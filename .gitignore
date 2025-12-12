@@ -1,0 +1,12 @@
+# Environment files
+.env
+.env.*
+*.env
+
+# Local development overrides
+*.local
+*.dev
+
+# Secrets
+*.key
+*.pem

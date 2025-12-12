@@ -1,0 +1,21 @@
+default: &default
+  ENGINE: postgresql
+  DRIVER: psycopg2
+  HOST: localhost
+  PORT: 5433
+  NAME: mydb
+  USER: myuser
+  PASSWORD: mypassword
+  URL: postgresql+psycopg2://myuser:mypassword@localhost:5433/mydb
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+  NAME: mydb_test
+
+production:
+  <<: *default
+  HOST: localhost
+  PORT: 5433

@@ -1,0 +1,9 @@
+
+anthropic>=0.39.0
+litellm>=1.44.0
+openai>=1.37.0
+psycopg2-binary>=2.9.9
+requests>=2.31.0
+sentence-transformers>=3.1.0
+tiktoken>=0.7.0
+certifi>=2024.2.2

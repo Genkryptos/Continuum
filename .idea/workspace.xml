@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 10 Dec 2025&#10;&#10;MTM - Complete" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main_mtm" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Genkryptos&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Genkryptos/Continuum.git&quot;,
+    &quot;accountId&quot;: &quot;29ba8531-2f01-4cf2-83fb-9931e3070a3b&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 5
+}</component>
+  <component name="ProjectId" id="35sQHoybXS7lVirQKhWMWvMGkJ1" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.test_compression_path_creates_summary_and_discards_old_messages.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.test_negative_path_only_records_user_message_on_failure.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_counter.TestTknCounter.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_stm.TestConversationSTM.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_stm.TestConversationSTM.test_eviction_prefers_less_important_messages.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_stm.TestConversationSTM.test_reserved_for_response_reduces_effective_budget.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests for test_stm.TestThreadSafeAndSharedSTM.test_threadsafe_delegates_to_wrapped_stm.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_agent_mtm.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_agent_stm.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_counter.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_local_agent.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_mtm_services.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_stm.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python.__init__.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.agent.executor&quot;: &quot;Run&quot;,
+    &quot;Python.conftest.executor&quot;: &quot;Run&quot;,
+    &quot;Python.counter.executor&quot;: &quot;Run&quot;,
+    &quot;Python.databaseRetrival.executor&quot;: &quot;Run&quot;,
+    &quot;Python.lOpenai.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.maintest.executor&quot;: &quot;Run&quot;,
+    &quot;Python.openai.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_mtm_repository.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_mtm_retriever.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/mayanksahu/Continuum/Documentation&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/Documentation" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/memory/mtm" />
+      <recent name="$PROJECT_DIR$/memory/mtm/service" />
+      <recent name="$PROJECT_DIR$/memory/stm" />
+      <recent name="$PROJECT_DIR$/Documentation" />
+      <recent name="$PROJECT_DIR$/test" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="LLMManager" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Continuum" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/LLMManager.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Continuum" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="maintest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Continuum" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/maintest.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_mtm_retriever" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Continuum" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/test/test_mtm_retriever.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests in test_mtm_services.py" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="Continuum" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/test/test_mtm_services.py&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python tests.Python tests in test_mtm_services.py" />
+        <item itemvalue="Python.test_mtm_retriever" />
+        <item itemvalue="Python.maintest" />
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.LLMManager" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-1b1018131e27-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.22562.180" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="" />
+      <created>1763896214119</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1763896214119</updated>
+    </task>
+    <task id="LOCAL-00001" summary="Initial commit - 23 Nov 2025&#10;- Created the basic structure for Continuum&#10;- Added py files &#10;- Decided to use Postgress Vector DB for LTM and Postgress Db MTM.&#10;- No DB for STM only basic python class.">
+      <option name="closed" value="true" />
+      <created>1763910562623</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1763910562623</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Initial commit - 23 Nov 2025&#10;- Refactored unittest written by codex into test folder">
+      <option name="closed" value="true" />
+      <created>1763923587882</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1763923587882</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Initial commit - 23 Nov 2025&#10;- Refactored unittest written by codex into test folder">
+      <option name="closed" value="true" />
+      <created>1764007731623</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1764007731623</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Initial commit - 23 Nov 2025&#10;- Refactored unittest written by codex into test folder">
+      <option name="closed" value="true" />
+      <created>1764047584890</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1764047584890</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Initial commit - 28 Nov 2025&#10;- Added code for STM">
+      <option name="closed" value="true" />
+      <created>1764277233886</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1764277233886</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Initial commit - 28 Nov 2025&#10;- Added code for Advanced STM">
+      <option name="closed" value="true" />
+      <created>1764301894913</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1764301894913</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Initial commit - 28 Nov 2025&#10;- Added code for Advanced STM">
+      <option name="closed" value="true" />
+      <created>1764302566534</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1764302566534</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Initial commit - 28 Nov 2025&#10;- Added Final code for Advanced STM&#10;&#10;( No Improvements in STM from here )">
+      <option name="closed" value="true" />
+      <created>1764303302919</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1764303302919</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Initial commit - 28 Nov 2025&#10;- Added Final code for Advanced STM&#10;&#10;( No Improvements in STM from here )">
+      <option name="closed" value="true" />
+      <created>1764490291005</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1764490291005</updated>
+    </task>
+    <task id="LOCAL-00010" summary="commit - 1 Dec 2025">
+      <option name="closed" value="true" />
+      <created>1764592908022</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1764592908022</updated>
+    </task>
+    <task id="LOCAL-00011" summary="commit - 1 Dec 2025">
+      <option name="closed" value="true" />
+      <created>1764593599200</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1764593599200</updated>
+    </task>
+    <task id="LOCAL-00012" summary="commit - 8 Dec 2025&#10;&#10;MTM - ......">
+      <option name="closed" value="true" />
+      <created>1765214996459</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1765214996459</updated>
+    </task>
+    <task id="LOCAL-00013" summary="commit - 8 Dec 2025&#10;&#10;MTM - ......">
+      <option name="closed" value="true" />
+      <created>1765215417166</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1765215417166</updated>
+    </task>
+    <task id="LOCAL-00014" summary="commit - 8 Dec 2025&#10;&#10;MTM - ......">
+      <option name="closed" value="true" />
+      <created>1765215991093</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1765215991093</updated>
+    </task>
+    <task id="LOCAL-00015" summary="commit - 8 Dec 2025&#10;&#10;MTM - ......">
+      <option name="closed" value="true" />
+      <created>1765257283716</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1765257283716</updated>
+    </task>
+    <task id="LOCAL-00016" summary="commit - 10 Dec 2025&#10;&#10;MTM - Complete">
+      <option name="closed" value="true" />
+      <created>1765343508486</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1765343508486</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
+    <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Initial commit - 23 Nov 2025&#10;- Created the basic structure for Continuum&#10;- Added py files &#10;- Decided to use Postgress Vector DB for LTM and Postgress Db MTM.&#10;- No DB for STM only basic python class." />
+    <MESSAGE value="Initial commit - 23 Nov 2025&#10;- Refactored unittest written by codex into test folder" />
+    <MESSAGE value="Initial commit - 28 Nov 2025&#10;- Added code for STM" />
+    <MESSAGE value="Initial commit - 28 Nov 2025&#10;- Added code for Advanced STM" />
+    <MESSAGE value="Initial commit - 28 Nov 2025&#10;- Added Final code for Advanced STM&#10;&#10;( No Improvements in STM from here )" />
+    <MESSAGE value="commit - 1 Dec 2025" />
+    <MESSAGE value="commit - 8 Dec 2025&#10;&#10;MTM - ......" />
+    <MESSAGE value="commit - 10 Dec 2025&#10;&#10;MTM - Complete" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit - 10 Dec 2025&#10;&#10;MTM - Complete" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/test/test_counter.py</url>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/LLMManager.py</url>
+          <line>3</line>
+          <option name="timeStamp" value="10" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/LLMManager.py</url>
+          <line>12</line>
+          <option name="timeStamp" value="13" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/LLMManager.py</url>
+          <line>13</line>
+          <option name="timeStamp" value="16" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>
