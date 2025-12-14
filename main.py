@@ -1,3 +1,11 @@
+"""
+CLI entrypoint for exercising the AgentMTM (STM + MTM) stack interactively.
+
+The script wires together storage, embedding and retrieval components, then
+opens a simple REPL loop so you can chat with the agent while seeing how STM
+compression and MTM context assembly behave turn by turn.
+"""
+
 import logging
 import os
 

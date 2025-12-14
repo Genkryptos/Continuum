@@ -1,4 +1,13 @@
 from __future__ import annotations
+"""
+Core short-term memory (STM) data structure for managing chat transcripts.
+
+The ConversationSTM maintains a bounded deque of immutable Message objects,
+handles eviction/compression hooks, and exposes prompt-friendly views of the
+conversation. It aims to be storage-agnostic so it can be reused in CLI demos,
+FastAPI handlers, or threaded agents.
+"""
+
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from collections import deque
@@ -11,6 +20,7 @@ TokenizerFn = Callable[[str], int]
 SummarizerFn = Callable[[List["Message"], int], str]
 
 class Importance(Enum):
+    """Relative priority for messages; values map directly into MTM storage."""
     LOW = auto()
     NORMAL = auto()
     HIGH = auto()
@@ -19,6 +29,7 @@ class Importance(Enum):
 
 @dataclass(frozen=True)
 class Message:
+    """Immutable chat message tracked by the STM with associated token count."""
     role: str
     content: str
     tokens: int
@@ -61,11 +72,13 @@ class Message:
 
 @dataclass
 class STMCallbacks:
+    """Optional hooks invoked when messages are evicted or compressed."""
     on_evict: Optional[Callable[[Message], None]] = None
     on_compress: Optional[Callable[[List[Message], Message], None]] = None
 
 @dataclass
 class STMConfig:
+    """Configuration for STM capacity, compression thresholds, and naming."""
     max_tokens: int
     max_messages: int = 100
     compress_threshold_ratio: float = 0.8
@@ -75,6 +88,7 @@ class STMConfig:
     name: str = "default_conversation"
 
 class ConversationSTM:
+    """Token-budgeted short-term memory with eviction and compression helpers."""
 
     _logger = logging.getLogger(__name__)
 
@@ -364,4 +378,3 @@ class ConversationSTM:
 
     def _effective_budget(self) -> int:
         return max(self.config.max_tokens - self.config.reserved_for_response, 0)
-

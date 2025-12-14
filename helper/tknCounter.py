@@ -1,3 +1,11 @@
+"""
+Token counting utilities that favor provider-specific encodings when available.
+
+The helpers fall back to best-effort estimates so callers can still enforce
+context budgets even when optional dependencies (tiktoken, anthropic) are
+missing.
+"""
+
 import logging
 import sys
 import types

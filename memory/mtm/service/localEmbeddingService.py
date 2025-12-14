@@ -10,6 +10,7 @@ from settings import LOCAL_EMBEDDING_MODEL
 
 
 class LocalEmbeddingService(EmbeddingService):
+    """Embedding provider backed by a local SentenceTransformer model."""
     def __init__(
         self,
         model_name: Optional[str] = None,
@@ -40,6 +41,7 @@ class LocalEmbeddingService(EmbeddingService):
         return self.embed_batch([text])[0]
 
     def embed_batch(self, text: List[str], batch_size: int = 32) -> List[List[float]]:
+        """Encode a batch of strings, guarding access with a lock for thread safety."""
         try:
             with self._lock:
                 embeddings = self._model.encode(

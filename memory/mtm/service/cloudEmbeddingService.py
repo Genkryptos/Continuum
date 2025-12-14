@@ -8,6 +8,7 @@ from settings import OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL
 
 
 class OpenAIEmbeddingService(EmbeddingService):
+    """Embedding provider that calls the OpenAI embeddings API via LLM wrapper."""
     def __init__(self, model_name: Optional[str] = None, client: Optional[LLM] = None):
         self._model_name = model_name or OPENAI_EMBEDDING_MODEL
         self._client = client or LLM(api_key=OPENAI_API_KEY)
@@ -25,6 +26,7 @@ class OpenAIEmbeddingService(EmbeddingService):
         return self.embed_batch([text])[0]
 
     def embed_batch(self, text: List[str], batch_size: int = 32) -> List[List[float]]:
+        """Embed text in batches to reduce per-request overhead."""
         try:
             all_vectors: List[List[float]] = []
             effective_batch_size = max(batch_size, 1)

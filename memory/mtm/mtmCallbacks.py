@@ -1,3 +1,10 @@
+"""
+Callbacks that persist STM events (evictions/compressions) into MTM storage.
+
+The callbacks translate STM messages into MTM records, handling embedding
+creation, per-user pruning, and error logging so STM callers can remain thin.
+"""
+
 import logging
 import time
 import uuid
@@ -6,9 +13,11 @@ from typing import Any, Dict, List, Optional
 from memory.mtm.repository.mtmRepository import MTMRepository
 from memory.mtm.service.embeddingService import EmbeddingService
 from memory.stm.ConversationSTM import Importance, Message
+from memory.mtm.importance import normalize_importance_value
 
 
 class MTMCallbacks:
+    """Bridge STM lifecycle events to persisted MTM memories."""
     ALLOWED_ROLES = frozenset({"user", "assistant"})
 
     def __init__(
@@ -49,11 +58,8 @@ class MTMCallbacks:
         return self.session_id
 
     def _convert_importance(self, importance: Any) -> int:
-        if isinstance(importance, int):
-            return importance
-        if hasattr(importance, "value"):
-            return int(importance.value)
-        return 2  # NORMAL
+        """Convert enum/int importance to the clamped numeric scale used in MTM."""
+        return normalize_importance_value(importance)
 
     def _prune_if_configured(self) -> None:
         if not self._max_memories_per_user:
@@ -75,6 +81,7 @@ class MTMCallbacks:
         return tags
 
     def on_evict(self, msg: Message) -> None:
+        """Store evicted conversational messages as episodic MTM memories."""
         # Skip non-conversational messages
         if msg.role not in self.ALLOWED_ROLES:
             return
@@ -122,6 +129,7 @@ class MTMCallbacks:
             )
 
     def on_compress(self, old_messages: List[Message], summary: Message) -> None:
+        """Persist summaries plus the compressed messages they replaced."""
         # Lazily create or fetch MTM session
         session_id = self._ensure_session()
         if session_id is None:

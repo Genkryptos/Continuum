@@ -1,3 +1,7 @@
+"""
+Abstract base classes for embedding providers used by the MTM subsystem.
+"""
+
 from abc import ABC, abstractmethod
 from typing import List
 

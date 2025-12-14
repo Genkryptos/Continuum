@@ -1,3 +1,11 @@
+"""
+Retriever for mid-term memories that blends vector similarity with heuristics.
+
+The retriever queries embeddings from the repository, re-ranks them with
+recency/importance/session affinity, and updates access stats for the chosen
+memories.
+"""
+
 import logging
 import math
 from datetime import datetime, timezone
@@ -7,12 +15,14 @@ from psycopg2.extras import RealDictCursor
 
 from memory.mtm.repository.mtmRepository import MTMRepository
 from memory.mtm.service.embeddingService import EmbeddingService
+from memory.mtm.importance import normalize_importance_value, importance_to_score
 
 
 logger = logging.getLogger(__name__)
 
 
 class MTMRetriever:
+    """Coordinate similarity search and scoring for MTM memories."""
     def __init__(self, mtm_repo: MTMRepository, embedding_service: EmbeddingService):
         self.mtm_repo = mtm_repo
         self.embedding_service = embedding_service
@@ -28,6 +38,7 @@ class MTMRetriever:
         recency_weight: float = 0.1,
         session_match_boost: float = 0.05,
     ) -> List[Dict]:
+        """Retrieve memories relevant to the query, ranked by composite score."""
         try:
             query_embedding = self.embedding_service.embed_text(query)
             now = datetime.now(timezone.utc)
@@ -87,8 +98,8 @@ class MTMRetriever:
             distance = float(row["distance"]) if row["distance"] is not None else 1.0
             similarity = 1.0 - distance
 
-            importance_raw = int(row.get("importance") or 1)
-            importance_norm = max(0.0, min(1.0, (importance_raw - 1) / 3.0))
+            importance_raw = normalize_importance_value(row.get("importance"))
+            importance_norm = importance_to_score(importance_raw)
 
             created_at = row.get("created_at")
             if isinstance(created_at, datetime):
@@ -140,6 +151,7 @@ class MTMRetriever:
         tag_filter: Dict[str, str],
         top_k: int = 10,
     ) -> List[Dict]:
+        """Return most recent memories that match the provided tag filters."""
         try:
             with self.mtm_repo.connection() as db:
                 with db.cursor(cursor_factory=RealDictCursor) as cur:

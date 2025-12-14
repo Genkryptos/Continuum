@@ -4,7 +4,30 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 10 Dec 2025&#10;&#10;MTM - Complete" />
+    <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 10 Dec 2025&#10;&#10;MTM - Complete">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/LLMManager.py" beforeDir="false" afterPath="$PROJECT_DIR$/LLMManager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent/AgentMTM.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent/AgentMTM.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent/AgentSTM.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent/AgentSTM.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent/agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helper/databaseRetrival.py" beforeDir="false" afterPath="$PROJECT_DIR$/helper/databaseRetrival.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helper/retrieval.py" beforeDir="false" afterPath="$PROJECT_DIR$/helper/retrieval.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helper/tknCounter.py" beforeDir="false" afterPath="$PROJECT_DIR$/helper/tknCounter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/contextAugmenter.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/contextAugmenter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/mtmCallbacks.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/mtmCallbacks.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/repository/mtmRepository.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/repository/mtmRepository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/repository/mtmRetriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/repository/mtmRetriever.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/service/cloudEmbeddingService.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/service/cloudEmbeddingService.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/service/embeddingService.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/service/embeddingService.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/service/llmSummarizerService.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/service/llmSummarizerService.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/service/localEmbeddingService.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/service/localEmbeddingService.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/service/summarizationService.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/service/summarizationService.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/stm/ConversationSTM.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/stm/ConversationSTM.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/stm/ThreadSafeSTM.py" beforeDir="false" afterPath="$PROJECT_DIR$/memory/stm/ThreadSafeSTM.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/requests.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -200,10 +223,10 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.main" />
         <item itemvalue="Python tests.Python tests in test_mtm_services.py" />
         <item itemvalue="Python.test_mtm_retriever" />
         <item itemvalue="Python.maintest" />
-        <item itemvalue="Python.main" />
         <item itemvalue="Python.LLMManager" />
       </list>
     </recent_temporary>
@@ -375,17 +398,17 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/LLMManager.py</url>
-          <line>3</line>
+          <line>12</line>
           <option name="timeStamp" value="10" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/LLMManager.py</url>
-          <line>12</line>
+          <line>21</line>
           <option name="timeStamp" value="13" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/LLMManager.py</url>
-          <line>13</line>
+          <line>22</line>
           <option name="timeStamp" value="16" />
         </line-breakpoint>
       </breakpoints>

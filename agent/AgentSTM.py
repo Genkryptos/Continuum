@@ -1,3 +1,10 @@
+"""
+Minimal agent loop backed by the ConversationSTM for short-term memory.
+
+This class keeps the orchestration logic small so it is easy to follow how
+messages are added, prompts are built, and compression is triggered.
+"""
+
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional
@@ -10,6 +17,7 @@ from settings import LLM_MODEL
 
 
 class TextTokenCounter:
+    """Adapter that exposes TknCounter as a simple callable for STM usage."""
     def __init__(self, model: str = LLM_MODEL):
         self.model = model
         self._tkn = TknCounter()
@@ -80,6 +88,7 @@ class AgentSTM:
     # --- core loop ------------------------------------------------------------
 
     def handle_user_input(self, user_input: str) -> Dict[str, Any]:
+        """Add the user turn, invoke the model, and update STM bookkeeping."""
         self.turn += 1
         self.logger.info(f"════════════════ Turn {self.turn} ════════════════")
         self.logger.info(f"User: {user_input}")

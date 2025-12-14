@@ -1,3 +1,7 @@
+"""
+Abstract interface for services that summarize chat transcripts.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 

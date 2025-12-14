@@ -1,3 +1,12 @@
+"""
+Lightweight wrapper around the OpenAI SDK with a built-in dummy client.
+
+The module allows the rest of the codebase to call OpenAI-compatible methods
+without hard dependency on API credentials or the real SDK; when unavailable,
+it supplies predictable stub responses and embeddings for local development and
+tests.
+"""
+
 import os
 from textwrap import shorten
 from typing import Any, Dict, Iterable, List, Optional

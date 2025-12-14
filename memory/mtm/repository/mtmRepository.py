@@ -1,3 +1,10 @@
+"""
+PostgreSQL-backed repository for mid-term memory (MTM) sessions and memories.
+
+The repository isolates connection pooling concerns and provides small helpers
+for inserting, retrieving, and pruning conversation memories.
+"""
+
 from contextlib import contextmanager
 from datetime import datetime
 import logging
@@ -17,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class MTMRepository:
+    """Lightweight data-access layer around the MTM Postgres schema."""
 
     def __init__(
         self,
@@ -41,6 +49,7 @@ class MTMRepository:
                 raise
 
     def get_connection(self):
+        """Fetch a database connection from the pool or create one directly."""
         if self._pool:
             return self._pool.getconn()
         if psycopg2 is None:
@@ -48,6 +57,7 @@ class MTMRepository:
         return psycopg2.connect(self.db_url)
 
     def release_connection(self, conn):
+        """Return a pooled connection or close a direct one."""
         if conn is None:
             return
         if self._pool:
@@ -82,6 +92,7 @@ class MTMRepository:
             session_key: str,
             metadata: Optional[Dict] = None,
     ) -> Optional[int]:
+        """Idempotently create a session row and return its id."""
         with self.connection() as db:
             try:
                 with db.cursor(cursor_factory=RealDictCursor) as cur:
@@ -117,6 +128,7 @@ class MTMRepository:
         embeddings: Optional[List[float]] = None,
         expires_at: Optional[datetime] = None,
     ) -> Optional[int]:
+        """Insert a single MTM memory record and return its identifier."""
         ##Inserting memory in memory table
         with self.connection() as db:
             try:
@@ -142,6 +154,7 @@ class MTMRepository:
                 return None
 
     def add_memory_batch(self, memories: List[Dict]) -> List[int]:
+        """Insert multiple memory rows efficiently in a single transaction."""
         with self.connection() as db:
             try:
                 with db.cursor(cursor_factory=RealDictCursor) as cur:
@@ -174,6 +187,7 @@ class MTMRepository:
                 return []
 
     def update_access_stats(self, memory_ids: List[int]) -> None:
+        """Increment access counters for the provided memory IDs."""
         if not memory_ids:
             return
         with self.connection() as db:
@@ -195,6 +209,7 @@ class MTMRepository:
                 self._rollback_safely(db)
 
     def prune_per_user_caps(self, user_id: str, max_per_user: int = 2000) -> int:
+        """Delete least important/oldest memories once a per-user cap is exceeded."""
         with self.connection() as db:
             try:
                 with db.cursor() as cur:
@@ -219,5 +234,4 @@ class MTMRepository:
                 logger.exception("Error in prune_per_user_caps")
                 self._rollback_safely(db)
                 return 0
-
 

@@ -1,3 +1,9 @@
+"""
+Adapter class that hides whether an LLM call is served by a local Ollama model
+or a hosted OpenAI endpoint. It normalizes responses and basic error handling
+so the higher-level agents can treat both providers the same.
+"""
+
 import json
 import logging
 import time
@@ -13,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class LocalAgent:
+    """Thin wrapper around either an OpenAI chat model or a local Ollama model."""
 
     def __init__(
         self,
@@ -40,6 +47,7 @@ class LocalAgent:
             self.verify_connection()
 
     def _infer_provider(self, model: str) -> str:
+        """Heuristically determine provider from model name."""
         if model.lower().startswith("gpt-"):
             return "openai"
         return "ollama"
@@ -89,6 +97,7 @@ class LocalAgent:
         )
 
     def verify_connection(self) -> bool:
+        """Probe the local Ollama server to verify connectivity."""
         try:
             response = requests.get(
                 f"{self.base_url}/api/tags", timeout=self.request_timeout
@@ -113,6 +122,7 @@ class LocalAgent:
             raise RuntimeError(details) from exc
 
     def call_model(self, messages: List[Dict]) -> Dict:
+        """Dispatch to the configured provider and normalize its response."""
         start = time.time()
 
         if self.provider == "openai":
@@ -121,6 +131,7 @@ class LocalAgent:
         return self._call_local(messages, start)
 
     def _call_openai(self, messages: List[Dict], start: float) -> Dict:
+        """Invoke OpenAI chat completions via the configured client."""
         try:
             response = self._create_openai_completion(messages)
 
@@ -145,6 +156,7 @@ class LocalAgent:
             }
 
     def _call_local(self, messages: List[Dict], start: float) -> Dict:
+        """Invoke a local Ollama model and extract latency/token metadata."""
         prompt = self._format_prompt(messages)
 
         try:

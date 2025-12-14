@@ -1,3 +1,10 @@
+"""
+Agent loop that combines short-term memory (STM) with mid-term memory (MTM).
+
+The class keeps STM state small via token-aware compression and augments each
+turn with MTM retrieval before calling the chosen LLM provider.
+"""
+
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional

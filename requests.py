@@ -1,3 +1,10 @@
+"""
+Tiny requests-style wrapper built on urllib, used to avoid pulling in requests.
+
+Only the minimal surface area needed by the project is implemented; callers
+should expect limited features compared to the real ``requests`` library.
+"""
+
 import json as _json
 import urllib.error
 import urllib.request
@@ -7,10 +14,12 @@ import certifi
 
 
 class Timeout(Exception):
+    """Raised when an HTTP operation exceeds the provided timeout."""
     pass
 
 
 class ConnectionError(Exception):
+    """Raised when a network failure occurs before a response is returned."""
     pass
 
 
@@ -38,6 +47,7 @@ _DEF_TIMEOUT = 30
 
 
 def _request(method: str, url: str, *, json: Optional[Any] = None, timeout: Optional[float] = None, **kwargs: Any) -> Response:
+    """Internal helper mirroring the core requests.request signature."""
     data = None
     headers = kwargs.get("headers", {})
     if json is not None:
@@ -65,8 +75,10 @@ def _request(method: str, url: str, *, json: Optional[Any] = None, timeout: Opti
 
 
 def get(url: str, *, timeout: Optional[float] = None, **kwargs: Any) -> Response:
+    """Perform a GET request and return a lightweight Response object."""
     return _request("GET", url, timeout=timeout, **kwargs)
 
 
 def post(url: str, *, json: Optional[Any] = None, timeout: Optional[float] = None, **kwargs: Any) -> Response:
+    """Perform a POST request with optional JSON payload."""
     return _request("POST", url, json=json, timeout=timeout, **kwargs)

@@ -1,3 +1,10 @@
+"""
+Thread-safe wrapper that serializes access to a ConversationSTM instance.
+
+This keeps the STM state consistent when accessed from multiple agent threads
+without changing the underlying STM semantics.
+"""
+
 from memory.stm import ConversationSTM
 from threading import Lock
 from typing import Any, Dict, List, Optional
@@ -5,6 +12,7 @@ from memory.stm.ConversationSTM import Message
 
 
 class ThreadSafeSTM:
+    """Delegate ConversationSTM operations under a shared mutex."""
 
     def __init__(self, stm: ConversationSTM):
         self._stm = stm

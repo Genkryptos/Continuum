@@ -1,3 +1,11 @@
+"""
+Builds a prompt that combines STM messages with mid-term memory (MTM) results.
+
+The augmenter is responsible for budgeting tokens between STM context, MTM
+retrieved memories, and the reserved response allowance so the final prompt
+stays within the target model context window.
+"""
+
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
@@ -8,12 +16,14 @@ from memory.stm.ConversationSTM import ConversationSTM
 
 @dataclass
 class ContextResult:
+    """Bundle of the final prompt, included memories, and debug metrics."""
     prompt_messages: List[Dict[str, str]]
     mtm_memories: List[Dict]
     debug_info: Dict[str, object]
 
 
 class ContextAugmenter:
+    """Orchestrates MTM retrieval and prompt assembly within a token budget."""
     def __init__(
         self,
         stm: ConversationSTM,
