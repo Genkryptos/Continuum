@@ -45,5 +45,5 @@ Continuum is an agent centric memory engine providing short-, mid- and long-term
 ## Testing
 Unit tests are located under `test/`. Run them with:
 ```bash
-pytest
+python3 -m unittest discover -s test
 ```
