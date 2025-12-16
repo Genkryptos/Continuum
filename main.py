@@ -12,11 +12,21 @@ import os
 from dotenv import load_dotenv
 
 from agent.AgentMTM import AgentMTM
+from helper.web_search import WebSearchService
 from memory.mtm.mtmCallbacks import MTMCallbacks
 from memory.mtm.repository.mtmRepository import MTMRepository
 from memory.mtm.repository.mtmRetriever import MTMRetriever
 from memory.mtm.service.cloudEmbeddingService import OpenAIEmbeddingService
-from settings import LLM_MODEL, MTM_MAX_PER_USER
+from settings import (
+    LLM_MODEL,
+    MTM_MAX_PER_USER,
+    WEB_SEARCH_ALLOW_NETWORK,
+    WEB_SEARCH_AUTO,
+    WEB_SEARCH_ENABLED,
+    WEB_SEARCH_MAX_CONTEXT_TOKENS,
+    WEB_SEARCH_MAX_RESULTS,
+    WEB_SEARCH_TIMEOUT,
+)
 
 
 def main() -> None:
@@ -54,11 +64,28 @@ def main() -> None:
         max_memories_per_user=MTM_MAX_PER_USER or None,
     )
 
+    web_search_service = None
+    if WEB_SEARCH_ENABLED:
+        web_search_service = WebSearchService(
+            max_results=WEB_SEARCH_MAX_RESULTS,
+            timeout=WEB_SEARCH_TIMEOUT,
+            allow_network=WEB_SEARCH_ALLOW_NETWORK,
+        )
+        logging.info(
+            "Web search enabled (max_results=%s, auto=%s)",
+            WEB_SEARCH_MAX_RESULTS,
+            WEB_SEARCH_AUTO,
+        )
+
     # --- AgentMTM (STM + MTM) ----------------------------------------------
     agent = AgentMTM(
         model_name=LLM_MODEL,     # from env: LLM=gpt-4o-mini etc.
         mtm_retriever=mtm_retriever,
         stm_callbacks=mtm_callbacks,
+        web_search_service=web_search_service,
+        auto_web_search=WEB_SEARCH_AUTO,
+        web_search_max_results=WEB_SEARCH_MAX_RESULTS,
+        max_web_context_tokens=WEB_SEARCH_MAX_CONTEXT_TOKENS,
         # you can override max_context_tokens / answer_fraction / mtm_top_k here if needed
     )
 

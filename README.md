@@ -25,6 +25,15 @@ Continuum is an agent centric memory engine providing short-, mid- and long-term
    ```
    The prompt will show STM token usage after each turn and automatically persists evicted messages to MTM.
 
+## Live web search (optional)
+- Start the MCP web-search server when you want fresh internet grounding:
+  ```bash
+  python -m continuum_mcp.web_search_server
+  ```
+  (module name uses `continuum_mcp` to avoid shadowing the pip `mcp` package it depends on). It respects `WEB_SEARCH_MAX_RESULTS`, `WEB_SEARCH_TIMEOUT` and `WEB_SEARCH_ALLOW_NETWORK` env vars.
+- To let the CLI agent auto-attach web snippets, set `WEB_SEARCH_ENABLED=1` in your `.env`. You can tune `WEB_SEARCH_AUTO` (default on), `WEB_SEARCH_MAX_RESULTS`, and `WEB_SEARCH_MAX_CONTEXT_TOKENS` to control when/what gets injected.
+- Manual trigger: include `@web` or "web search" in your message; auto mode also fires when no MTM context is available for the turn.
+
 ## Project layout
 - `agent/`: agent loops that orchestrate STM/MTM usage.
 - `memory/stm/`: short-term memory implementation with compression hooks.

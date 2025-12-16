@@ -7,10 +7,11 @@ turn with MTM retrieval before calling the chosen LLM provider.
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional, Tuple
 
 from agent.agent import LocalAgent
 from helper.tknCounter import TknCounter
+from helper.web_search import WebSearchResult, WebSearchService
 from memory.mtm.contextAugmenter import ContextAugmenter, ContextResult
 from memory.mtm.repository.mtmRetriever import MTMRetriever
 from memory.stm.ConversationSTM import STMConfig, STMCallbacks, ConversationSTM, Importance, Message
@@ -64,6 +65,11 @@ class AgentMTM:
         mtm_top_k: Optional[int] = None,
         min_messages_to_compress: int = 4,
         system_prompt: str = "You are a helpful assistant.",
+        web_search_service: Optional[WebSearchService] = None,
+        auto_web_search: bool = True,
+        web_search_max_results: int = 3,
+        max_web_context_tokens: int = 512,
+        web_search_triggers: Optional[List[str]] = None,
     ):
         self.logger = logging.getLogger("AgentMTM")
 
@@ -74,6 +80,14 @@ class AgentMTM:
         self.mtm_top_k = mtm_top_k or MTM_TOP_K
         self.system_prompt = system_prompt
         self.min_messages_to_compress = min_messages_to_compress
+        self.web_search_service = web_search_service
+        self.auto_web_search = auto_web_search
+        self.web_search_max_results = web_search_max_results
+        self.max_web_context_tokens = max_web_context_tokens
+        self.web_search_triggers = tuple(
+            web_search_triggers
+            or ("@web", "/web", "web search", "search the web")
+        )
 
         # ---- LLM + token counters ----
         self.llm = llm or LocalAgent(model=self.model_name)
@@ -213,6 +227,7 @@ class AgentMTM:
         self.turn += 1
         self.logger.info(f"════════════════ Turn {self.turn} ════════════════")
         self.logger.info(f"User: {user_input}")
+        response_budget = max(int(self.max_context_tokens * self.answer_fraction), 1)
 
         self.stm.add_user_message(
             content=user_input,
@@ -241,6 +256,9 @@ class AgentMTM:
         prompt_messages: List[Dict[str, str]]
         memories: List[Dict[str, Any]] = []
         mtm_error: Optional[str] = None
+        web_results: List[WebSearchResult] = []
+        web_error: Optional[str] = None
+        web_tokens_used = 0
         try:
             context_result = self.context_augmenter.build_context(
                 user_id=user_id,
@@ -261,7 +279,30 @@ class AgentMTM:
             )
             prompt_messages = self.stm.get_prompt_messages(system_prompt=self.system_prompt)
 
-        response_budget = max(int(self.max_context_tokens * self.answer_fraction), 1)
+        prompt_messages = self._inject_capabilities_prompt(prompt_messages)
+        prompt_messages = self._inject_time_prompt(prompt_messages)
+
+        if self.web_search_service and self._should_search_web(user_input, context_result):
+            (
+                prompt_messages,
+                web_results,
+                web_tokens_used,
+                web_error,
+            ) = self._attach_web_context(
+                prompt_messages=prompt_messages,
+                user_query=user_input,
+                response_budget=response_budget,
+                )
+            if web_results:
+                self.logger.info(
+                    "Added web context: %s results (+%s tokens)",
+                    len(web_results),
+                    web_tokens_used,
+                )
+            if web_error:
+                self.logger.warning("Web search error: %s", web_error)
+
+        web_results_payload = [r.as_dict() for r in web_results]
         prompt_tokens = self._count_tokens(prompt_messages)
         if prompt_tokens + response_budget > self.max_context_tokens:
             self.logger.warning(
@@ -291,6 +332,8 @@ class AgentMTM:
                 "mtm_error": mtm_error,
                 "compression_error": compression_error,
                 "rolled_back_user_message": bool(rolled_back),
+                "web_results": web_results_payload,
+                "web_error": web_error,
             }
 
         if not result.get("success"):
@@ -312,6 +355,8 @@ class AgentMTM:
                 "mtm_error": mtm_error,
                 "compression_error": compression_error,
                 "rolled_back_user_message": bool(rolled_back),
+                "web_results": web_results_payload,
+                "web_error": web_error,
             }
 
         assistant_reply = result.get("response", "")
@@ -333,6 +378,8 @@ class AgentMTM:
                 "model": self.llm.model,
                 "mtm_memories": memories,
                 "context_debug_info": getattr(context_result, "debug_info", None),
+                "web_results": web_results_payload,
+                "web_error": web_error,
             },
         )
 
@@ -354,6 +401,128 @@ class AgentMTM:
             "mtm_memories": memories,
             "mtm_error": mtm_error,
             "compression_error": compression_error,
+            "web_results": web_results_payload,
+            "web_error": web_error,
+        }
+
+    def _should_search_web(
+        self,
+        user_input: str,
+        context_result: Optional[ContextResult],
+    ) -> bool:
+        """
+        Decide whether to trigger a web search.
+
+        Manual triggers (keywords) override the auto flag so users can request
+        a fetch ad-hoc without enabling it globally.
+        """
+        if self.web_search_service is None:
+            return False
+
+        lowered = user_input.lower()
+        if any(trigger in lowered for trigger in self.web_search_triggers):
+            return True
+
+        if not self.auto_web_search:
+            return False
+
+        if context_result is not None and not getattr(context_result, "mtm_memories", None):
+            return True
+
+        return True
+
+    def _attach_web_context(
+        self,
+        prompt_messages: List[Dict[str, str]],
+        user_query: str,
+        response_budget: int,
+    ) -> Tuple[List[Dict[str, str]], List[WebSearchResult], int, Optional[str]]:
+        """Fetch web results and attempt to prepend them within the token budget."""
+        try:
+            results = self.web_search_service.search(
+                user_query,
+                max_results=self.web_search_max_results,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return prompt_messages, [], 0, str(exc)
+
+        if not results:
+            return prompt_messages, [], 0, None
+
+        base_tokens = self._count_tokens(prompt_messages)
+        web_context = self.web_search_service.format_results(results)
+        web_msg = {
+            "role": "system",
+            "content": f"Live web search results:\n{web_context}",
+        }
+
+        def _inject(msgs: List[Dict[str, str]]) -> List[Dict[str, str]]:
+            return msgs[:1] + [web_msg] + msgs[1:] if msgs else [web_msg]
+
+        candidate_prompt = _inject(prompt_messages)
+        total_tokens = self._count_tokens(candidate_prompt)
+
+        if total_tokens + response_budget > self.max_context_tokens:
+            try:
+                truncate_budget = max(int(self.max_web_context_tokens or 0), 0)
+                if truncate_budget > 0:
+                    web_msg["content"] = self._tkn.truncate_text(
+                        self.model_name, web_msg["content"], truncate_budget
+                    )
+                    candidate_prompt = _inject(prompt_messages)
+                    total_tokens = self._count_tokens(candidate_prompt)
+            except Exception as exc:  # noqa: BLE001
+                return prompt_messages, [], 0, f"Failed to budget web context: {exc}"
+
+        if total_tokens + response_budget > self.max_context_tokens:
+            return prompt_messages, [], 0, "web_context_exceeds_budget"
+
+        tokens_added = max(total_tokens - base_tokens, 0)
+        return candidate_prompt, results, tokens_added, None
+
+    def _inject_capabilities_prompt(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        If web search is available, add a capability hint so the model does not
+        claim it cannot browse when results are present or fail silently.
+        """
+        if self.web_search_service is None:
+            return messages
+
+        capability_msg = {
+            "role": "system",
+            "content": (
+                "You have access to live web search results injected as system messages "
+                "labeled 'Live web search results'. Use them for the freshest facts. "
+                "If no results are present or the search fails, say that the search "
+                "returned nothing instead of claiming you cannot browse."
+            ),
+        }
+
+        if not messages:
+            return [capability_msg]
+
+        if messages[0].get("role") == "system":
+            return [messages[0], capability_msg] + messages[1:]
+
+        return [capability_msg] + messages
+
+    def _inject_time_prompt(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Insert a system message with current datetime to ground time-sensitive questions."""
+        time_msg = self._current_datetime_message()
+        if not messages:
+            return [time_msg]
+
+        if messages[0].get("role") == "system":
+            return [messages[0], time_msg] + messages[1:]
+
+        return [time_msg] + messages
+
+    def _current_datetime_message(self) -> Dict[str, str]:
+        now = datetime.now()
+        human = now.strftime("%A, %B %d, %Y %H:%M:%S")
+        return {
+            "role": "system",
+            "content": f"Current datetime (system clock): {human} (ISO: {now.isoformat()})",
         }
 
     def _naive_summarizer(self, messages: List["Message"], budget: int) -> str:

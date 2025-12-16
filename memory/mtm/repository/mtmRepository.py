@@ -164,17 +164,16 @@ class MTMRepository:
                             """
                             INSERT INTO mtm_memories
                               (session_id, "scope", "source", "content",
-                               importance, tags, embedding, embedding_model, expires_at)
+                               importance, tags, embedding, expires_at)
                             VALUES
                               (%(session_id)s, %(scope)s, %(source)s, %(content)s,
-                               %(importance)s, %(tags)s, %(embedding)s, %(embedding_model)s, %(expires_at)s)
+                               %(importance)s, %(tags)s, %(embedding)s, %(expires_at)s)
                             RETURNING id;
                             """,
                             {
                                 **memory,
                                 "tags": Json(memory.get("tags", {})),
                                 "embedding": memory.get("embedding"),  # not 'embeddings'
-                                "embedding_model": memory.get("embedding_model"),
                             },
                         )
                         row = cur.fetchone()
@@ -234,4 +233,3 @@ class MTMRepository:
                 logger.exception("Error in prune_per_user_caps")
                 self._rollback_safely(db)
                 return 0
-
