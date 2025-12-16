@@ -1,6 +1,5 @@
+import unittest
 from datetime import datetime, timezone
-
-import pytest
 
 from memory.mtm.repository.mtmRetriever import MTMRetriever
 
@@ -58,81 +57,9 @@ class _Repo:
         self.updated_ids = ids
 
 
-def test_search_prioritizes_session_matches_and_uses_scoped_filters():
-    now = datetime.now(timezone.utc)
-    rows = [
-        {
-            "id": 1,
-            "content": "other session",
-            "scope": "episode",
-            "source": "stm",
-            "importance": 1,
-            "created_at": now,
-            "access_count": 0,
-            "distance": 0.2,
-            "session_match": False,
-        },
-        {
-            "id": 2,
-            "content": "current session",
-            "scope": "episode",
-            "source": "stm",
-            "importance": 1,
-            "created_at": now,
-            "access_count": 0,
-            "distance": 0.2,
-            "session_match": True,
-        },
-    ]
-
-    repo = _Repo(rows)
-    retriever = MTMRetriever(repo, _FakeEmbeddingService())
-
-    results = retriever.search(
-        user_id="user-123",
-        agent_id="agent-abc",
-        session_key="session-key",
-        query="hello",
-        top_k=2,
-        session_match_boost=0.2,
-    )
-
-    assert repo.executed
-    _, params = repo.executed[0]
-    assert params == (
-        [0.1, 0.2],
-        "session-key",
-        "session-key",
-        "user-123",
-        "agent-abc",
-        20,
-    )
-
-    assert [r["id"] for r in results] == [2, 1]
-    assert results[0]["session_match"] is True
-    assert repo.updated_ids == [2, 1]
-
-
 class _FailingEmbeddingService:
     def embed_text(self, text: str):
         raise RuntimeError("embedding failed")
-
-
-def test_search_returns_empty_on_embedding_failure(caplog):
-    caplog.set_level("ERROR")
-    repo = _Repo([])
-    retriever = MTMRetriever(repo, _FailingEmbeddingService())
-
-    results = retriever.search(
-        user_id="user-123",
-        agent_id="agent-abc",
-        session_key="session-key",
-        query="hello",
-    )
-
-    assert results == []
-    assert not repo.executed
-    assert any("MTM retrieval failed" in message for message in caplog.messages)
 
 
 class _FailingCursor(_Cursor):
@@ -150,33 +77,110 @@ class _FailingRepo(_Repo):
         return _FailingConnection(self.rows, self.executed)
 
 
-def test_search_returns_empty_on_query_failure(caplog):
-    caplog.set_level("ERROR")
-    repo = _FailingRepo([])
-    retriever = MTMRetriever(repo, _FakeEmbeddingService())
-
-    results = retriever.search(
-        user_id="user-123",
-        agent_id="agent-abc",
-        session_key="session-key",
-        query="hello",
-    )
-
-    assert results == []
-    assert any("MTM retrieval failed" in message for message in caplog.messages)
-
-
 class _FailingTagRepo(_Repo):
     def connection(self):
         raise RuntimeError("cannot connect")
 
 
-def test_search_by_tags_logs_and_returns_empty_on_failure(caplog):
-    caplog.set_level("ERROR")
-    repo = _FailingTagRepo([])
-    retriever = MTMRetriever(repo, _FakeEmbeddingService())
+class TestMTMRetriever(unittest.TestCase):
+    def test_search_prioritizes_session_matches_and_uses_scoped_filters(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {
+                "id": 1,
+                "content": "other session",
+                "scope": "episode",
+                "source": "stm",
+                "importance": 1,
+                "created_at": now,
+                "access_count": 0,
+                "distance": 0.2,
+                "session_match": False,
+            },
+            {
+                "id": 2,
+                "content": "current session",
+                "scope": "episode",
+                "source": "stm",
+                "importance": 1,
+                "created_at": now,
+                "access_count": 0,
+                "distance": 0.2,
+                "session_match": True,
+            },
+        ]
 
-    results = retriever.search_by_tags(user_id="user-123", tag_filter={"topic": "x"})
+        repo = _Repo(rows)
+        retriever = MTMRetriever(repo, _FakeEmbeddingService())
 
-    assert results == []
-    assert any("search_by_tags failed" in msg for msg in caplog.messages)
+        results = retriever.search(
+            user_id="user-123",
+            agent_id="agent-abc",
+            session_key="session-key",
+            query="hello",
+            top_k=2,
+            session_match_boost=0.2,
+        )
+
+        self.assertTrue(repo.executed)
+        _, params = repo.executed[0]
+        self.assertEqual(
+            params,
+            (
+                [0.1, 0.2],
+                "session-key",
+                "session-key",
+                "user-123",
+                "agent-abc",
+                20,
+            ),
+        )
+
+        self.assertEqual([r["id"] for r in results], [2, 1])
+        self.assertTrue(results[0]["session_match"])
+        self.assertEqual(repo.updated_ids, [2, 1])
+
+    def test_search_returns_empty_on_embedding_failure(self):
+        repo = _Repo([])
+        retriever = MTMRetriever(repo, _FailingEmbeddingService())
+
+        with self.assertLogs("memory.mtm.repository.mtmRetriever", level="ERROR") as log_ctx:
+            results = retriever.search(
+                user_id="user-123",
+                agent_id="agent-abc",
+                session_key="session-key",
+                query="hello",
+            )
+
+        self.assertEqual(results, [])
+        self.assertFalse(repo.executed)
+        self.assertTrue(any("MTM retrieval failed" in message for message in log_ctx.output))
+
+    def test_search_returns_empty_on_query_failure(self):
+        repo = _FailingRepo([])
+        retriever = MTMRetriever(repo, _FakeEmbeddingService())
+
+        with self.assertLogs("memory.mtm.repository.mtmRetriever", level="ERROR") as log_ctx:
+            results = retriever.search(
+                user_id="user-123",
+                agent_id="agent-abc",
+                session_key="session-key",
+                query="hello",
+            )
+
+        self.assertEqual(results, [])
+        self.assertTrue(any("MTM retrieval failed" in message for message in log_ctx.output))
+
+    def test_search_by_tags_logs_and_returns_empty_on_failure(self):
+        repo = _FailingTagRepo([])
+        retriever = MTMRetriever(repo, _FakeEmbeddingService())
+
+        with self.assertLogs("memory.mtm.repository.mtmRetriever", level="ERROR") as log_ctx:
+            results = retriever.search_by_tags(user_id="user-123", tag_filter={"topic": "x"})
+
+        self.assertEqual(results, [])
+        self.assertTrue(any("search_by_tags failed" in msg for msg in log_ctx.output))
+
+
+if __name__ == "__main__":
+    unittest.main()
