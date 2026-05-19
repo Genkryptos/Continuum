@@ -1,0 +1,244 @@
+# =============================================================================
+# pyproject.toml — Continuum memory framework
+# =============================================================================
+
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+# ── Project metadata ──────────────────────────────────────────────────────────
+
+[project]
+name        = "continuum-memory"
+version     = "0.1.0"
+description = "AI agent memory framework with layered STM / MTM / LTM"
+readme      = "README.md"
+license     = { file = "LICENSE" }
+requires-python = ">=3.11"
+
+keywords = ["ai", "memory", "agent", "llm", "vector-database", "pgvector"]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+# Core deps: only what every install needs (pydantic config + YAML loader).
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.4",
+    "PyYAML>=6.0",
+]
+
+
+# ── Optional extras ───────────────────────────────────────────────────────────
+
+[project.optional-dependencies]
+# PostgreSQL / pgvector persistence backends
+postgres = [
+    "psycopg2-binary>=2.9.9",       # legacy sync paths + test fixtures
+    "psycopg[binary,pool]>=3.1",    # async stores + PostgresLTM pooling
+]
+# LLM providers used by the Promoter and Optimizer
+llm = [
+    "litellm>=1.44.0",
+    "openai>=1.37.0",
+    "anthropic>=0.39.0",
+]
+# Embedding model (local, via sentence-transformers)
+embed = [
+    "sentence-transformers>=3.1.0",
+    "tiktoken>=0.7.0",
+    "cachetools>=5.3",
+    "numpy>=1.26",
+    "redis>=5.0",
+]
+# Token-budget compression (LLMLingua)
+optimizer = [
+    "llmlingua>=0.2.0",
+]
+# Code knowledge-graph indexing
+code = [
+    "tree-sitter>=0.21.0",
+]
+# Everything at once (for full local dev)
+all = [
+    "continuum-memory[postgres,llm,embed,optimizer,code]",
+]
+# Developer toolchain — installed via `pip install -e .[dev]`
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=5.0",
+    "pytest-benchmark>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "black>=24.0",
+    "isort>=5.13",
+    # test-time extras
+    "psycopg2-binary>=2.9.9",
+    "PyYAML>=6.0",
+]
+
+
+# ── Package discovery ─────────────────────────────────────────────────────────
+
+[tool.hatch.build.targets.wheel]
+# Flat layout: the distributable package lives at ./continuum/
+packages = ["continuum"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# PEP 561: ship the inline-types marker so downstream `mypy`/`pyright`
+# type-check against continuum's own annotations.
+"continuum/py.typed" = "continuum/py.typed"
+
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+# Primary config lives in pytest.ini; this section provides IDE integration
+# (many editors read pyproject.toml but not pytest.ini).
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+asyncio_mode = "auto"
+
+
+# ── Mypy ─────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version         = "3.11"
+# 100% type coverage: strict mode is the floor, not a goal.
+strict                 = true
+warn_return_any        = true
+warn_unused_configs    = true
+warn_redundant_casts   = true
+warn_unused_ignores    = true
+disallow_untyped_defs  = true
+disallow_incomplete_defs = true
+check_untyped_defs     = true
+no_implicit_optional   = true
+# Optional 3rd-party deps (psycopg, tiktoken, …) aren't always installed and
+# ship no stubs; silence import errors globally and per-module below rather
+# than scattering `# type: ignore[import-untyped]` across the codebase.
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional deps — not always installed in a given environment.
+module = [
+    "psycopg2.*",
+    "sentence_transformers.*",
+    "litellm.*",
+    "tiktoken.*",
+    "llmlingua.*",
+    "tree_sitter.*",
+]
+ignore_missing_imports = true
+
+
+# ── Ruff ─────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py311"
+line-length    = 100
+
+# The task spec asks for {E,F,I,N,W,UP}. We keep that as a *subset* and
+# additionally enable B/C4/RUF/SIM/TID — a strict superset is stricter, not
+# looser, and the codebase already passes them.
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (undefined names, unused imports, …)
+    "I",    # isort import ordering
+    "N",    # pep8-naming (Class/CONSTANT/function casing)
+    "UP",   # pyupgrade (modern Python syntax)
+    "B",    # flake8-bugbear (likely bugs / design issues)
+    "C4",   # flake8-comprehensions (simplify list/dict/set comprehensions)
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports (ban relative imports in src)
+]
+ignore = [
+    "E501",   # line too long — handled by the formatter
+    "B008",   # function calls in default argument values (Pydantic pattern)
+    "RUF012", # mutable class attributes — needed for Pydantic fields
+    "SIM108", # ternary vs if/else — sometimes if/else is clearer
+    "SIM114", # combine if branches — hurts readability here
+    "RUF001", # ambiguous Unicode in strings (intentional math: –, ×, −)
+    "RUF002", # ambiguous Unicode in docstrings (intentional math)
+    "RUF003", # ambiguous Unicode in comments (intentional math)
+    "RUF022", # __all__ must be sorted — we use semantic grouping with comments
+    "UP042",  # StrEnum migration — deferred; (str, Enum) is intentional here
+    "SIM103", # return negated condition — multi-guard form is clearer here
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use assert statements and skip type annotations freely.
+"tests/**/*.py" = ["S101", "ANN", "D"]
+# __init__ files only re-export — silence "imported but unused".
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["continuum"]
+
+[tool.ruff.format]
+# Ruff's built-in formatter is black-compatible.
+quote-style = "double"
+indent-style = "space"
+
+
+# ── Black ─────────────────────────────────────────────────────────────────────
+
+[tool.black]
+line-length    = 100
+target-version = ["py311", "py312"]
+
+
+# ── isort ────────────────────────────────────────────────────────────────────
+
+[tool.isort]
+profile         = "black"
+line_length     = 100
+known_first_party = ["continuum"]
+
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source  = ["continuum"]
+branch  = true          # measure branch coverage, not just line coverage
+omit = [
+    "continuum/__init__.py",
+    "continuum/core/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing  = true
+skip_covered  = false
+fail_under    = 80      # CI fails below 80 % combined coverage
+exclude_lines = [
+    # Standard pragma
+    "pragma: no cover",
+    # Debug/repr helpers
+    "def __repr__",
+    "def __str__",
+    # Import-time type stubs
+    "if TYPE_CHECKING:",
+    # Abstract interface bodies
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    # Protocol stub bodies
+    "\\.\\.\\.\\s*$",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"

@@ -1,0 +1,185 @@
+# =============================================================================
+# continuum.yaml  —  Continuum memory framework configuration
+# =============================================================================
+#
+# Priority order (highest → lowest):
+#   1. Programmatic  ContinuumConfig(database=DatabaseConfig(dsn="..."))
+#   2. Env vars      CONTINUUM_DB_DSN=postgresql://...
+#   3. This file     (you are here)
+#   4. Defaults      built into config.py
+#
+# Load in Python:
+#   from continuum.core.config import ContinuumConfig
+#   cfg = ContinuumConfig.load()                          # reads this file
+#   cfg = ContinuumConfig.load("path/to/other.yaml")     # override path
+#
+# Or set CONTINUUM_CONFIG_FILE=/path/to/file.yaml before importing.
+#
+# Lines beginning with '#' are comments.  Remove any section you don't need
+# to override — the built-in defaults will be used instead.
+# =============================================================================
+
+# ── Top-level ────────────────────────────────────────────────────────────────
+
+# log_level: one of DEBUG | INFO | WARNING | ERROR | CRITICAL
+log_level: INFO
+
+# environment: development | staging | production
+# In production, validation errors are fatal and telemetry is enabled.
+environment: development
+
+
+# ── Database ─────────────────────────────────────────────────────────────────
+# Also configurable via:
+#   CONTINUUM_DB_DSN, CONTINUUM_DB_POOL_SIZE, CONTINUUM_DB_TIMEOUT
+
+database:
+  # Full PostgreSQL DSN including credentials and database name.
+  # Format: postgresql://user:password@host:port/dbname
+  dsn: postgresql://myuser:mypassword@localhost:5432/continuum
+
+  # Number of persistent connections in the psycopg2 pool (1–100).
+  pool_size: 5
+
+  # Query / connection timeout in seconds (must be > 0).
+  timeout: 30.0
+
+
+# ── Embedding ─────────────────────────────────────────────────────────────────
+# Also configurable via:
+#   CONTINUUM_EMBED_MODEL, CONTINUUM_EMBED_BATCH_SIZE,
+#   CONTINUUM_EMBED_CACHE_ENABLED, CONTINUUM_EMBED_DIM
+
+embedding:
+  # HuggingFace model id or local path.
+  # Must produce vectors whose dimension matches the pgvector column (memory_nodes.embedding).
+  #
+  # Recommended options:
+  #   BAAI/bge-m3              — 1024-dim, multilingual, top MTEB scores  ← default
+  #   BAAI/bge-large-en-v1.5  — 1024-dim, English-only, fast
+  #   text-embedding-3-small   — OpenAI API, 1536-dim (set dim: 1536)
+  #   nomic-ai/nomic-embed-text-v1 — 768-dim, Apache-2.0
+  model_name: BAAI/bge-m3
+
+  # Number of texts embedded per forward pass.
+  # Larger = faster throughput, higher VRAM usage.
+  batch_size: 64
+
+  # Cache identical texts to avoid redundant model calls.
+  cache_enabled: true
+
+  # Must match the pgvector column dimension.
+  dim: 1024
+
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+# Formula: composite = rel·relevance + imp·importance + rec·recency + conf·confidence
+# Also configurable via:
+#   CONTINUUM_SCORE_W_REL, CONTINUUM_SCORE_W_IMP,
+#   CONTINUUM_SCORE_W_REC, CONTINUUM_SCORE_W_CONF,
+#   CONTINUUM_SCORE_TAU_HOURS
+
+scoring:
+  weights:
+    # Coefficients MUST sum to exactly 1.0.
+    rel:  0.45   # vector / keyword relevance
+    imp:  0.25   # item importance (normalised from the 4-level STM enum)
+    rec:  0.20   # recency (exponential decay, see tau_hours)
+    conf: 0.10   # source confidence (lower for inferred / summarised facts)
+
+  # Recency decay half-life in hours.
+  # After tau_hours:   recency = 0.50
+  # After 2×tau_hours: recency = 0.25
+  # Default 168 h = 7 days.  Lower values (e.g. 24) suit fast-moving domains.
+  tau_hours: 168.0
+
+
+# ── Retriever ─────────────────────────────────────────────────────────────────
+# Also configurable via:
+#   CONTINUUM_RETRIEVER_K1, CONTINUUM_RETRIEVER_K_GRAPH,
+#   CONTINUUM_RETRIEVER_LTM_TOP_K, CONTINUUM_RETRIEVER_STM_TURNS,
+#   CONTINUUM_RETRIEVER_MTM_TOP_K
+
+retriever:
+  # Initial candidate pool fetched from the vector index before re-ranking.
+  # Larger = better recall, slower query.
+  k1: 50
+
+  # LTM knowledge-graph traversal depth (0 = graph disabled).
+  k_graph: 2
+
+  # Maximum LTM items returned after scoring.
+  ltm_top_k: 10
+
+  # Number of recent STM conversation turns to include in the context bundle.
+  stm_turns: 6
+
+  # Maximum MTM items returned after scoring.
+  mtm_top_k: 5
+
+
+# ── Promoter ──────────────────────────────────────────────────────────────────
+# Also configurable via:
+#   CONTINUUM_PROMOTER_CONFIDENCE_THRESHOLD, CONTINUUM_PROMOTER_BATCH_SIZE,
+#   CONTINUUM_PROMOTER_TRIGGER_ON_NEW_ENTITY, CONTINUUM_PROMOTER_LLM_MODEL
+
+promoter:
+  # Minimum LLM confidence for a candidate to be promoted to LTM.
+  # Range [0.0, 1.0].  Raise to reduce noisy promotions (e.g. 0.85 for production).
+  confidence_threshold: 0.75
+
+  # MTM items evaluated per promote() call.
+  batch_size: 20
+
+  # Run the Promoter eagerly when a new 'entity' kind is added to MTM.
+  trigger_on_new_entity: true
+
+  # LiteLLM-compatible model for promotion decisions.
+  # Any provider: openai/gpt-4o, anthropic/claude-3-5-haiku, ollama/llama3, …
+  llm_model: gpt-4o-mini
+
+
+# ── Optimizer ─────────────────────────────────────────────────────────────────
+# Also configurable via:
+#   CONTINUUM_OPTIMIZER_COMPRESS_RATIO, CONTINUUM_OPTIMIZER_STRATEGIES_ENABLED
+
+optimizer:
+  # Target compression ratio for the 'compression' strategy (0 < ratio < 1).
+  # 0.5 = aim to halve token count.  Ignored when compression is not enabled.
+  compress_ratio: 0.5
+
+  # Ordered list of strategies the Optimizer may apply.
+  # truncation  — drop lowest-scored items until budget fits (lossless per item)
+  # compression — shorten content via LLMlingua (lossy, needs continuum[optimizer])
+  # hybrid      — compress low-priority, keep high-priority verbatim
+  strategies_enabled:
+    - truncation
+    - compression
+
+
+# ── Code knowledge graph ───────────────────────────────────────────────────────
+# Only relevant when using the continuum-code sub-package.
+# Also configurable via:
+#   CONTINUUM_CODE_LANGUAGES, CONTINUUM_CODE_INDEX_BATCH_SIZE,
+#   CONTINUUM_CODE_INCREMENTAL, CONTINUUM_CODE_WATCH_GLOBS
+
+code:
+  # Languages to index.  Must be a subset of:
+  #   python, javascript, typescript, rust, go, java, c, cpp, ruby, kotlin, swift
+  languages:
+    - python
+    - javascript
+    - typescript
+
+  # Files processed per indexing batch (1–1024).
+  index_batch_size: 32
+
+  # Only re-index files changed since the last run (hash-tracked).
+  # Set to false for a full re-index every run.
+  incremental_enabled: true
+
+  # Glob patterns for files to include.
+  watch_globs:
+    - "**/*.py"
+    - "**/*.js"
+    - "**/*.ts"

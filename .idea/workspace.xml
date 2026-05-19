@@ -4,10 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 15 December &#10;Added logic for continuum to search on net and respond with the latest information if asked">
+    <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 16 December &#10;Fixing unit tests">
+      <change beforePath="$PROJECT_DIR$/.github/workflows/ci.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/ci.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/test_mtm_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/test/test_mtm_repository.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/test_mtm_retriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/test/test_mtm_retriever.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/memory/mtm/Readme.md" beforeDir="false" afterPath="$PROJECT_DIR$/memory/mtm/Readme.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -84,12 +84,13 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/mayanksahu/Continuum/Documentation&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/mayanksahu/Continuum/documentation&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/documentation" />
       <recent name="$PROJECT_DIR$/Documentation" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
@@ -374,7 +375,23 @@
       <option name="project" value="LOCAL" />
       <updated>1765904098916</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="commit - 16 December &#10;Fixing unit tests">
+      <option name="closed" value="true" />
+      <created>1765904960494</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1765904960494</updated>
+    </task>
+    <task id="LOCAL-00020" summary="commit - 16 December &#10;Fixing unit tests">
+      <option name="closed" value="true" />
+      <created>1765905829576</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1765905829576</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -388,7 +405,8 @@
     <MESSAGE value="commit - 10 Dec 2025&#10;&#10;MTM - Complete" />
     <MESSAGE value="commit - 15 December &#10;Added documentation in all files and changes logic for importance to handle more professionally" />
     <MESSAGE value="commit - 15 December &#10;Added logic for continuum to search on net and respond with the latest information if asked" />
-    <option name="LAST_COMMIT_MESSAGE" value="commit - 15 December &#10;Added logic for continuum to search on net and respond with the latest information if asked" />
+    <MESSAGE value="commit - 16 December &#10;Fixing unit tests" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit - 16 December &#10;Fixing unit tests" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -476,6 +494,11 @@
           <url>file://$PROJECT_DIR$/agent/AgentMTM.py</url>
           <line>431</line>
           <option name="timeStamp" value="35" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main.py</url>
+          <line>110</line>
+          <option name="timeStamp" value="36" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
