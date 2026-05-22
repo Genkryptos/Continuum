@@ -34,7 +34,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
-from continuum.core.config import RetrieverConfig
+from continuum.core.config import PolicyEngineConfig, RetrieverConfig
 from continuum.core.types import (
     ContextBundle,
     MemoryItem,
@@ -95,6 +95,7 @@ class Retriever:
         token_counter: TokenCounter | None = None,
         clock: ClockFn | None = None,
         session_id: str = "default",
+        policy_engine_config: PolicyEngineConfig | None = None,
     ) -> None:
         self.config = config or RetrieverConfig()
         self._ltm = ltm
@@ -106,6 +107,11 @@ class Retriever:
         self._count = token_counter or (lambda s: len(s.split()))
         self._clock = clock or (lambda: datetime.now(UTC))
         self._session_id = session_id
+        # Policy-engine config is optional. Filtering and boosting only
+        # activate when items in the pool carry the policy metadata
+        # introduced by migration 004 — old rows without those fields
+        # are untouched (backward compatible).
+        self._policy_config = policy_engine_config or PolicyEngineConfig()
 
     # ── RetrieverProtocol ───────────────────────────────────────────────────
 
@@ -211,16 +217,92 @@ class Retriever:
     ) -> list[ScoredItem]:
         now = self._clock()
         rescored: list[ScoredItem] = []
+        filtered_out = 0
         for si in pool.values():
+            if not self._should_retrieve(si.item, now):
+                filtered_out += 1
+                continue
             try:
                 sb = self._scorer.breakdown(si.item, query, now)
             except Exception:
                 log.debug("scoring failed for %s", si.item.id, exc_info=True)
                 sb = si.scores
-            rescored.append(ScoredItem(item=si.item, scores=sb))
+            boosted = self._apply_policy_boost(si.item, query, sb)
+            rescored.append(ScoredItem(item=si.item, scores=boosted))
         rescored.sort(key=lambda s: s.score, reverse=True)
         debug["scored"] = len(rescored)
+        if filtered_out:
+            debug["policy_filtered"] = filtered_out
         return rescored
+
+    # ── policy-aware filtering / boosting ───────────────────────────────────
+
+    def _should_retrieve(self, item: MemoryItem, now: datetime) -> bool:
+        """
+        Policy filter applied during scoring.
+
+        * Drop items whose ``expires_at`` is in the past.
+        * Drop RESTRICTED items still pending approval (status != active).
+        Items without any of the policy fields are untouched.
+        """
+        if not self._policy_config.enabled:
+            return True
+        md = item.metadata or {}
+        # 1. expiry
+        expires = md.get("expires_at")
+        if isinstance(expires, datetime) and expires < now:
+            return False
+        # 2. restricted-without-approval
+        sensitivity = md.get("sensitivity")
+        status = md.get("status")
+        if (
+            sensitivity == "restricted"
+            and status not in (None, "active")
+            and self._policy_config.require_approval_for_restricted
+        ):
+            return False
+        return True
+
+    def _apply_policy_boost(
+        self,
+        item: MemoryItem,
+        query: Query,
+        scores: ScoreBreakdown,
+    ) -> ScoreBreakdown:
+        """
+        Bump composite for high-signal candidate types.
+
+        * Tasks marked urgent get a recency boost.
+        * Procedures get boosted on "how" queries.
+        * User preferences get boosted on all queries.
+        Untyped items are untouched.
+        """
+        if not self._policy_config.enabled:
+            return scores
+        md = item.metadata or {}
+        ctype = md.get("candidate_type")
+        urgency = md.get("urgency")
+        boost = 0.0
+
+        if ctype == "user_preference":
+            boost += 0.10
+        if ctype == "task" and urgency in ("immediate", "soon"):
+            boost += 0.15
+        if ctype == "procedure" and any(
+            kw in (query.text or "").lower() for kw in ("how", "workflow", "process")
+        ):
+            boost += 0.10
+
+        if boost == 0.0:
+            return scores
+        new_composite = min(1.0, scores.composite + boost)
+        return ScoreBreakdown(
+            relevance=scores.relevance,
+            importance=scores.importance,
+            recency=scores.recency,
+            confidence=scores.confidence,
+            composite=new_composite,
+        )
 
     # ── 5. Reranking ────────────────────────────────────────────────────────
 

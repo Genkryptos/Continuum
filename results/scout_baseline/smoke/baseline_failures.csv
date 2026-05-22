@@ -1,0 +1,3 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+51a45a95,wrong_retrieval,Target,"I don't know. The context only mentions that you redeemed a $5 coupon on coffee creamer, but it doesn't specify where you redeemed it.",answer_d61669c7,answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7,,1837.0
+58bf7951,wrong_retrieval,The Glass Menagerie,I don't know. The context doesn't mention the name of the play.,answer_355c48bb,answer_355c48bb;answer_355c48bb;answer_355c48bb;answer_355c48bb,,3252.2

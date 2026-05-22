@@ -136,6 +136,7 @@ class ContinuumSession:
         *,
         responder: Responder | None = None,
         trigger_manager: Any | None = None,
+        idle_flush: Any | None = None,
         session_id: str = "default",
         agent_id: str | None = None,
         user_id: str | None = None,
@@ -161,6 +162,12 @@ class ContinuumSession:
         # Optional: a continuum.promotion.TriggerManager. When set,
         # process_turn queues its after_turn() check off the response path.
         self.trigger_manager = trigger_manager
+        # Optional: a continuum.promotion.IdleStmFlush watcher. When set,
+        # partial STM is flushed to MTM after a configurable idle gap so
+        # cross-session retrieval sees it even when the buffer never
+        # fills. The watcher is started in :meth:`start` and stopped in
+        # :meth:`aclose`.
+        self.idle_flush = idle_flush
         self.session_id = session_id
         self.agent_id = agent_id
         self.user_id = user_id
@@ -221,6 +228,17 @@ class ContinuumSession:
                     )
 
         await self.background.start()
+
+        # Spin up the idle-flush watcher (if wired) so partial STM gets
+        # promoted automatically when the user goes quiet.
+        if self.idle_flush is not None:
+            try:
+                await self.idle_flush.start(self.session_id)
+            except Exception:
+                log.exception(
+                    "idle_flush.start failed — continuing without watcher"
+                )
+
         self._started = True
         log.debug("ContinuumSession started")
 
@@ -235,6 +253,15 @@ class ContinuumSession:
         if not self._started:
             return
         self._started = False
+
+        # Stop the idle-flush watcher first — its stop() performs one
+        # final best-effort flush so partial STM still survives the
+        # shutdown even when no background queue work is queued.
+        if self.idle_flush is not None:
+            try:
+                await self.idle_flush.stop()
+            except Exception:
+                log.exception("idle_flush.stop failed (swallowed)")
 
         await self.background.stop(drain=True, timeout=self._shutdown_timeout)
 
@@ -329,6 +356,11 @@ class ContinuumSession:
         ``TokenBudget``, or ``None`` for the configured default.
         """
         budget = self._coerce_budget(context_budget)
+
+        # Reset the idle-flush clock — the user is actively interacting,
+        # so we shouldn't flush partial STM yet.
+        if self.idle_flush is not None:
+            self.idle_flush.touch()
 
         await self._append_to_stm(user_message, role="user")
 

@@ -1,0 +1,130 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "gpt-4o-mini",
+  "started_at": "2026-05-22T18:18:59.647450+00:00",
+  "finished_at": "2026-05-22T18:19:21.284820+00:00",
+  "metrics": {
+    "n_questions": 3,
+    "accuracy": 0.6666666666666666,
+    "avg_tokens": 8.666666666666666,
+    "recall": 1.0,
+    "latency_p50_ms": 6346.6517080087215,
+    "latency_p95_ms": 10026.955791996443,
+    "total_cost_usd": 1.56e-05,
+    "failure_breakdown": {
+      "llm_error": 0,
+      "missing_fact": 0,
+      "wrong_retrieval": 1,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 0.0,
+    "avg_context_tokens_post_opt": 0.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {}
+  },
+  "rows": [
+    {
+      "question_id": "e47becba",
+      "correct": true,
+      "latency_ms": 10026.955791996443,
+      "answer_tokens": 9,
+      "cost_usd": 5.399999999999999e-06,
+      "retrieved_session_ids": [
+        "sharegpt_QZMeA7V_17",
+        "sharegpt_QZMeA7V_17",
+        "ultrachat_458322",
+        "answer_280352e9"
+      ],
+      "expected_session_ids": [
+        "answer_280352e9"
+      ],
+      "answer": "You graduated with a degree in Business Administration.",
+      "expected_answer": "Business Administration",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "118b2229",
+      "correct": true,
+      "latency_ms": 5261.297667006147,
+      "answer_tokens": 12,
+      "cost_usd": 7.2e-06,
+      "retrieved_session_ids": [
+        "5209e813_2",
+        "5209e813_2",
+        "answer_40a90d51",
+        "5209e813_2",
+        "answer_40a90d51",
+        "sharegpt_M3x4mZx_0",
+        "sharegpt_M3x4mZx_0",
+        "d600c646",
+        "004edb32",
+        "sharegpt_M3x4mZx_0"
+      ],
+      "expected_session_ids": [
+        "answer_40a90d51"
+      ],
+      "answer": "Your daily commute to work takes 45 minutes each way.",
+      "expected_answer": "45 minutes each way",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "51a45a95",
+      "correct": false,
+      "latency_ms": 6346.6517080087215,
+      "answer_tokens": 5,
+      "cost_usd": 2.9999999999999997e-06,
+      "retrieved_session_ids": [
+        "answer_d61669c7",
+        "answer_d61669c7",
+        "answer_d61669c7",
+        "answer_d61669c7"
+      ],
+      "expected_session_ids": [
+        "answer_d61669c7"
+      ],
+      "answer": "I don't know.",
+      "expected_answer": "Target",
+      "failure_category": "wrong_retrieval",
+      "error": null,
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    }
+  ]
+}

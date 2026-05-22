@@ -507,6 +507,127 @@ class RerankerConfig(BaseSettings):
 
 
 # =============================================================================
+# PolicyEngineConfig  (policy-based memory lifecycle)
+# =============================================================================
+
+
+class PolicyEngineConfig(BaseSettings):
+    """
+    Policy-based memory lifecycle settings.
+
+    Env vars
+    --------
+    CONTINUUM_POLICY_ENABLED                       bool (default true)
+    CONTINUUM_POLICY_STRICT_SENSITIVITY            bool (default true)
+    CONTINUUM_POLICY_REQUIRE_APPROVAL_RESTRICTED   bool (default true)
+    CONTINUUM_POLICY_DEFAULT_FACT_TTL_DAYS         int|null (default null)
+    CONTINUUM_POLICY_TASK_GRACE_HOURS              int (default 24)
+    CONTINUUM_POLICY_MEETING_RAW_TTL_DAYS          int (default 30)
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="CONTINUUM_POLICY_",
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "enabled", "CONTINUUM_POLICY_ENABLED"
+        ),
+        description=(
+            "Master switch. When False (or no PolicyEngine is wired), the "
+            "Promoter falls back to the legacy Mem0 ADD/UPDATE/DELETE/NOOP "
+            "path and Retriever skips policy-aware filtering."
+        ),
+    )
+    strict_sensitivity: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "strict_sensitivity", "CONTINUUM_POLICY_STRICT_SENSITIVITY"
+        ),
+        description=(
+            "When True, the SensitivityPolicy always wins on conflict — "
+            "never merge a redact/encrypt requirement away."
+        ),
+    )
+    require_approval_for_restricted: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "require_approval_for_restricted",
+            "CONTINUUM_POLICY_REQUIRE_APPROVAL_RESTRICTED",
+        ),
+        description=(
+            "When True, RESTRICTED-sensitivity candidates are deferred to "
+            "memory_pending_approvals instead of being stored."
+        ),
+    )
+    default_fact_ttl_days: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "default_fact_ttl_days", "CONTINUUM_POLICY_DEFAULT_FACT_TTL_DAYS"
+        ),
+        description=(
+            "Fallback TTL (days) the DefaultFactPolicy stamps on plain facts. "
+            "``None`` = indefinite retention."
+        ),
+    )
+    task_grace_period_hours: int = Field(
+        default=24,
+        ge=0,
+        validation_alias=AliasChoices(
+            "task_grace_period_hours", "CONTINUUM_POLICY_TASK_GRACE_HOURS"
+        ),
+        description=(
+            "Hours past a task's deadline the TaskUrgencyPolicy keeps it "
+            "around before compaction/expiry."
+        ),
+    )
+    meeting_raw_transcript_ttl_days: int = Field(
+        default=30,
+        ge=1,
+        validation_alias=AliasChoices(
+            "meeting_raw_transcript_ttl_days",
+            "CONTINUUM_POLICY_MEETING_RAW_TTL_DAYS",
+        ),
+        description=(
+            "How long the raw meeting transcript is retained in the "
+            "evidence store before compaction. Extracted decisions / tasks "
+            "are unaffected."
+        ),
+    )
+    preserve_decision_versions: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "preserve_decision_versions",
+            "CONTINUUM_POLICY_PRESERVE_DECISION_VERSIONS",
+        ),
+        description="DecisionPolicy keeps every version (append-only).",
+    )
+    preserve_preference_versions: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "preserve_preference_versions",
+            "CONTINUUM_POLICY_PRESERVE_PREFERENCE_VERSIONS",
+        ),
+        description="UserPreferencePolicy keeps domain-specific history.",
+    )
+    enable_code_policy: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "enable_code_policy", "CONTINUUM_POLICY_ENABLE_CODE"
+        ),
+    )
+    enable_procedural_policy: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "enable_procedural_policy", "CONTINUUM_POLICY_ENABLE_PROCEDURAL"
+        ),
+    )
+
+
+# =============================================================================
 # ScoringConfig  (weights + decay)
 # =============================================================================
 
@@ -1069,6 +1190,7 @@ class ContinuumConfig(BaseSettings):
         default_factory=FactExtractionConfig
     )
     trigger: TriggerConfig = Field(default_factory=TriggerConfig)
+    policy_engine: PolicyEngineConfig = Field(default_factory=PolicyEngineConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     retriever: RetrieverConfig = Field(default_factory=RetrieverConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)

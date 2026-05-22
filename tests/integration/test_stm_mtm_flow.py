@@ -95,8 +95,10 @@ def _near(vec: list[float], seed: int, eps: float = 0.01) -> list[float]:
 
 
 def _cos(a: list[float], b: list[float]) -> float:
+    # ``np.dot`` (1-D path) avoids a spurious "divide by zero in matmul"
+    # RuntimeWarning numpy 2.x emits for ``av @ bv`` on some platforms.
     av, bv = np.asarray(a), np.asarray(b)
-    return float(av @ bv / (np.linalg.norm(av) * np.linalg.norm(bv)))
+    return float(np.dot(av, bv) / (np.linalg.norm(av) * np.linalg.norm(bv)))
 
 
 def _turn(session: str, i: int, topic: str = "general") -> MemoryItem:
@@ -199,7 +201,7 @@ async def test_topic_shift_triggers_flush(postgres_db: str) -> None:
         b_emb = _near(base_b, seed=50)
         assert centroid is not None
         if _cos(centroid, b_emb) < 0.4:  # ← topic-shift policy
-            flushes += await_flush(stm, session, mtm)
+            flushes += await await_flush(stm, session, mtm)
 
         # Now continue the conversation on Topic B.
         for i in range(5, 10):

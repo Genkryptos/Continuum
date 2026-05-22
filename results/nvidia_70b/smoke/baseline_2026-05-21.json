@@ -1,0 +1,188 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "meta/llama-3.3-70b-instruct",
+  "started_at": "2026-05-21T23:20:22.836874+00:00",
+  "finished_at": "2026-05-21T23:21:00.997411+00:00",
+  "metrics": {
+    "n_questions": 5,
+    "accuracy": 0.8,
+    "avg_tokens": 10.8,
+    "recall": 1.0,
+    "latency_p50_ms": 8869.753041995864,
+    "latency_p95_ms": 12389.44329199876,
+    "total_cost_usd": 0.0,
+    "failure_breakdown": {
+      "llm_error": 0,
+      "missing_fact": 0,
+      "wrong_retrieval": 1,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 736.0,
+    "avg_context_tokens_post_opt": 736.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.17868359864223748,
+    "strategy_savings_total": {}
+  },
+  "rows": [
+    {
+      "question_id": "e47becba",
+      "correct": true,
+      "latency_ms": 10446.945167001104,
+      "answer_tokens": 9,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "sharegpt_QZMeA7V_17",
+        "sharegpt_QZMeA7V_17",
+        "ultrachat_458322",
+        "answer_280352e9"
+      ],
+      "expected_session_ids": [
+        "answer_280352e9"
+      ],
+      "answer": "I graduated with a degree in Business Administration.",
+      "expected_answer": "Business Administration",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 266,
+      "post_opt_total_tokens": 266,
+      "pre_opt_stm_tokens": 185,
+      "pre_opt_mtm_tokens": 16,
+      "pre_opt_ltm_tokens": 65,
+      "post_opt_stm_tokens": 185,
+      "post_opt_mtm_tokens": 16,
+      "post_opt_ltm_tokens": 65,
+      "retrieved_count": 4,
+      "retrieval_ms": 7793.560209000134,
+      "optimizer_ms": 0.08074999641394243,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "118b2229",
+      "correct": true,
+      "latency_ms": 8869.753041995864,
+      "answer_tokens": 23,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_40a90d51",
+        "answer_40a90d51",
+        "7d8b5834_1",
+        "004edb32"
+      ],
+      "expected_session_ids": [
+        "answer_40a90d51"
+      ],
+      "answer": "45 minutes each way, so your total daily commute is 1.5 hours (45 minutes x 2).",
+      "expected_answer": "45 minutes each way",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 973,
+      "post_opt_total_tokens": 973,
+      "pre_opt_stm_tokens": 21,
+      "pre_opt_mtm_tokens": 195,
+      "pre_opt_ltm_tokens": 757,
+      "post_opt_stm_tokens": 21,
+      "post_opt_mtm_tokens": 195,
+      "post_opt_ltm_tokens": 757,
+      "retrieved_count": 4,
+      "retrieval_ms": 932.3741659973166,
+      "optimizer_ms": 0.2592919991002418,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "51a45a95",
+      "correct": true,
+      "latency_ms": 4608.464791999722,
+      "answer_tokens": 2,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_d61669c7",
+        "answer_d61669c7",
+        "answer_d61669c7",
+        "answer_d61669c7"
+      ],
+      "expected_session_ids": [
+        "answer_d61669c7"
+      ],
+      "answer": "Target.",
+      "expected_answer": "Target",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 823,
+      "post_opt_total_tokens": 823,
+      "pre_opt_stm_tokens": 32,
+      "pre_opt_mtm_tokens": 209,
+      "pre_opt_ltm_tokens": 582,
+      "post_opt_stm_tokens": 32,
+      "post_opt_mtm_tokens": 209,
+      "post_opt_ltm_tokens": 582,
+      "retrieved_count": 4,
+      "retrieval_ms": 983.982499994454,
+      "optimizer_ms": 0.18149999959859997,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "58bf7951",
+      "correct": false,
+      "latency_ms": 12389.44329199876,
+      "answer_tokens": 5,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_355c48bb",
+        "answer_355c48bb",
+        "answer_355c48bb",
+        "answer_355c48bb"
+      ],
+      "expected_session_ids": [
+        "answer_355c48bb"
+      ],
+      "answer": "I don't know.",
+      "expected_answer": "The Glass Menagerie",
+      "failure_category": "wrong_retrieval",
+      "error": null,
+      "pre_opt_total_tokens": 642,
+      "post_opt_total_tokens": 642,
+      "pre_opt_stm_tokens": 47,
+      "pre_opt_mtm_tokens": 179,
+      "pre_opt_ltm_tokens": 416,
+      "post_opt_stm_tokens": 47,
+      "post_opt_mtm_tokens": 179,
+      "post_opt_ltm_tokens": 416,
+      "retrieved_count": 4,
+      "retrieval_ms": 1112.841958005447,
+      "optimizer_ms": 0.14466699940385297,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "1e043500",
+      "correct": true,
+      "latency_ms": 1842.522207996808,
+      "answer_tokens": 15,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_3e012175",
+        "answer_3e012175",
+        "answer_3e012175",
+        "8020d945_2"
+      ],
+      "expected_session_ids": [
+        "answer_3e012175"
+      ],
+      "answer": "The name of the playlist you created on Spotify is \"Summer Vibes\".",
+      "expected_answer": "Summer Vibes",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 976,
+      "post_opt_total_tokens": 976,
+      "pre_opt_stm_tokens": 68,
+      "pre_opt_mtm_tokens": 473,
+      "pre_opt_ltm_tokens": 435,
+      "post_opt_stm_tokens": 68,
+      "post_opt_mtm_tokens": 473,
+      "post_opt_ltm_tokens": 435,
+      "retrieved_count": 4,
+      "retrieval_ms": 977.3815419976017,
+      "optimizer_ms": 0.22720899869455025,
+      "strategy_savings": {}
+    }
+  ]
+}

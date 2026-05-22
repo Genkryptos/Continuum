@@ -1,0 +1,2 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+51a45a95,wrong_retrieval,Target,"You redeemed a $5 coupon on coffee creamer at a store, but the specific store is not mentioned in the context.",answer_d61669c7,answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7;6e0b1800_2;f32d1ccf_1,,2813.3

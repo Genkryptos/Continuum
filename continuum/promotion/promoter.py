@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from continuum.core.config import PromoterConfig
+from continuum.core.config import PolicyEngineConfig, PromoterConfig
 from continuum.core.types import (
     MemoryItem,
     MemoryTier,
@@ -53,6 +53,10 @@ from continuum.core.types import (
     ScoredItem,
 )
 from continuum.extraction.fact_extractor import Fact
+from continuum.policies.models import (
+    MemoryAction,
+    PolicyEvaluationContext,
+)
 
 log = logging.getLogger(__name__)
 
@@ -146,6 +150,12 @@ class Promoter:
         metrics_fn: MetricsFn | None = None,
         clock: ClockFn | None = None,
         cost_per_1k: dict[str, tuple[float, float]] | None = None,
+        # ── Policy Engine (optional, backward-compatible) ────────────────
+        policy_engine: Any | None = None,
+        candidate_extractor: Any | None = None,
+        storage_router: Any | None = None,
+        trace_writer: Any | None = None,
+        policy_engine_config: PolicyEngineConfig | None = None,
     ) -> None:
         self.config = config or PromoterConfig()
         self._mtm = mtm
@@ -157,6 +167,27 @@ class Promoter:
         self._metrics = metrics_fn
         self._clock = clock or (lambda: datetime.now(UTC))
         self._prices = cost_per_1k or _PRICE_PER_1K
+        # Policy-engine collaborators are entirely optional. The legacy
+        # Mem0 path runs unchanged unless *all* of policy_engine,
+        # candidate_extractor, and storage_router are wired AND the
+        # config has enabled=True.
+        self._policy_engine = policy_engine
+        self._candidate_extractor = candidate_extractor
+        self._storage_router = storage_router
+        self._trace_writer = trace_writer
+        self._policy_config = policy_engine_config or PolicyEngineConfig()
+
+    # ── policy-engine activation guard ──────────────────────────────────────
+
+    @property
+    def _policy_engine_active(self) -> bool:
+        """True only when fully wired AND enabled in config."""
+        return bool(
+            self._policy_config.enabled
+            and self._policy_engine is not None
+            and self._candidate_extractor is not None
+            and self._storage_router is not None
+        )
 
     # ── protocol entry point ────────────────────────────────────────────────
 
@@ -189,6 +220,17 @@ class Promoter:
     # ── pipeline ────────────────────────────────────────────────────────────
 
     async def _run(
+        self, sc: PromotionScope, report: PromotionRunReport
+    ) -> None:
+        # Branch on policy engine availability. The legacy Mem0 path is the
+        # default and ships unchanged for callers that don't wire a policy
+        # engine.
+        if self._policy_engine_active:
+            await self._run_policy_engine(sc, report)
+            return
+        await self._run_legacy(sc, report)
+
+    async def _run_legacy(
         self, sc: PromotionScope, report: PromotionRunReport
     ) -> None:
         # Steps 1–3: scan + extract → (fact, neighbors) candidate pairs.
@@ -262,6 +304,135 @@ class Promoter:
 
         # Step 6: mark blocks processed.
         await self._mark_processed(processed_blocks, report)
+
+    # ── policy-engine pipeline ──────────────────────────────────────────────
+
+    async def _run_policy_engine(
+        self, sc: PromotionScope, report: PromotionRunReport
+    ) -> None:
+        """
+        Policy-driven promotion path.
+
+        For each MTM block: entities → candidates → engine.evaluate_many →
+        storage_router.execute → trace_writer.write. Errors per block /
+        per candidate are isolated, mirroring the legacy path.
+        """
+        # _policy_engine_active is True iff all three are non-None; help
+        # mypy narrow the unions.
+        assert self._policy_engine is not None
+        assert self._candidate_extractor is not None
+        assert self._storage_router is not None
+
+        processed_blocks: list[uuid.UUID] = []
+        traces: list[Any] = []
+        scanned = 0
+
+        async for block in self._mtm.scan_unprocessed():
+            if not self._in_scope(block, sc):
+                continue
+            scanned += 1
+            if scanned % 10 == 0:
+                log.info("promotion progress: %d blocks scanned", scanned)
+                self._emit("promoter.processed", scanned)
+
+            try:
+                entities = await self._extract_entities(block.text)
+                candidates = await self._candidate_extractor.extract_candidates(
+                    block, entities
+                )
+            except Exception as exc:
+                report.errors.append(
+                    f"block {block.id}: extract_candidates: {exc!r}"
+                )
+                self._emit("promoter.errors", 1)
+                log.exception(
+                    "candidate extraction failed for block %s", block.id
+                )
+                continue
+
+            # Block-level handling is considered done once extraction
+            # succeeded — mirror the legacy contract.
+            processed_blocks.append(block.id)
+            report.blocks_processed += 1
+
+            if not candidates:
+                continue
+
+            ctx = PolicyEvaluationContext(
+                now=self._clock(),
+                session_id=self._coerce_uuid(
+                    getattr(block, "session_id", None)
+                ),
+                existing_neighbors=[],
+                config=self._policy_config.model_dump(),
+            )
+
+            try:
+                evaluated = await self._policy_engine.evaluate_many(
+                    candidates, ctx
+                )
+            except Exception as exc:
+                report.errors.append(
+                    f"block {block.id}: policy.evaluate_many: {exc!r}"
+                )
+                self._emit("promoter.errors", 1)
+                log.exception("policy evaluation failed for block %s", block.id)
+                continue
+
+            for candidate, plan, trace in evaluated:
+                traces.append(trace)
+                self._account_policy_decision(plan, report)
+                try:
+                    await self._storage_router.execute(candidate, plan)
+                except Exception as exc:
+                    report.errors.append(
+                        f"candidate {candidate.id}: storage_router: {exc!r}"
+                    )
+                    self._emit("promoter.errors", 1)
+                    log.exception(
+                        "storage_router failed for candidate %s", candidate.id
+                    )
+
+        # Persist traces best-effort (TraceWriter never raises).
+        if traces and self._trace_writer is not None:
+            try:
+                await self._trace_writer.write(traces)
+            except Exception:
+                # TraceWriter promises to swallow, but be defensive.
+                log.exception("trace_writer.write raised — ignoring")
+
+        await self._mark_processed(processed_blocks, report)
+
+    def _account_policy_decision(
+        self, plan: Any, report: PromotionRunReport
+    ) -> None:
+        """Map a MemoryAction onto the legacy add/upd/del/noop counters."""
+        action = getattr(plan, "action", None)
+        cand_id = getattr(plan, "candidate_id", None)
+        try:
+            cand_uuid = self._as_uuid(cand_id) if cand_id is not None else None
+        except Exception:
+            cand_uuid = None
+
+        if action == MemoryAction.STORE:
+            if cand_uuid is not None:
+                report.added.append(cand_uuid)
+            self._emit("promoter.added", 1)
+        elif action in (
+            MemoryAction.UPDATE,
+            MemoryAction.MERGE,
+            MemoryAction.SUPERSEDE,
+            MemoryAction.COMPACT,
+        ):
+            if cand_uuid is not None:
+                report.updated.append(cand_uuid)
+        elif action in (MemoryAction.DELETE, MemoryAction.EXPIRE):
+            if cand_uuid is not None:
+                report.deleted.append(cand_uuid)
+        else:
+            # IGNORE / ASK_USER / NOOP all count as "skipped" from the
+            # promotion-report perspective.
+            report.noop_count += 1
 
     # ── steps ───────────────────────────────────────────────────────────────
 
@@ -373,6 +544,17 @@ class Promoter:
     @staticmethod
     def _as_uuid(value: Any) -> uuid.UUID:
         return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+    @staticmethod
+    def _coerce_uuid(value: Any) -> uuid.UUID | None:
+        if value is None:
+            return None
+        if isinstance(value, uuid.UUID):
+            return value
+        try:
+            return uuid.UUID(str(value))
+        except (ValueError, AttributeError):
+            return None
 
     def _emit(self, name: str, value: float) -> None:
         if self._metrics is not None:

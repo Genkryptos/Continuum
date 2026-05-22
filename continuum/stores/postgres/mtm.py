@@ -312,8 +312,9 @@ class PostgresMTM:
               AND  mp.id IS NULL
               {agent_clause}
               AND  (
-                    %(after_ts)s IS NULL
-                 OR (mn.created_at, mn.id) > (%(after_ts)s, %(after_id)s)
+                    %(after_ts)s::timestamptz IS NULL
+                 OR (mn.created_at, mn.id) >
+                    (%(after_ts)s::timestamptz, %(after_id)s::uuid)
               )
             ORDER  BY mn.created_at ASC, mn.id ASC
             LIMIT  %(batch)s

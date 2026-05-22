@@ -1,0 +1,1205 @@
+2026-05-22 04:58:48,760 INFO provider=nvidia model=meta/llama-3.3-70b-instruct rpm=35
+2026-05-22 04:58:48,809 INFO loading dataset from /Users/mayanksahu/Continuum/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
+2026-05-22 04:58:50,034 INFO loaded 500 rows
+2026-05-22 04:58:50,034 INFO optimizer chain ENABLED: StmTrim → MtmSummarize → SemanticDedupe → ScoreAwareBudgetPrune
+2026-05-22 04:58:50,034 INFO === SMOKE TEST (5 questions) ===
+2026-05-22 04:58:52,829 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
+2026-05-22 04:58:52,842 INFO Use pytorch device_name: mps
+2026-05-22 04:58:52,842 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:03,  4.50it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01,  8.23it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01,  9.90it/s]Batches:  39%|███▉      | 7/18 [00:00<00:01, 10.94it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 12.37it/s]Batches:  72%|███████▏  | 13/18 [00:00<00:00, 18.11it/s]Batches: 100%|██████████| 18/18 [00:01<00:00, 24.59it/s]Batches: 100%|██████████| 18/18 [00:01<00:00, 16.48it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 24.93it/s]
+2026-05-22 04:59:17,228 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 04:59:17,229 INFO row 1/5 id=e47becba correct=True latency=27195ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.39it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.90it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.83it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.34it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.49it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 25.11it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.98it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 51.84it/s]
+2026-05-22 05:00:02,387 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:02,388 INFO row 2/5 id=118b2229 correct=True latency=45158ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:02,  7.68it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.62it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.53it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 11.82it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.89it/s]Batches:  76%|███████▋  | 13/17 [00:00<00:00, 20.12it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 18.46it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 56.37it/s]
+2026-05-22 05:00:03,409 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:03,409 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:00:19,385 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:19,387 INFO row 3/5 id=51a45a95 correct=True latency=16998ms
+Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:02,  7.46it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01, 10.58it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 11.59it/s]Batches:  35%|███▌      | 7/20 [00:00<00:01, 12.21it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 12.76it/s]Batches:  60%|██████    | 12/20 [00:00<00:00, 16.84it/s]Batches:  80%|████████  | 16/20 [00:00<00:00, 22.46it/s]Batches: 100%|██████████| 20/20 [00:01<00:00, 19.07it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 49.32it/s]
+2026-05-22 05:00:21,023 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:21,025 INFO row 4/5 id=58bf7951 correct=False latency=1637ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.59it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.90it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.69it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.92it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.03it/s]Batches:  88%|████████▊ | 14/16 [00:00<00:00, 22.93it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.21it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 54.83it/s]
+2026-05-22 05:00:28,294 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:28,296 INFO row 5/5 id=1e043500 correct=True latency=7271ms
+2026-05-22 05:00:28,298 INFO metrics written to results/smoke/baseline_2026-05-21.json
+2026-05-22 05:00:28,299 INFO 1 failures written to results/smoke/baseline_failures.csv
+2026-05-22 05:00:28,299 INFO smoke completed in 98s
+2026-05-22 05:00:28,299 INFO === FULL RUN (500 questions) ===
+============================================================
+LongMemEval baseline — longmemeval-s
+  answerer:        meta/llama-3.3-70b-instruct
+  questions:       5
+  accuracy:        80.0%
+  recall:          100.0%
+  avg tokens:      14
+  latency p50/p95: 16998ms / 45158ms
+  total cost:      $0.00
+  failure types:
+    wrong_retrieval    1
+============================================================
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:02,  8.37it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 10.90it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 11.76it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 12.29it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 14.07it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 29.00it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 21.98it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 221.29it/s]
+2026-05-22 05:00:29,934 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:29,935 INFO row 1/? id=e47becba correct=True latency=1635ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.43it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.80it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.62it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.14it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.39it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.34it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 223.61it/s]
+2026-05-22 05:00:30,916 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:30,917 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:00:32,641 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:32,642 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:00:34,692 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:34,693 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:00:38,725 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:38,726 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:00:48,775 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:48,776 INFO row 2/? id=118b2229 correct=True latency=18841ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.35it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.85it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.79it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.32it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.79it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.50it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 260.02it/s]
+2026-05-22 05:00:49,647 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:00:49,647 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:00:59,731 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:00:59,732 INFO row 3/? id=51a45a95 correct=True latency=10956ms
+Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:02,  8.41it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01, 11.02it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 11.80it/s]Batches:  35%|███▌      | 7/20 [00:00<00:01, 12.32it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 13.77it/s]Batches:  70%|███████   | 14/20 [00:00<00:00, 23.33it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 22.84it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 199.84it/s]
+2026-05-22 05:01:01,678 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:01:01,680 INFO row 4/? id=58bf7951 correct=False latency=1948ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.57it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.98it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.88it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.48it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.06it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.92it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 200.72it/s]
+2026-05-22 05:01:22,054 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:01:22,055 INFO row 5/? id=1e043500 correct=True latency=20374ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.15it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.67it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.63it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.31it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 16.51it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 24.83it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 18.25it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 219.12it/s]
+2026-05-22 05:01:27,174 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:01:27,175 INFO row 6/? id=c5e8278d correct=True latency=5119ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:02,  7.98it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.77it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.77it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.29it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.84it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 23.26it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 19.55it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 232.29it/s]
+2026-05-22 05:01:52,775 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:01:52,776 INFO row 7/? id=6ade9755 correct=False latency=25600ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.99it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.75it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.64it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.90it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.44it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 24.81it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.56it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 209.96it/s]
+2026-05-22 05:01:54,311 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:01:54,312 INFO row 8/? id=6f9b354f correct=False latency=1535ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.13it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.74it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.74it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.21it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 14.20it/s]Batches:  76%|███████▋  | 13/17 [00:00<00:00, 20.18it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 18.92it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 235.36it/s]
+2026-05-22 05:01:55,445 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:01:55,445 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:01:57,154 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:01:57,155 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:01:59,190 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:01:59,191 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:02:04,039 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:04,040 INFO row 9/? id=58ef2f1c correct=False latency=9727ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.96it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.70it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.63it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.10it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.34it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.73it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.46it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 264.91it/s]
+2026-05-22 05:02:05,472 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:05,474 INFO row 10/? id=f8c5f88b correct=False latency=1433ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.00it/s]Batches:  25%|██▌       | 4/16 [00:00<00:01, 11.89it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.30it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 12.84it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 14.63it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 23.67it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.12it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 35.40it/s]
+2026-05-22 05:02:07,111 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:07,112 INFO row 11/? id=5d3d2817 correct=False latency=1638ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.78it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.95it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.76it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.98it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 18.14it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.57it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 185.77it/s]
+2026-05-22 05:02:08,634 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:08,635 INFO row 12/? id=7527f7e2 correct=True latency=1523ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.87it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.43it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.05it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.42it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.04it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 23.75it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.77it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 252.85it/s]
+2026-05-22 05:02:10,111 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:10,111 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:02:11,820 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:11,821 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:02:13,856 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:13,857 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:02:17,900 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:17,901 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:02:26,362 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:26,363 INFO row 13/? id=c960da58 correct=True latency=17727ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.87it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.61it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.54it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.11it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 16.45it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 18.46it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 239.24it/s]
+2026-05-22 05:02:28,206 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:28,207 INFO row 14/? id=3b6f954b correct=False latency=1844ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.97it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.24it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.32it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.95it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.56it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 20.43it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 17.94it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 51.43it/s]
+2026-05-22 05:02:29,381 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:29,382 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:02:31,892 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:02:31,893 INFO row 15/? id=726462e0 correct=False latency=3685ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.71it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.67it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.58it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.19it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.24it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.51it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 237.69it/s]
+2026-05-22 05:02:32,815 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:32,815 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:02:34,516 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:34,516 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:02:36,555 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:36,555 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:02:40,596 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:40,597 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:02:48,889 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:02:48,890 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:03:04,997 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:04,998 ERROR LLM completion failed for 'How long did it take me to assemble the IKEA bookshelf?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:03:04,999 INFO row 16/? id=94f70d80 correct=False latency=33105ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.56it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.94it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.84it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.30it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.52it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.06it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.12it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 39.49it/s]
+2026-05-22 05:03:06,656 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:06,656 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:26,267 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:26,268 INFO row 17/? id=66f24dbb correct=True latency=21268ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.42it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.46it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.52it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 11.99it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 16.27it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 24.36it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 17.85it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 53.69it/s]
+2026-05-22 05:03:27,204 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:27,204 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:28,926 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:28,926 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:03:33,434 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:33,435 INFO row 18/? id=ad7109d1 correct=True latency=7167ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.53it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.99it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.24it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.87it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 12.64it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 19.33it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 16.95it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 159.37it/s]
+2026-05-22 05:03:34,496 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:34,496 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:36,187 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:36,188 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:03:38,809 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:38,811 INFO row 19/? id=af8d2e46 correct=True latency=5375ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.02it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.72it/s]Batches:  31%|███▏      | 5/16 [00:00<00:01, 10.97it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.80it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.57it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 28.22it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.98it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 80.40it/s]
+2026-05-22 05:03:39,937 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:39,938 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:42,139 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:42,141 INFO row 20/? id=dccbc061 correct=True latency=3329ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.09it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.68it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.66it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.17it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.49it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.10it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 222.97it/s]
+2026-05-22 05:03:43,364 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:43,365 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:45,521 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:45,523 INFO row 21/? id=c8c3f81d correct=True latency=3381ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.89it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.49it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.46it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.24it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.03it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 28.26it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.38it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 237.48it/s]
+2026-05-22 05:03:47,361 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:03:47,362 INFO row 22/? id=8ebdbe50 correct=True latency=1839ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.61it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.29it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.91it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.89it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.30it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 28.22it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.27it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 264.21it/s]
+2026-05-22 05:03:48,538 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:48,538 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:03:50,228 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:50,228 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:03:52,273 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:52,274 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:03:56,309 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:03:56,311 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:04:04,390 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:04,391 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:04:20,513 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:20,514 ERROR LLM completion failed for 'How many bikes do I own?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:04:20,515 INFO row 23/? id=6b168ec8 correct=False latency=33152ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.69it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.04it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.21it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.74it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 11.78it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 24.16it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 17.22it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 193.92it/s]
+2026-05-22 05:04:22,140 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:22,141 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:04:33,879 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:04:33,880 INFO row 24/? id=75499fd8 correct=True latency=13365ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.91it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.69it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.72it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.31it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.70it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 28.85it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.61it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 253.80it/s]
+2026-05-22 05:04:34,776 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:34,776 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:04:36,513 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:36,513 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:04:38,561 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:38,561 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:04:42,597 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:42,598 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:04:50,850 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:04:50,851 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:05:13,686 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:13,688 INFO row 25/? id=21436231 correct=True latency=39807ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  5.39it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.17it/s]Batches:  31%|███▏      | 5/16 [00:00<00:01, 10.57it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.42it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.28it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.66it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.06it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 217.78it/s]
+2026-05-22 05:05:24,113 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:24,114 INFO row 26/? id=95bcc1c8 correct=True latency=10426ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  7.40it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.39it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.55it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.12it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 15.95it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.73it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 222.12it/s]
+2026-05-22 05:05:25,021 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:05:25,021 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:05:29,354 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:29,355 INFO row 27/? id=0862e8bf correct=True latency=5240ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.95it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.60it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.58it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.02it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.93it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 25.88it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.19it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 43.22it/s]
+2026-05-22 05:05:41,641 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:41,641 INFO row 28/? id=853b0a1d correct=True latency=12286ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:02,  6.88it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.10it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.20it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 11.94it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.79it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 28.40it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 19.82it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 42.09it/s]
+2026-05-22 05:05:43,634 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:43,636 INFO row 29/? id=a06e4cfe correct=True latency=1994ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:  12%|█▏        | 2/17 [00:00<00:01, 10.83it/s]Batches:  24%|██▎       | 4/17 [00:00<00:01, 11.94it/s]Batches:  35%|███▌      | 6/17 [00:00<00:00, 12.19it/s]Batches:  47%|████▋     | 8/17 [00:00<00:00, 12.75it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 24.81it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.41it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 211.96it/s]
+2026-05-22 05:05:44,516 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:05:44,516 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:05:46,658 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:46,659 INFO row 30/? id=37d43f65 correct=True latency=3023ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.06it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.86it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.73it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.65it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 17.41it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.55it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 35.52it/s]
+2026-05-22 05:05:47,954 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:05:47,955 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:05:54,748 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:54,749 INFO row 31/? id=b86304ba correct=False latency=8089ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.07it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.30it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.40it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.32it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 19.26it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.10it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 233.69it/s]
+2026-05-22 05:05:55,618 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:05:55,618 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:05:57,718 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:05:57,719 INFO row 32/? id=d52b4f67 correct=False latency=2970ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.66it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.98it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.77it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.18it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.71it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.01it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 229.94it/s]
+2026-05-22 05:06:05,809 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:06:05,810 INFO row 33/? id=25e5aa4f correct=False latency=8090ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.96it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.83it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.78it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.14it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 16.90it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.89it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 131.69it/s]
+2026-05-22 05:06:06,652 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:06,653 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:06:22,602 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:06:22,604 INFO row 34/? id=caf9ead2 correct=True latency=16793ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:02,  5.94it/s]Batches:  20%|██        | 3/15 [00:00<00:01,  9.54it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 10.89it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 11.62it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 15.86it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 17.88it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 203.34it/s]
+2026-05-22 05:06:23,551 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:23,551 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:06:25,674 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:06:25,675 INFO row 35/? id=8550ddae correct=False latency=3071ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:02,  7.93it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.62it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.75it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 11.71it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.43it/s]Batches:  88%|████████▊ | 15/17 [00:00<00:00, 25.07it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 19.29it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 200.89it/s]
+2026-05-22 05:06:27,720 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:06:27,721 INFO row 36/? id=60d45044 correct=True latency=2045ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.46it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.94it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.69it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.20it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.64it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 28.00it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 19.81it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 216.87it/s]
+2026-05-22 05:06:28,693 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:28,693 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:06:30,395 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:30,397 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:06:32,482 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:32,483 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:06:36,571 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:36,572 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:06:44,777 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:06:44,777 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:07:01,154 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:07:01,155 INFO row 37/? id=3f1e9474 correct=True latency=33433ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.72it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.98it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.17it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.88it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 18.54it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.64it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 247.64it/s]
+2026-05-22 05:07:02,538 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:02,540 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:07:04,242 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:04,243 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:07:06,279 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:06,280 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:07:10,322 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:10,323 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:07:18,461 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:18,462 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:07:52,306 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:07:52,308 INFO row 38/? id=86b68151 correct=True latency=51152ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:02,  6.06it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.61it/s]Batches:  31%|███▏      | 5/16 [00:00<00:01, 10.93it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.00it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 15.01it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.20it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 232.29it/s]
+2026-05-22 05:07:53,637 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:07:53,638 INFO row 39/? id=577d4d32 correct=True latency=1330ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.20it/s]Batches:  25%|██▌       | 4/16 [00:00<00:01, 11.95it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.28it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 12.74it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 22.40it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.01it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 184.12it/s]
+2026-05-22 05:07:55,017 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:07:55,018 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:12,376 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:12,378 INFO row 40/? id=ec81a493 correct=False latency=18739ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.42it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.86it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.65it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.17it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 16.30it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 18.83it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 41.61it/s]
+2026-05-22 05:08:14,628 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:14,630 INFO row 41/? id=15745da0 correct=True latency=2251ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.43it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.93it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.82it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.30it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 17.06it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 31.79it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.42it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 217.21it/s]
+2026-05-22 05:08:15,960 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:15,961 INFO row 42/? id=e01b8e2f correct=False latency=1330ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.37it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.29it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.03it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.51it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 14.29it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 29.14it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.82it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 215.10it/s]
+2026-05-22 05:08:17,238 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:17,239 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:19,341 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:19,342 INFO row 43/? id=bc8a6e93 correct=False latency=3380ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.62it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.86it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.84it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.28it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 22.03it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.96it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 217.43it/s]
+2026-05-22 05:08:20,663 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:20,664 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:22,718 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:22,719 INFO row 44/? id=ccb36322 correct=True latency=3376ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.88it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.10it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.85it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 11.98it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 13.54it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 28.55it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.38it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 225.48it/s]
+2026-05-22 05:08:24,088 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:24,088 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:25,834 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:25,835 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:08:30,910 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:30,912 INFO row 45/? id=001be529 correct=True latency=8192ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.92it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.68it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.65it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.55it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.06it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.77it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 278.25it/s]
+2026-05-22 05:08:31,767 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:31,767 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:35,956 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:08:35,957 INFO row 46/? id=b320f3f8 correct=True latency=5044ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.13it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.12it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.88it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.30it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.33it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.38it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 219.14it/s]
+2026-05-22 05:08:36,848 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:36,848 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:08:38,553 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:38,553 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:08:40,590 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:40,590 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:08:44,630 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:44,631 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:08:52,711 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:08:52,712 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:09:09,311 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:09:09,312 INFO row 47/? id=19b5f2b3 correct=True latency=33355ms
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:02,  8.00it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 10.68it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 11.59it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 12.19it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 12.84it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 27.31it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 20.28it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 228.10it/s]
+2026-05-22 05:09:10,486 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:10,487 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:09:12,180 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:12,181 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:09:14,730 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:09:14,731 INFO row 48/? id=4fd1909e correct=True latency=5418ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.66it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.96it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.85it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.28it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 17.04it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.32it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 240.14it/s]
+2026-05-22 05:09:15,931 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:15,932 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:09:17,643 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:17,644 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:09:19,703 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:19,704 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:09:23,749 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:23,749 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:09:31,838 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:31,838 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:09:47,921 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:47,923 ERROR LLM completion failed for 'How much screen time have I been averaging on Instagram per day?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:09:47,924 INFO row 49/? id=545bd2b5 correct=False latency=33192ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.62it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.00it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.84it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.27it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.93it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.68it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 227.32it/s]
+2026-05-22 05:09:49,591 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:49,591 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:09:51,345 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:51,345 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:09:53,393 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:53,394 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:09:57,439 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:09:57,440 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:10:05,527 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:10:05,528 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:10:31,642 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:10:31,644 INFO row 50/? id=8a137a7f correct=False latency=43720ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.29it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.79it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.61it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.11it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.23it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.94it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.56it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 279.66it/s]
+2026-05-22 05:10:33,177 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:10:33,179 INFO row 51/? id=76d63226 correct=False latency=1534ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.06it/s]Batches:  25%|██▌       | 4/16 [00:00<00:01, 11.82it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.36it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 13.06it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 22.97it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.22it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 202.80it/s]
+2026-05-22 05:10:35,020 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:10:35,023 INFO row 52/? id=86f00804 correct=False latency=1843ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 10.68it/s]Batches:  25%|██▌       | 4/16 [00:00<00:01, 11.80it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.28it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 12.79it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 29.12it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.91it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 188.75it/s]
+2026-05-22 05:10:50,484 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:10:50,485 INFO row 53/? id=8e9d538c correct=True latency=15461ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.46it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.04it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.94it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.79it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.77it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 30.13it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.49it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 232.41it/s]
+2026-05-22 05:11:04,409 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:04,410 INFO row 54/? id=311778f1 correct=True latency=13925ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.94it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.12it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.87it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.28it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 22.00it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.93it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 226.14it/s]
+2026-05-22 05:11:05,256 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:05,257 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:11:06,968 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:06,969 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:11:09,016 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:09,017 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:11:16,827 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:16,828 INFO row 55/? id=c19f7a0b correct=True latency=12417ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.56it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.99it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.88it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.41it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 14.01it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 29.07it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.58it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 39.50it/s]
+2026-05-22 05:11:18,568 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:18,569 INFO row 56/? id=4100d0a0 correct=False latency=1741ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 10.86it/s]Batches:  25%|██▌       | 4/16 [00:00<00:01, 11.72it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.25it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.12it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 24.19it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.32it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 218.78it/s]
+2026-05-22 05:11:20,309 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:20,311 INFO row 57/? id=29f2956b correct=True latency=1741ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.51it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 12.23it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.52it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.60it/s]Batches:  88%|████████▊ | 14/16 [00:00<00:00, 27.09it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.57it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 234.36it/s]
+2026-05-22 05:11:21,422 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:21,423 INFO row 58/? id=1faac195 correct=True latency=1112ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 11.65it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.30it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 12.45it/s]Batches:  53%|█████▎    | 8/15 [00:00<00:00, 12.70it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 27.50it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.18it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 235.29it/s]
+2026-05-22 05:11:23,354 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:23,356 INFO row 59/? id=faba32e5 correct=True latency=1931ms
+Batches:   0%|          | 0/19 [00:00<?, ?it/s]Batches:  11%|█         | 2/19 [00:00<00:01, 11.11it/s]Batches:  21%|██        | 4/19 [00:00<00:01, 11.90it/s]Batches:  32%|███▏      | 6/19 [00:00<00:01, 12.35it/s]Batches:  42%|████▏     | 8/19 [00:00<00:00, 12.47it/s]Batches:  58%|█████▊    | 11/19 [00:00<00:00, 16.95it/s]Batches: 100%|██████████| 19/19 [00:00<00:00, 33.64it/s]Batches: 100%|██████████| 19/19 [00:00<00:00, 22.15it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 219.01it/s]
+2026-05-22 05:11:25,260 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:11:25,262 INFO row 60/? id=f4f1d8a4 correct=False latency=1905ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.70it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.47it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.99it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.96it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 15.77it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.18it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.50it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 192.12it/s]
+2026-05-22 05:11:26,351 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:26,352 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:11:28,061 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:28,063 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:11:30,111 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:30,111 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:11:34,147 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:34,147 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:11:42,243 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:11:42,243 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:12:00,938 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:12:00,940 INFO row 61/? id=c14c00dd correct=True latency=35677ms
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:02,  8.45it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 11.12it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 11.99it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 12.40it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 14.22it/s]Batches:  67%|██████▋   | 12/18 [00:00<00:00, 17.88it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 20.26it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 226.92it/s]
+2026-05-22 05:12:01,923 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:01,925 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:12:03,646 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:03,647 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:12:05,696 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:05,697 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:12:09,742 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:09,742 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:12:17,829 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:17,830 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:12:33,957 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:33,958 ERROR LLM completion failed for 'What health issue did I initially think was just a cold?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:12:33,960 INFO row 62/? id=36580ce8 correct=False latency=33019ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.57it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.96it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.83it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.26it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.56it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 30.99it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.10it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 205.37it/s]
+2026-05-22 05:12:42,613 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:12:42,615 INFO row 63/? id=3d86fd0a correct=True latency=8654ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.86it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.68it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.68it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.26it/s]Batches:  60%|██████    | 9/15 [00:00<00:00, 14.27it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 18.86it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 257.15it/s]
+2026-05-22 05:12:43,868 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:12:43,870 INFO row 64/? id=a82c026e correct=False latency=1254ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:  12%|█▏        | 2/17 [00:00<00:01, 11.18it/s]Batches:  24%|██▎       | 4/17 [00:00<00:01, 11.95it/s]Batches:  35%|███▌      | 6/17 [00:00<00:00, 12.33it/s]Batches:  47%|████▋     | 8/17 [00:00<00:00, 12.34it/s]Batches:  71%|███████   | 12/17 [00:00<00:00, 19.42it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.65it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 207.52it/s]
+2026-05-22 05:12:45,991 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:12:45,993 INFO row 65/? id=0862e8bf_abs correct=False latency=2122ms
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:01,  8.52it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 10.83it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 11.75it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 12.61it/s]Batches:  61%|██████    | 11/18 [00:00<00:00, 19.30it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 32.27it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 22.20it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 169.61it/s]
+2026-05-22 05:12:46,925 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:46,925 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:12:48,652 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:48,653 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:12:52,134 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:12:52,136 INFO row 66/? id=15745da0_abs correct=False latency=6143ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.07it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.69it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.56it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.03it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.28it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.80it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 212.21it/s]
+2026-05-22 05:12:53,048 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:53,048 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:12:54,745 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:54,746 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:12:56,807 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:12:56,808 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:13:00,842 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:00,842 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:13:10,108 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:13:10,109 INFO row 67/? id=bc8a6e93_abs correct=False latency=17972ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.20it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.01it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.77it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.67it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 19.35it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.68it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 254.46it/s]
+2026-05-22 05:13:18,350 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:13:18,351 INFO row 68/? id=19b5f2b3_abs correct=False latency=8241ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.20it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.74it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.65it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.87it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 18.56it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.22it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 217.68it/s]
+2026-05-22 05:13:19,232 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:19,233 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:13:20,951 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:20,952 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:13:22,987 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:22,987 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:13:27,018 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:27,019 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:13:35,143 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:35,144 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:13:51,682 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:13:51,684 INFO row 69/? id=29f2956b_abs correct=False latency=33332ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.04it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.72it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.60it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.16it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.19it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.50it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.38it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 183.21it/s]
+2026-05-22 05:13:53,371 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:13:53,373 INFO row 70/? id=f4f1d8a4_abs correct=False latency=1688ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.87it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.06it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.86it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.79it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.22it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.66it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 35.04it/s]
+2026-05-22 05:13:55,830 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:13:55,832 INFO row 71/? id=0a995998 correct=False latency=2458ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.93it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.10it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.95it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.36it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 12.87it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 24.97it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 18.66it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 262.54it/s]
+2026-05-22 05:13:56,800 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:56,800 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:13:58,490 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:13:58,491 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:14:00,538 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:00,539 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:14:04,570 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:04,570 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:14:12,724 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:12,725 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:14:29,486 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:14:29,487 INFO row 72/? id=6d550036 correct=False latency=33652ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.20it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.67it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.60it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.54it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.22it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.72it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 238.04it/s]
+2026-05-22 05:14:31,908 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:14:31,909 INFO row 73/? id=gpt4_59c863d7 correct=False latency=2420ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.39it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 10.80it/s]Batches:  29%|██▉       | 5/17 [00:00<00:01, 11.75it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.20it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.24it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.88it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 214.28it/s]
+2026-05-22 05:14:32,848 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:32,848 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:14:34,534 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:34,535 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:14:36,587 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:36,588 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:14:45,755 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:14:45,756 INFO row 74/? id=b5ef892d correct=False latency=13845ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.99it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.66it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.59it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 11.63it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.28it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.32it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 39.09it/s]
+2026-05-22 05:14:49,289 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:14:49,291 INFO row 75/? id=e831120c correct=False latency=3533ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.88it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.14it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.98it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.38it/s]Batches:  60%|██████    | 9/15 [00:00<00:00, 14.45it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 27.06it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.04it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 225.17it/s]
+2026-05-22 05:14:50,475 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:14:50,476 INFO row 76/? id=3a704032 correct=False latency=1184ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.37it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 12.05it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.38it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.09it/s]Batches:  88%|████████▊ | 14/16 [00:00<00:00, 26.95it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.21it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 255.16it/s]
+2026-05-22 05:14:51,899 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:51,900 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:14:53,591 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:53,591 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:14:55,635 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:55,636 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:14:59,681 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:14:59,682 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:15:07,784 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:15:07,784 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:15:24,206 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:15:24,207 INFO row 77/? id=gpt4_d84a3211 correct=False latency=33730ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.96it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.12it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 11.77it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.22it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.68it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.93it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 94.49it/s]
+2026-05-22 05:15:25,537 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:15:25,537 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:15:27,277 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:15:27,278 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:15:45,973 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:15:45,974 INFO row 78/? id=aae3761f correct=False latency=21766ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.61it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 10.90it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 11.84it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.79it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 17.22it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 26.39it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.10it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 226.14it/s]
+2026-05-22 05:15:46,856 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:15:46,856 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:15:48,578 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:15:48,579 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:16:25,444 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:25,444 INFO row 79/? id=gpt4_f2262a51 correct=False latency=39470ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.10it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.58it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.53it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.45it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 14.49it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 31.62it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.51it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 232.44it/s]
+2026-05-22 05:16:26,313 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:26,313 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:16:28,053 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:28,054 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:16:30,462 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:30,463 INFO row 80/? id=dd2973ad correct=False latency=5018ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.77it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.58it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.48it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.07it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.78it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.59it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 220.02it/s]
+2026-05-22 05:16:32,860 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:32,862 INFO row 81/? id=c4a1ceb8 correct=False latency=2398ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.22it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.58it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.50it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.03it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 22.85it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.03it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 227.12it/s]
+2026-05-22 05:16:34,107 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:34,109 INFO row 82/? id=gpt4_a56e767c correct=False latency=1246ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 12.23it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.78it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 13.31it/s]Batches:  53%|█████▎    | 8/15 [00:00<00:00, 15.12it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 30.79it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 22.36it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 221.34it/s]
+2026-05-22 05:16:35,379 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:35,379 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:16:37,117 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:37,118 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:16:39,209 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:39,209 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:16:44,388 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:44,391 INFO row 83/? id=6cb6f249 correct=False latency=10280ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.98it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.76it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.64it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.13it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.63it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.43it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 38.36it/s]
+2026-05-22 05:16:45,257 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:45,257 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:16:46,992 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:46,993 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:16:55,652 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:16:55,654 INFO row 84/? id=46a3abf7 correct=True latency=11262ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.22it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.65it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.62it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.12it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.39it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.72it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 255.83it/s]
+2026-05-22 05:16:56,469 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:56,469 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:16:58,210 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:16:58,211 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:17:00,258 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:00,258 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:17:04,303 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:04,304 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:17:14,466 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:17:14,468 INFO row 85/? id=36b9f61e correct=True latency=18813ms
+Batches:   0%|          | 0/14 [00:00<?, ?it/s]Batches:   7%|▋         | 1/14 [00:00<00:01,  9.02it/s]Batches:  21%|██▏       | 3/14 [00:00<00:00, 11.57it/s]Batches:  36%|███▌      | 5/14 [00:00<00:00, 12.48it/s]Batches:  50%|█████     | 7/14 [00:00<00:00, 12.97it/s]Batches: 100%|██████████| 14/14 [00:00<00:00, 27.93it/s]Batches: 100%|██████████| 14/14 [00:00<00:00, 20.74it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 236.25it/s]
+2026-05-22 05:17:15,236 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:15,236 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:17:16,969 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:16,971 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:17:19,027 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:19,028 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:17:23,062 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:23,063 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:17:31,184 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:31,185 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:17:47,298 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:47,299 ERROR LLM completion failed for 'How many hours have I spent playing games in total?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:17:47,301 INFO row 86/? id=28dc39ac correct=False latency=32832ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.58it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.31it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.36it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.97it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 19.66it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.78it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 241.89it/s]
+2026-05-22 05:17:49,411 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:17:49,413 INFO row 87/? id=gpt4_2f8be40d correct=False latency=2111ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.72it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.57it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.64it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.76it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 22.90it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.99it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 240.87it/s]
+2026-05-22 05:17:50,649 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:50,650 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:17:52,373 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:52,374 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:17:54,432 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:54,433 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:17:58,473 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:17:58,474 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:18:06,614 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:06,615 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:18:22,743 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:22,744 ERROR LLM completion failed for 'How many babies were born to friends and family members in the last few months?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:18:22,746 INFO row 88/? id=2e6d26dc correct=False latency=33332ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.80it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.51it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.40it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.93it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 22.88it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.96it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 218.29it/s]
+2026-05-22 05:18:27,404 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:18:27,407 INFO row 89/? id=gpt4_15e38248 correct=False latency=4659ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.03it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.68it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.61it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.18it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.49it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.67it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 231.49it/s]
+2026-05-22 05:18:30,636 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:18:30,638 INFO row 90/? id=88432d0a correct=False latency=3230ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.96it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.45it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.50it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.99it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.19it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.58it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 235.40it/s]
+2026-05-22 05:18:31,497 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:31,497 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:18:33,187 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:33,188 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:18:35,227 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:35,228 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:18:39,281 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:39,282 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:18:47,362 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:18:47,363 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:19:03,552 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:03,553 ERROR LLM completion failed for 'How many different museums or galleries did I visit in the month of February?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:19:03,555 INFO row 91/? id=80ec1f4f correct=True latency=32915ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.83it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.58it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.54it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.08it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.72it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.73it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 247.22it/s]
+2026-05-22 05:19:27,921 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:27,923 INFO row 92/? id=d23cf73b correct=False latency=24368ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.98it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.70it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.68it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.11it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.58it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.85it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 38.86it/s]
+2026-05-22 05:19:29,406 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:29,409 INFO row 93/? id=gpt4_7fce9456 correct=False latency=1484ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 12.23it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.86it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 13.27it/s]Batches:  53%|█████▎    | 8/15 [00:00<00:00, 14.27it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 29.35it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.64it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 254.97it/s]
+2026-05-22 05:19:30,499 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:30,500 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:19:36,704 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:36,706 INFO row 94/? id=d682f1a2 correct=False latency=7297ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.97it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.46it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.57it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.10it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.84it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.68it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 205.13it/s]
+2026-05-22 05:19:40,064 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:40,067 INFO row 95/? id=7024f17c correct=False latency=3359ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.19it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.61it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.55it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.01it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 20.18it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.54it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 228.15it/s]
+2026-05-22 05:19:40,874 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:40,874 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:19:43,149 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:43,151 INFO row 96/? id=gpt4_5501fe77 correct=False latency=3084ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.27it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.66it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.47it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.03it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.07it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.26it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 231.86it/s]
+2026-05-22 05:19:44,305 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:44,306 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:19:46,048 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:46,049 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:19:52,638 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:19:52,640 INFO row 97/? id=gpt4_2ba83207 correct=True latency=9488ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.06it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.72it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.66it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.83it/s]Batches:  71%|███████   | 12/17 [00:00<00:00, 23.20it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.12it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 199.76it/s]
+2026-05-22 05:19:53,469 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:53,469 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:19:55,176 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:55,177 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:19:57,366 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:19:57,367 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:20:01,409 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:01,410 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:20:09,662 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:09,663 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:20:27,315 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:27,317 INFO row 98/? id=2318644b correct=False latency=34676ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.02it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.56it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.41it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.63it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 22.16it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.97it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 230.09it/s]
+2026-05-22 05:20:31,205 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:31,207 INFO row 99/? id=2ce6a0f2 correct=False latency=3889ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.26it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.72it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.64it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.33it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.23it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.81it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 237.02it/s]
+2026-05-22 05:20:32,030 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:32,030 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:20:33,729 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:33,730 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:20:38,479 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:38,481 INFO row 100/? id=gpt4_d12ceb0e correct=False latency=7273ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  7.82it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 10.99it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.16it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.92it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.34it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.34it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 239.46it/s]
+2026-05-22 05:20:39,314 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:39,314 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:20:42,418 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:42,420 INFO row 101/? id=00ca467f correct=False latency=3938ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.28it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.69it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.62it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.18it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.82it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.58it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 221.99it/s]
+2026-05-22 05:20:44,316 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:44,318 INFO row 102/? id=b3c15d39 correct=False latency=1897ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 11.39it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.50it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 13.00it/s]Batches:  53%|█████▎    | 8/15 [00:00<00:00, 14.59it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.99it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 218.10it/s]
+2026-05-22 05:20:45,409 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:20:45,411 INFO row 103/? id=gpt4_31ff4165 correct=False latency=1092ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:  12%|█▏        | 2/17 [00:00<00:01, 11.66it/s]Batches:  24%|██▎       | 4/17 [00:00<00:01, 12.60it/s]Batches:  35%|███▌      | 6/17 [00:00<00:00, 13.18it/s]Batches:  47%|████▋     | 8/17 [00:00<00:00, 13.15it/s]Batches:  76%|███████▋  | 13/17 [00:00<00:00, 23.06it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.99it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 235.95it/s]
+2026-05-22 05:20:46,816 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:46,817 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:20:48,513 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:48,514 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:20:50,545 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:50,546 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:20:54,586 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:20:54,587 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:21:02,693 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:02,694 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:21:18,788 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:18,789 ERROR LLM completion failed for 'How many fish are there in total in both of my aquariums?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:21:18,791 INFO row 104/? id=eeda8a6d correct=False latency=33379ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  7.90it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.05it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.17it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.63it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 17.60it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.21it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 183.52it/s]
+2026-05-22 05:21:20,460 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:20,461 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:21:23,267 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:21:23,270 INFO row 105/? id=2788b940 correct=False latency=4478ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.93it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.46it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.51it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.24it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.86it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.71it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 231.86it/s]
+2026-05-22 05:21:24,094 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:24,094 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:21:25,817 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:25,818 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:21:27,866 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:27,867 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:21:31,901 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:31,902 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:21:40,102 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:40,103 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:21:56,208 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:21:56,209 ERROR LLM completion failed for 'How many days did it take for my laptop backpack to arrive after I bought it?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:21:56,211 INFO row 106/? id=60bf93ed correct=False latency=32940ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.26it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.60it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.49it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.11it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.57it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.05it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 216.12it/s]
+2026-05-22 05:22:03,675 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:03,677 INFO row 107/? id=9d25d4e0 correct=False latency=7465ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.74it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.44it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.45it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.60it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.80it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.11it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 254.18it/s]
+2026-05-22 05:22:04,471 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:04,471 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:22:22,107 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:22,111 INFO row 108/? id=129d1232 correct=False latency=18433ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.78it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.54it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.48it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.11it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.68it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.92it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 215.10it/s]
+2026-05-22 05:22:29,939 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:29,942 INFO row 109/? id=60472f9c correct=True latency=7829ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.62it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.48it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.52it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.35it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 23.86it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.53it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 243.26it/s]
+2026-05-22 05:22:30,743 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:30,743 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:22:32,445 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:32,446 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:22:38,849 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:38,850 INFO row 110/? id=gpt4_194be4b3 correct=False latency=8908ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.98it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.85it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.70it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.14it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.69it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.69it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 184.44it/s]
+2026-05-22 05:22:39,655 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:39,656 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:22:41,388 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:41,389 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:22:43,815 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:43,817 INFO row 111/? id=a9f6b44c correct=False latency=4966ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.32it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.65it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.61it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.64it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.34it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.65it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 202.44it/s]
+2026-05-22 05:22:45,709 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:22:45,711 INFO row 112/? id=d851d5ba correct=False latency=1893ms
+Batches:   0%|          | 0/14 [00:00<?, ?it/s]Batches:  14%|█▍        | 2/14 [00:00<00:01, 11.15it/s]Batches:  29%|██▊       | 4/14 [00:00<00:00, 12.27it/s]Batches:  43%|████▎     | 6/14 [00:00<00:00, 12.89it/s]Batches:  64%|██████▍   | 9/14 [00:00<00:00, 17.40it/s]Batches: 100%|██████████| 14/14 [00:00<00:00, 21.12it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 244.79it/s]
+2026-05-22 05:22:46,870 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:46,871 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:22:48,589 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:22:48,591 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:23:12,400 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:23:12,402 INFO row 113/? id=5a7937c8 correct=False latency=26690ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.80it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.47it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.52it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.10it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.78it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.14it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 249.74it/s]
+2026-05-22 05:23:25,543 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:23:25,545 INFO row 114/? id=gpt4_ab202e7f correct=False latency=13142ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.73it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.50it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.36it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.90it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.91it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.47it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 222.97it/s]
+2026-05-22 05:23:26,385 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:23:26,385 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:23:28,089 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:23:28,091 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:23:50,638 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:23:50,640 INFO row 115/? id=gpt4_e05b82a6 correct=False latency=25094ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.02it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.67it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.65it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.26it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.97it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 22.02it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 265.93it/s]
+2026-05-22 05:23:51,501 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:23:51,501 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:23:53,230 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:23:53,232 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:23:55,702 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:23:55,704 INFO row 116/? id=gpt4_731e37d7 correct=False latency=5063ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.96it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.54it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.44it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.11it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.47it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.34it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 239.56it/s]
+2026-05-22 05:24:00,953 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:24:00,955 INFO row 117/? id=edced276 correct=False latency=5250ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.04it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.48it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.53it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.31it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 23.41it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.37it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 229.25it/s]
+2026-05-22 05:24:02,255 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:24:02,258 INFO row 118/? id=10d9b85a correct=False latency=1301ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 11.50it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.57it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 13.08it/s]Batches:  53%|█████▎    | 8/15 [00:00<00:00, 13.45it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 28.68it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.99it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 224.71it/s]
+2026-05-22 05:24:03,462 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:03,463 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:24:22,465 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:24:22,467 INFO row 119/? id=e3038f8c correct=False latency=20208ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.32it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.73it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.61it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.16it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.90it/s]Batches:  88%|████████▊ | 14/16 [00:00<00:00, 24.94it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.28it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 290.69it/s]
+2026-05-22 05:24:23,346 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:23,346 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:24:25,069 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:25,070 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:24:27,117 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:27,118 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:24:31,182 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:31,184 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:24:39,272 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:39,273 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:24:55,398 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:55,400 ERROR LLM completion failed for 'What is the total amount of money I earned from selling my products at the marke'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raise RuntimeError(
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:24:55,402 INFO row 120/? id=2b8f3739 correct=False latency=32934ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.84it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.55it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.53it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.10it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.24it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.31it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 253.94it/s]
+2026-05-22 05:24:57,450 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:24:57,452 INFO row 121/? id=1a8a66a6 correct=False latency=2050ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.92it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.54it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.56it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.12it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 17.41it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 22.33it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 240.62it/s]
+2026-05-22 05:24:58,758 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:24:58,759 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:25:00,453 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:00,454 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:25:02,491 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:02,492 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:25:06,524 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:06,526 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:25:14,633 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:14,634 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:25:31,925 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:25:31,927 INFO row 122/? id=c2ac3c61 correct=False latency=34474ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.29it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.81it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.67it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.18it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 17.66it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 22.74it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 212.90it/s]
+2026-05-22 05:25:32,776 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:32,776 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:25:35,490 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:25:35,492 INFO row 123/? id=bf659f65 correct=False latency=3564ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.32it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.77it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.72it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 12.52it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 19.28it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.37it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 39.68it/s]
+2026-05-22 05:25:36,333 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:36,334 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:25:38,051 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:38,052 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:25:40,100 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:40,101 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:25:50,599 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:25:50,601 INFO row 124/? id=gpt4_372c3eed correct=False latency=15108ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.81it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.50it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.55it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.10it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 15.04it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 33.14it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 22.22it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 46.82it/s]
+2026-05-22 05:25:51,516 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:51,516 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:25:58,589 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:25:58,592 INFO row 125/? id=gpt4_2f91af09 correct=False latency=7990ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.74it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.60it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.53it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.15it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.29it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.83it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 201.73it/s]
+2026-05-22 05:25:59,448 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:25:59,449 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:26:01,655 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:26:01,657 INFO row 126/? id=81507db6 correct=False latency=3064ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.29it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.72it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.52it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.23it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.05it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.54it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 225.89it/s]
+2026-05-22 05:26:02,886 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:02,887 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:26:04,602 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:04,603 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:26:07,902 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:26:07,903 INFO row 127/? id=88432d0a_abs correct=False latency=6245ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.80it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.44it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.49it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.28it/s]Batches:  80%|████████  | 12/15 [00:00<00:00, 23.29it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.19it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 285.33it/s]
+2026-05-22 05:26:08,686 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:08,686 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:26:10,409 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:10,410 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:26:13,020 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:26:13,022 INFO row 128/? id=80ec1f4f_abs correct=False latency=5118ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.16it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.63it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.58it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.11it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.54it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.36it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 215.47it/s]
+2026-05-22 05:26:14,178 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:14,179 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:26:15,889 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:15,889 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:26:17,936 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:17,937 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:26:21,980 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:21,981 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:26:30,199 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:30,200 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:26:46,311 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:46,312 ERROR LLM completion failed for 'How many fish are there in my 30-gallon tank?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    0, int(d.get("input_tokens", 0)) - int(d.get("output_tokens", 0))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raw = str(data["choices"][0]["message"]["content"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:26:46,315 INFO row 129/? id=eeda8a6d_abs correct=False latency=33292ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.10it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.70it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.63it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.88it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 20.04it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 22.56it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 224.76it/s]
+2026-05-22 05:26:47,962 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:47,963 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:26:58,333 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:26:58,335 INFO row 130/? id=60bf93ed_abs correct=False latency=12019ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.90it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.60it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.59it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.15it/s]Batches:  71%|███████   | 12/17 [00:00<00:00, 23.48it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 24.12it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 222.62it/s]
+2026-05-22 05:26:59,129 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:26:59,130 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:27:00,852 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:00,853 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:27:02,888 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:02,890 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:27:06,939 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:06,940 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:27:15,076 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:15,077 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:27:32,280 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:27:32,283 INFO row 131/? id=edced276_abs correct=False latency=33946ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.73it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.38it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.47it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.39it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 22.69it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.76it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 233.37it/s]
+2026-05-22 05:27:33,098 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:33,098 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:27:34,840 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:34,841 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:27:36,887 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:36,888 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:27:40,942 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:40,943 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:27:50,199 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:27:50,201 INFO row 132/? id=gpt4_372c3eed_abs correct=False latency=17918ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.92it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.45it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.45it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.07it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.97it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.28it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 206.02it/s]
+2026-05-22 05:27:53,239 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:27:53,241 INFO row 133/? id=8a2466db correct=False latency=3039ms
+Batches:   0%|          | 0/14 [00:00<?, ?it/s]Batches:   7%|▋         | 1/14 [00:00<00:01,  9.35it/s]Batches:  21%|██▏       | 3/14 [00:00<00:00, 11.74it/s]Batches:  36%|███▌      | 5/14 [00:00<00:00, 12.63it/s]Batches:  50%|█████     | 7/14 [00:00<00:00, 13.18it/s]Batches:  93%|█████████▎| 13/14 [00:00<00:00, 25.99it/s]Batches: 100%|██████████| 14/14 [00:00<00:00, 20.54it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 269.92it/s]
+2026-05-22 05:27:54,017 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:54,017 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:27:55,727 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:55,729 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:27:57,777 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:27:57,778 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:28:01,822 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:01,823 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:28:09,949 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:09,950 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:28:26,036 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:26,037 ERROR LLM completion failed for 'Can you suggest some accessories that would complement my current photography se'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    rerank_ms = 0.0
+                 ^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raw = str(data["choices"][0]["message"]["content"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:28:26,039 INFO row 134/? id=06878be2 correct=False latency=32797ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.56it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.42it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.38it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.09it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.72it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.91it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 249.93it/s]
+2026-05-22 05:28:38,891 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:28:38,893 INFO row 135/? id=75832dbd correct=False latency=12853ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  8.85it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.40it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.43it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.09it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.58it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.65it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 255.36it/s]
+2026-05-22 05:28:39,709 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:39,709 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:28:42,118 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:28:42,120 INFO row 136/? id=0edc2aef correct=False latency=3226ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.05it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.60it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.52it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.10it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 20.50it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.65it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 241.94it/s]
+2026-05-22 05:28:43,140 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:43,141 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:28:44,849 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:44,850 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:28:46,886 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:46,888 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:28:50,921 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:50,922 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:28:59,062 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:28:59,063 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:29:16,636 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:29:16,638 INFO row 137/? id=35a27287 correct=False latency=34516ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.06it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.68it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.63it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.23it/s]Batches:  71%|███████   | 12/17 [00:00<00:00, 22.73it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.49it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 205.33it/s]
+2026-05-22 05:29:17,447 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:17,448 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:29:19,186 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:19,187 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:29:21,233 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:21,234 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:29:25,273 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:25,274 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+2026-05-22 05:29:33,357 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:33,358 WARNING NVIDIA 429 rate-limited; sleeping 16.0s (attempt 5/5)
+2026-05-22 05:29:49,547 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:29:49,548 ERROR LLM completion failed for 'Can you recommend a show or movie for me to watch tonight?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 1149, in answer_question
+    rerank_ms = 0.0
+                 ^^
+  File "/Users/mayanksahu/Continuum/evals/longmemeval/bootstrap_ollama.py", line 423, in complete
+    raw = str(data["choices"][0]["message"]["content"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: nvidia: HTTP 429 — {"status":429,"title":"Too Many Requests"}
+2026-05-22 05:29:49,550 INFO row 138/? id=32260d93 correct=False latency=32911ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.69it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 12.19it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.95it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.58it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 18.19it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.55it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 215.34it/s]
+2026-05-22 05:29:58,000 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:29:58,003 INFO row 139/? id=195a1a1b correct=False latency=8452ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.00it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.58it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.61it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.19it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 23.49it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.26it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 256.08it/s]
+2026-05-22 05:30:35,833 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:30:35,835 INFO row 140/? id=afdc33df correct=False latency=37832ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.73it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.47it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.40it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.99it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 23.04it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.25it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 214.04it/s]
+2026-05-22 05:30:37,320 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:30:37,322 INFO row 141/? id=caf03d32 correct=False latency=1486ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:  13%|█▎        | 2/15 [00:00<00:01, 11.56it/s]Batches:  27%|██▋       | 4/15 [00:00<00:00, 12.48it/s]Batches:  40%|████      | 6/15 [00:00<00:00, 13.03it/s]Batches:  60%|██████    | 9/15 [00:00<00:00, 16.77it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 21.57it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 234.27it/s]
+2026-05-22 05:30:38,364 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:30:38,365 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:30:40,084 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:30:40,086 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:30:45,334 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:30:45,336 INFO row 142/? id=54026fce correct=False latency=8013ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.04it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.82it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.67it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.24it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.10it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.83it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 239.06it/s]
+2026-05-22 05:30:48,336 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:30:48,338 INFO row 143/? id=06f04340 correct=False latency=3001ms
+Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.87it/s]Batches:  20%|██        | 3/15 [00:00<00:00, 12.02it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.82it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.27it/s]Batches:  73%|███████▎  | 11/15 [00:00<00:00, 20.85it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 20.94it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 43.45it/s]
+2026-05-22 05:31:00,563 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:31:00,565 INFO row 144/? id=6b7dfb22 correct=False latency=12226ms
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  8.81it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.62it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.52it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.27it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 20.16it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.19it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 33.69it/s]
+2026-05-22 05:31:09,090 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 05:31:09,091 INFO row 145/? id=1a1907b4 correct=False latency=8525ms
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.75it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.36it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.34it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.82it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 23.05it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.20it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 235.30it/s]
+2026-05-22 05:31:09,909 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:31:09,909 WARNING NVIDIA 429 rate-limited; sleeping 1.0s (attempt 1/5)
+2026-05-22 05:31:11,622 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:31:11,623 WARNING NVIDIA 429 rate-limited; sleeping 2.0s (attempt 2/5)
+2026-05-22 05:31:13,658 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:31:13,659 WARNING NVIDIA 429 rate-limited; sleeping 4.0s (attempt 3/5)
+2026-05-22 05:31:17,701 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-22 05:31:17,703 WARNING NVIDIA 429 rate-limited; sleeping 8.0s (attempt 4/5)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
