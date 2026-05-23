@@ -74,11 +74,13 @@ class FakeLTM:
         self._nbrs = neighbors or {}
         self.raises = raises
         self.search_queries: list[str] = []
+        self.search_query_objects: list[Any] = []
 
     async def search_hybrid(self, q: Any, k: int) -> list[ScoredItem]:
         if self.raises:
             raise RuntimeError("ltm down")
         self.search_queries.append(q.text)
+        self.search_query_objects.append(q)
         return self._hits[:k]
 
     async def neighbors(self, node_id: Any, hops: int = 1) -> list[Edge]:
@@ -104,12 +106,31 @@ class FakeMTM:
         self._blocks = blocks
         self.raises = raises
         self.budget_seen: int | None = None
+        self.calls: list[dict[str, Any]] = []
 
     async def recent(self, token_budget: int,
-                     *, session_id: Any = None) -> list[SummaryBlock]:
+                     *, session_id: Any = None,
+                     user_id: Any = None,
+                     exclude_session_id: Any = None) -> list[SummaryBlock]:
         if self.raises:
             raise RuntimeError("mtm down")
         self.budget_seen = token_budget
+        self.calls.append({
+            "token_budget": token_budget,
+            "session_id": session_id,
+            "user_id": user_id,
+            "exclude_session_id": exclude_session_id,
+        })
+        if user_id is not None:
+            return [
+                b for b in self._blocks
+                if b.metadata.get("scope") == "cross"
+            ]
+        if session_id is not None:
+            return [
+                b for b in self._blocks
+                if b.metadata.get("scope", "current") == "current"
+            ]
         return self._blocks
 
 
@@ -198,11 +219,83 @@ class TestFullPipeline:
         await r.retrieve(_q(), BUDGET)
         assert mtm.budget_seen == BUDGET.mtm_reserved
 
+    async def test_same_user_mtm_recall_uses_only_user_id_and_keeps_stm_session_local(self) -> None:
+        current = SummaryBlock(
+            text="current session summary",
+            id=uuid.uuid4(),
+            session_id="chat-b",
+            metadata={"scope": "cross"},
+        )
+        prior = SummaryBlock(
+            text="prior session favorite color is blue",
+            id=uuid.uuid4(),
+            session_id="chat-a",
+            metadata={"scope": "cross"},
+        )
+        mtm = FakeMTM([current, prior])
+        stm = FakeSTM([_mi("only chat-b recent", role="user")])
+        r = Retriever(RetrieverConfig(), stm=stm, mtm=mtm)
+
+        bundle = await r.retrieve(
+            Query(text="What is my favorite color?", session_id="chat-b", user_id="u1"),
+            BUDGET,
+        )
+
+        assert len(mtm.calls) == 1
+        assert mtm.calls[0]["token_budget"] == BUDGET.mtm_reserved
+        assert mtm.calls[0]["session_id"] is None
+        assert mtm.calls[0]["user_id"] == "u1"
+        assert mtm.calls[0]["exclude_session_id"] is None
+        assert "current session summary" in [i.content for i in bundle.items]
+        assert "prior session favorite color is blue" in [i.content for i in bundle.items]
+        assert stm.n == 6
+
+    async def test_cross_session_mtm_not_used_without_user_id(self) -> None:
+        mtm = FakeMTM([
+            SummaryBlock(
+                text="current only",
+                id=uuid.uuid4(),
+                session_id="chat-b",
+                metadata={"scope": "current"},
+            )
+        ])
+        r = Retriever(RetrieverConfig(), mtm=mtm)
+
+        await r.retrieve(Query(text="q", session_id="chat-b"), BUDGET)
+
+        assert len(mtm.calls) == 1
+        assert mtm.calls[0]["session_id"] == "chat-b"
+        assert mtm.calls[0]["user_id"] is None
+
     async def test_stm_uses_config_turns(self) -> None:
         stm = FakeSTM([_mi(f"t{i}") for i in range(20)])
         r = Retriever(RetrieverConfig(stm_turns=4), stm=stm)
         await r.retrieve(_q(), BUDGET)
         assert stm.n == 4
+
+    async def test_ltm_search_is_user_scoped_when_user_id_is_present(self) -> None:
+        ltm = FakeLTM([_si("favorite color is blue", 0.9)])
+        r = Retriever(
+            RetrieverConfig(),
+            ltm=ltm,
+            scorer=FakeScorer({"favorite color is blue": 0.9}),
+        )
+
+        bundle = await r.retrieve(
+            Query(
+                text="What is my favorite color?",
+                session_id="chat-b",
+                user_id="u1",
+                metadata_filter={"kind": "fact"},
+            ),
+            BUDGET,
+        )
+
+        assert bundle.debug_info["cross_session_ltm_filter"] == {"user_id": "u1"}
+        assert ltm.search_query_objects[0].metadata_filter == {
+            "kind": "fact",
+            "user_id": "u1",
+        }
 
 
 # ---------------------------------------------------------------------------

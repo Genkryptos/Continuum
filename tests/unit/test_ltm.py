@@ -127,8 +127,15 @@ class TestUpsert:
     async def test_insert_new_returns_uuid_and_sets_ltm(self) -> None:
         conn = MockConnection()
         ltm = _ltm(conn)
-        item = MemoryItem(id=str(N1), content="a durable fact",
-                          tier=MemoryTier.MTM, metadata={"kind": "fact"})
+        item = MemoryItem(
+            id=str(N1),
+            content="a durable fact",
+            tier=MemoryTier.MTM,
+            session_id="s1",
+            user_id="u1",
+            agent_id="a1",
+            metadata={"kind": "fact"},
+        )
 
         rid = await ltm.upsert(item)
 
@@ -141,6 +148,10 @@ class TestUpsert:
         assert "updated_at  = now()" in sql
         assert params["id"] == str(N1)
         assert params["kind"] == "fact"
+        tags = json.loads(params["tags"])
+        assert tags["session_id"] == "s1"
+        assert tags["user_id"] == "u1"
+        assert tags["agent_id"] == "a1"
 
     async def test_update_existing_uses_same_id(self) -> None:
         conn = MockConnection()

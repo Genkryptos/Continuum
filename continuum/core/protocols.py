@@ -366,22 +366,29 @@ class MTMProtocol(Protocol):
 
     async def recent(
         self,
-        session_id: str,
-        limit: int = 20,
+        token_budget: int,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        exclude_session_id: str | None = None,
     ) -> Sequence[MemoryItem]:
         """
-        Return the most recent MTM items for *session_id*, newest-first.
+        Return the most recent MTM items within *token_budget*, newest-first.
 
         Used by the Retriever to surface fresh project context without running
-        a full vector search — cheaper and sufficient for the latest few items.
+        a full vector search. Implementations may scope to the current session
+        or same-user memories from other sessions.
 
         Parameters
         ----------
+        token_budget:
+            Maximum context budget to spend on returned MTM items.
         session_id:
-            Scopes the query to a single conversation or project session.
-        limit:
-            Maximum number of items to return.  Keep this small (≤ 50) to
-            avoid overwhelming the Optimizer's token budget.
+            Optional single-session scope.
+        user_id:
+            Optional same-user scope for cross-session recall.
+        exclude_session_id:
+            Optional session to omit when querying same-user memories.
         """
         ...
 

@@ -1,0 +1,224 @@
+2026-05-23 17:29:59,160 INFO provider=nvidia model=meta/llama-3.3-70b-instruct rpm=35
+2026-05-23 17:29:59,205 INFO loading dataset from /Users/mayanksahu/Continuum_Codex/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
+2026-05-23 17:30:00,567 INFO loaded 500 rows
+2026-05-23 17:30:00,567 INFO scorer weights = {'relevance': 0.45, 'importance': 0.25, 'recency': 0.2, 'confidence': 0.1}   tau_hours = 168
+2026-05-23 17:30:00,567 INFO decomposed answering ENABLED — split question, retrieve and answer each part, synthesize final answer
+2026-05-23 17:30:00,567 INFO wiki memory ENABLED — compiled Markdown wiki retrieval, top 8 pages
+2026-05-23 17:30:00,567 INFO === SMOKE TEST (5 questions) ===
+2026-05-23 17:31:30,869 ERROR nvidia network error
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 466, in _adaptive_complete
+    resp = await client.post(url, json=payload, headers=headers)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-05-23 17:31:30,878 ERROR decomposed-answer decomposition failed
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 466, in _adaptive_complete
+    resp = await client.post(url, json=payload, headers=headers)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 1907, in _decompose_question
+    reply = await self.llm.complete(
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 570, in complete
+    return await _adaptive_complete(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 469, in _adaptive_complete
+    raise RuntimeError(f"{provider}: {exc!r}") from exc
+RuntimeError: nvidia: ReadTimeout('')
+2026-05-23 17:31:33,537 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
+2026-05-23 17:31:33,549 INFO Use pytorch device_name: mps
+2026-05-23 17:31:33,549 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  3.59it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  5.68it/s]
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:  11%|█         | 2/18 [00:00<00:01, 13.43it/s]Batches:  22%|██▏       | 4/18 [00:00<00:01, 13.34it/s]Batches:  33%|███▎      | 6/18 [00:00<00:00, 13.36it/s]Batches:  44%|████▍     | 8/18 [00:00<00:00, 13.60it/s]Batches:  61%|██████    | 11/18 [00:00<00:00, 17.84it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 26.52it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 21.34it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 34.11it/s]
+2026-05-23 17:31:43,742 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:31:43,746 INFO row 1/5 id=e47becba correct=False latency=103178ms
+2026-05-23 17:31:45,610 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.56it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.47it/s]
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 13.31it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 13.43it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.70it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.68it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 21.84it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.51it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 67.95it/s]
+2026-05-23 17:32:05,885 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:32:05,887 INFO row 2/5 id=118b2229 correct=False latency=22140ms
+2026-05-23 17:32:18,378 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.40it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.06it/s]
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:  12%|█▏        | 2/17 [00:00<00:01, 13.34it/s]Batches:  24%|██▎       | 4/17 [00:00<00:00, 13.73it/s]Batches:  35%|███▌      | 6/17 [00:00<00:00, 13.83it/s]Batches:  47%|████▋     | 8/17 [00:00<00:00, 13.96it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 18.49it/s]Batches:  94%|█████████▍| 16/17 [00:00<00:00, 27.48it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.40it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 56.52it/s]
+2026-05-23 17:32:21,760 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:32:21,763 INFO row 3/5 id=51a45a95 correct=False latency=15874ms
+2026-05-23 17:32:23,602 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  6.20it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.33it/s]
+Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:  10%|█         | 2/20 [00:00<00:01, 13.60it/s]Batches:  20%|██        | 4/20 [00:00<00:01, 13.78it/s]Batches:  30%|███       | 6/20 [00:00<00:01, 13.92it/s]Batches:  40%|████      | 8/20 [00:00<00:00, 13.70it/s]Batches:  55%|█████▌    | 11/20 [00:00<00:00, 17.59it/s]Batches:  80%|████████  | 16/20 [00:00<00:00, 25.54it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 22.98it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 60.69it/s]
+2026-05-23 17:32:27,083 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:32:27,085 INFO row 4/5 id=58bf7951 correct=True latency=5321ms
+2026-05-23 17:32:28,016 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.58it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.30it/s]
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 13.51it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 13.70it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.73it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.33it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 21.47it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.31it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 59.62it/s]
+2026-05-23 17:33:02,615 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:33:02,617 INFO row 5/5 id=1e043500 correct=True latency=35531ms
+2026-05-23 17:33:02,620 INFO metrics written to results/nvidia_70b_instruct_wiki/smoke/baseline_2026-05-23.json
+2026-05-23 17:33:02,622 INFO 3 failures written to results/nvidia_70b_instruct_wiki/smoke/baseline_failures.csv
+2026-05-23 17:33:02,622 INFO smoke completed in 182s
+2026-05-23 17:33:02,622 INFO === FULL RUN (500 questions) ===
+2026-05-23 17:33:04,768 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+============================================================
+LongMemEval baseline — longmemeval-s
+  answerer:        meta/llama-3.3-70b-instruct
+  questions:       5
+  accuracy:        40.0%
+  recall:          100.0%
+  avg tokens:      6
+  latency p50/p95: 22140ms / 103178ms
+  total cost:      $0.00
+  by question type:
+    single-session-user      n=5   acc=40.0% recall=100.0%
+  failure types:
+    wrong_retrieval    3
+============================================================
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.72it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.26it/s]
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:  11%|█         | 2/18 [00:00<00:01, 13.41it/s]Batches:  22%|██▏       | 4/18 [00:00<00:01, 13.33it/s]Batches:  33%|███▎      | 6/18 [00:00<00:00, 13.52it/s]Batches:  44%|████▍     | 8/18 [00:00<00:00, 13.88it/s]Batches:  72%|███████▏  | 13/18 [00:00<00:00, 23.72it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 24.67it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 305.89it/s]
+2026-05-23 17:33:20,230 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:33:20,232 INFO row 1/? id=e47becba correct=True latency=17609ms
+2026-05-23 17:33:22,018 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.50it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.73it/s]
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 13.23it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 13.53it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.66it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 15.13it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 24.76it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 319.08it/s]
+2026-05-23 17:33:34,157 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:33:34,159 INFO row 2/? id=118b2229 correct=False latency=13925ms
+2026-05-23 17:33:38,663 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.57it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.43it/s]
+Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:  12%|█▏        | 2/17 [00:00<00:01, 13.20it/s]Batches:  24%|██▎       | 4/17 [00:00<00:00, 13.53it/s]Batches:  35%|███▌      | 6/17 [00:00<00:00, 13.74it/s]Batches:  47%|████▋     | 8/17 [00:00<00:00, 14.74it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 27.50it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 24.67it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 307.41it/s]
+2026-05-23 17:33:43,884 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:33:43,886 INFO row 3/? id=51a45a95 correct=False latency=9726ms
+2026-05-23 17:33:46,058 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]

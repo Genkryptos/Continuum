@@ -103,6 +103,7 @@ def _row(
     qid: str,
     expected: str,
     expected_sids: list[str] | None = None,
+    question_type: str = "single-session-user",
 ) -> EvalRow:
     return EvalRow(
         question_id=qid,
@@ -110,6 +111,7 @@ def _row(
         expected_answer=expected,
         messages=[{"role": "user", "content": "context goes here"}],
         answer_session_ids=expected_sids or [],
+        question_type=question_type,
     )
 
 
@@ -404,3 +406,102 @@ def test_eval_row_and_row_result_are_dataclasses() -> None:
     row = _row("q", "e")
     assert dataclasses.is_dataclass(row)
     assert dataclasses.asdict(row)["question_id"] == "q"
+    assert dataclasses.asdict(row)["question_type"] == "single-session-user"
+
+
+def test_baseline_results_reports_metrics_by_question_type() -> None:
+    from evals.longmemeval.baseline import RowResult
+
+    results = BaselineResults(
+        dataset="longmemeval-s",
+        answerer="fake",
+        rows=[
+            RowResult(
+                question_id="q1",
+                question_type="multi-session",
+                correct=True,
+                latency_ms=10,
+                answer_tokens=1,
+                cost_usd=0,
+                retrieved_session_ids=["s1"],
+                expected_session_ids=["s1"],
+                answer="blue",
+                expected_answer="blue",
+                failure_category=None,
+            ),
+            RowResult(
+                question_id="q2",
+                question_type="multi-session",
+                correct=False,
+                latency_ms=20,
+                answer_tokens=1,
+                cost_usd=0,
+                retrieved_session_ids=[],
+                expected_session_ids=["s2"],
+                answer="red",
+                expected_answer="green",
+                failure_category="wrong_retrieval",
+            ),
+            RowResult(
+                question_id="q3",
+                question_type="temporal-reasoning",
+                correct=True,
+                latency_ms=30,
+                answer_tokens=1,
+                cost_usd=0,
+                retrieved_session_ids=["s3"],
+                expected_session_ids=["s3"],
+                answer="March",
+                expected_answer="March",
+                failure_category=None,
+            ),
+        ],
+        started_at="start",
+        finished_at="end",
+    )
+
+    by_type = results.to_dict()["metrics"]["by_question_type"]
+
+    assert by_type["multi-session"]["n_questions"] == 2
+    assert by_type["multi-session"]["accuracy"] == 0.5
+    assert by_type["multi-session"]["recall"] == 0.5
+    assert by_type["temporal-reasoning"]["accuracy"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_run_one_records_decomposition_stats_when_available() -> None:
+    from evals.longmemeval.baseline import _run_one
+
+    class Adapter:
+        last_ctx = None
+        last_decomposition_stats = {
+            "mode": "decompose_answer",
+            "n_sub_questions": 2,
+            "sub_questions": ["Q1?", "Q2?"],
+            "sub_answers": ["A1", "A2"],
+            "subquestion_hits": [4, 3],
+        }
+
+        async def process_conversation(self, messages):
+            return None
+
+        async def answer_question(self, question):
+            return "final"
+
+    result = await _run_one(
+        row=EvalRow(
+            question_id="q",
+            question="Q?",
+            expected_answer="final",
+            messages=[],
+            answer_session_ids=[],
+        ),
+        adapter=Adapter(),
+        scorer=lambda answer, expected: answer == expected,
+        answerer="gpt-4o-mini",
+        prices={"gpt-4o-mini": 0.0},
+        count_tokens=lambda text: 1,
+    )
+
+    assert result.decomposition_stats["mode"] == "decompose_answer"
+    assert result.decomposition_stats["sub_answers"] == ["A1", "A2"]

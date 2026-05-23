@@ -1,0 +1,4 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+e47becba,wrong_retrieval,Business Administration,I don't know what degree you graduated with.,answer_280352e9,answer_280352e9;02bd2b90_3;sharegpt_QZMeA7V_17;ultrachat_458322;sharegpt_T1EiHWI_13,,103177.9
+118b2229,wrong_retrieval,45 minutes each way,I don't know.,answer_40a90d51,answer_40a90d51;7d8b5834_1;db73b7e4_4;728deb4d_5,,22140.0
+51a45a95,wrong_retrieval,Target,I don't know.,answer_d61669c7,answer_d61669c7;98c198fb;5c44d9fe_1;217debf7;sharegpt_MKMWjX0_25;sharegpt_apWLb2c_0,,15874.2

@@ -1,0 +1,3 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+118b2229,wrong_retrieval,45 minutes each way,I don't know.,answer_40a90d51,5209e813_2;5209e813_2;answer_40a90d51;answer_40a90d51;004edb32;004edb32;d600c646;d600c646;004edb32;004edb32;7d8b5834_1;7d8b5834_1,,12229.0
+51a45a95,wrong_retrieval,Target,I redeemed a $5 coupon on coffee creamer last Sunday.,answer_d61669c7,answer_d61669c7;answer_d61669c7;6e0b1800_2;6e0b1800_2;sharegpt_MKMWjX0_25;sharegpt_MKMWjX0_25;sharegpt_apWLb2c_0;sharegpt_apWLb2c_0;6e0b1800_2;sharegpt_MKMWjX0_25;f32d1ccf_1;f32d1ccf_1;sharegpt_MKMWjX0_25,,13723.2

@@ -1,0 +1,28 @@
+2026-05-23 17:53:58,733 INFO provider=groq model=llama-3.3-70b-versatile rpm=10
+2026-05-23 17:53:58,768 INFO loading dataset from /Users/mayanksahu/Continuum_Codex/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
+2026-05-23 17:53:59,611 INFO loaded 500 rows
+2026-05-23 17:53:59,611 INFO scorer weights = {'relevance': 0.45, 'importance': 0.25, 'recency': 0.2, 'confidence': 0.1}   tau_hours = 168
+2026-05-23 17:53:59,611 INFO decomposed answering ENABLED — split question, retrieve and answer each part, synthesize final answer
+2026-05-23 17:53:59,611 INFO wiki memory ENABLED — compiled Markdown wiki retrieval, top 4 pages
+2026-05-23 17:53:59,611 INFO === SMOKE TEST (5 questions) ===
+2026-05-23 17:53:59,892 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:54:01,756 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
+2026-05-23 17:54:01,768 INFO Use pytorch device_name: mps
+2026-05-23 17:54:01,768 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  4.42it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  6.63it/s]
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:  11%|█         | 2/18 [00:00<00:01, 13.44it/s]Batches:  22%|██▏       | 4/18 [00:00<00:01, 13.68it/s]Batches:  33%|███▎      | 6/18 [00:00<00:00, 13.64it/s]Batches:  44%|████▍     | 8/18 [00:00<00:00, 13.86it/s]Batches:  61%|██████    | 11/18 [00:00<00:00, 18.20it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 26.98it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 21.71it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 35.99it/s]
+2026-05-23 17:54:07,258 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:54:07,261 INFO row 1/5 id=e47becba correct=True latency=7649ms
+2026-05-23 17:54:12,738 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  4.71it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  6.64it/s]
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.08it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01,  8.84it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01,  9.15it/s]Batches:  31%|███▏      | 5/16 [00:00<00:01, 10.16it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 10.85it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 14.80it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 18.21it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 16.19it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 52.57it/s]
+2026-05-23 17:54:18,556 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:54:18,557 WARNING groq 429 — adaptive pace now 9.00s/call; backoff 128.0s (retry 1/8)
+2026-05-23 17:56:26,843 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:56:26,845 WARNING groq 429 — adaptive pace now 13.50s/call; backoff 128.0s (retry 2/8)
+2026-05-23 17:58:35,086 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:58:35,086 WARNING groq 429 — adaptive pace now 20.25s/call; backoff 128.0s (retry 3/8)
+2026-05-23 18:00:44,079 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 18:00:44,080 WARNING groq 429 — adaptive pace now 30.00s/call; backoff 128.0s (retry 4/8)

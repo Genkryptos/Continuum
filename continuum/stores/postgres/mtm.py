@@ -199,6 +199,8 @@ class PostgresMTM:
             tags["session_id"] = block.session_id
         if block.agent_id is not None:
             tags["agent_id"] = block.agent_id
+        if block.user_id is not None:
+            tags["user_id"] = block.user_id
 
         params: dict[str, Any] = {
             "id": str(block.id),
@@ -244,6 +246,8 @@ class PostgresMTM:
         token_budget: int,
         *,
         session_id: str | None = None,
+        user_id: str | None = None,
+        exclude_session_id: str | None = None,
     ) -> list[SummaryBlock]:
         """
         Newest-first MTM blocks whose cumulative tokens fit *token_budget*.
@@ -260,6 +264,12 @@ class PostgresMTM:
         if session_id is not None:
             where.append("tags->>'session_id' = %(sid)s")
             params["sid"] = session_id
+        if user_id is not None:
+            where.append("tags->>'user_id' = %(uid)s")
+            params["uid"] = user_id
+        if exclude_session_id is not None:
+            where.append("tags->>'session_id' <> %(exclude_sid)s")
+            params["exclude_sid"] = exclude_session_id
 
         sql = f"""
             SELECT id, "text", embedding, created_at, tags
@@ -430,10 +440,12 @@ class PostgresMTM:
             embedding=embedding,
             session_id=tags.get("session_id"),
             agent_id=tags.get("agent_id"),
+            user_id=tags.get("user_id"),
             created_at=created_at,
             processed=processed,
             metadata={
-                k: v for k, v in tags.items() if k not in ("tokens", "session_id", "agent_id")
+                k: v for k, v in tags.items()
+                if k not in ("tokens", "session_id", "agent_id", "user_id")
             },
         )
 

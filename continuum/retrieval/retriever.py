@@ -127,7 +127,7 @@ class Retriever:
             scored = self._score_all(pool, query, debug)
             ltm_items = await self._rerank(query, scored, debug)
             stm_items = await self._stm_recent(query)
-            mtm_items = await self._mtm_recent(query, budget)
+            mtm_items = await self._mtm_recent(query, budget, debug)
             return self._assemble(
                 budget, ltm_items, mtm_items, stm_items, debug
             )
@@ -161,9 +161,18 @@ class Retriever:
         if self._ltm is None:
             debug["ltm_hybrid"] = 0
             return pool
+        search_query = query
+        if (
+            self.config.cross_session_user_recall_enabled
+            and query.user_id
+        ):
+            filt = dict(query.metadata_filter or {})
+            filt.setdefault("user_id", query.user_id)
+            search_query = replace(query, metadata_filter=filt)
+            debug["cross_session_ltm_filter"] = {"user_id": query.user_id}
         try:
             hits: Sequence[ScoredItem] = await self._ltm.search_hybrid(
-                query, self.config.k1
+                search_query, self.config.k1
             )
         except Exception:
             log.exception("LTM hybrid search failed")
@@ -340,14 +349,23 @@ class Retriever:
             return []
 
     async def _mtm_recent(
-        self, query: Query, budget: TokenBudget
+        self, query: Query, budget: TokenBudget, debug: dict[str, Any]
     ) -> list[MemoryItem]:
         if self._mtm is None:
             return []
+        recall_enabled = (
+            self.config.cross_session_user_recall_enabled
+            and bool(query.user_id)
+        )
         try:
-            blocks = await self._mtm.recent(
-                budget.mtm_reserved, session_id=query.session_id
-            )
+            if recall_enabled:
+                blocks = await self._mtm.recent(
+                    budget.mtm_reserved, user_id=query.user_id
+                )
+            else:
+                blocks = await self._mtm.recent(
+                    budget.mtm_reserved, session_id=query.session_id
+                )
         except Exception:
             log.exception("MTM retrieval failed")
             return []
@@ -355,6 +373,9 @@ class Retriever:
         for b in blocks:
             to_item = getattr(b, "to_memory_item", None)
             out.append(to_item() if callable(to_item) else b)
+        debug["cross_session_mtm"] = bool(recall_enabled)
+        debug["mtm_user_scoped"] = bool(recall_enabled)
+        debug["mtm_count"] = len(out)
         return out
 
     # ── 7. Assembly ─────────────────────────────────────────────────────────

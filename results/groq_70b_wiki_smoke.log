@@ -1,0 +1,46 @@
+2026-05-23 17:34:56,795 INFO provider=groq model=llama-3.3-70b-versatile rpm=25
+2026-05-23 17:34:56,840 INFO loading dataset from /Users/mayanksahu/Continuum_Codex/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
+2026-05-23 17:34:57,667 INFO loaded 500 rows
+2026-05-23 17:34:57,667 INFO scorer weights = {'relevance': 0.45, 'importance': 0.25, 'recency': 0.2, 'confidence': 0.1}   tau_hours = 168
+2026-05-23 17:34:57,667 INFO decomposed answering ENABLED — split question, retrieve and answer each part, synthesize final answer
+2026-05-23 17:34:57,667 INFO wiki memory ENABLED — compiled Markdown wiki retrieval, top 8 pages
+2026-05-23 17:34:57,667 INFO === SMOKE TEST (5 questions) ===
+2026-05-23 17:34:58,203 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-23 17:35:00,084 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
+2026-05-23 17:35:00,097 INFO Use pytorch device_name: mps
+2026-05-23 17:35:00,097 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  4.50it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  6.83it/s]
+Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:  11%|█         | 2/18 [00:00<00:01, 13.35it/s]Batches:  22%|██▏       | 4/18 [00:00<00:01, 13.71it/s]Batches:  33%|███▎      | 6/18 [00:00<00:00, 13.66it/s]Batches:  44%|████▍     | 8/18 [00:00<00:00, 13.86it/s]Batches:  61%|██████    | 11/18 [00:00<00:00, 18.22it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 26.90it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 21.70it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 40.23it/s]
+2026-05-23 17:35:05,009 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 413 Payload Too Large"
+2026-05-23 17:35:05,010 ERROR LLM completion failed for 'What degree did I graduate with?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/adapter.py", line 147, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 332, in complete
+    return await _adaptive_complete(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 489, in _adaptive_complete
+    raise RuntimeError(
+RuntimeError: groq: HTTP 413 — {"error":{"message":"Request too large for model `llama-3.3-70b-versatile` in organization `org_01ks3trd24fbw8vq8c2kznyd4g` service tier `on_demand` on tokens per minute (TPM): Limit 12000, Requested 
+2026-05-23 17:35:05,011 INFO row 1/5 id=e47becba correct=False latency=7343ms
+2026-05-23 17:35:07,752 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]Batches:  50%|█████     | 1/2 [00:00<00:00,  5.53it/s]Batches: 100%|██████████| 2/2 [00:00<00:00,  8.51it/s]
+Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 13.10it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 13.47it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.69it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.79it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 22.13it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.69it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 70.80it/s]
+2026-05-23 17:35:09,814 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 413 Payload Too Large"
+2026-05-23 17:35:09,815 ERROR LLM completion failed for 'How long is my daily commute to work?'
+Traceback (most recent call last):
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/adapter.py", line 147, in answer_question
+    answer = await self.llm.complete(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 332, in complete
+    return await _adaptive_complete(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mayanksahu/Continuum_Codex/evals/longmemeval/bootstrap_ollama.py", line 489, in _adaptive_complete
+    raise RuntimeError(
+RuntimeError: groq: HTTP 413 — {"error":{"message":"Request too large for model `llama-3.3-70b-versatile` in organization `org_01ks3trd24fbw8vq8c2kznyd4g` service tier `on_demand` on tokens per minute (TPM): Limit 12000, Requested 
+2026-05-23 17:35:09,817 INFO row 2/5 id=118b2229 correct=False latency=4805ms
+2026-05-23 17:35:12,358 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]

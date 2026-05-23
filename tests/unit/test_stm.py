@@ -51,6 +51,7 @@ from continuum.core.types import (
     ScoredItem,
     TokenBudget,
 )
+from continuum.stores.stm import InMemorySTM as ProductionInMemorySTM
 
 # Every test in this module is a "unit" test — no DB or network required.
 pytestmark = pytest.mark.unit
@@ -561,3 +562,35 @@ async def test_stm_loads_all_stm_tier_items_from_fixture(
         assert all(m.session_id == session_id for m in window), (
             f"Window for {session_id} contains items from another session"
         )
+
+
+async def test_production_inmemory_stm_preserves_user_id_and_agent_id_on_flush() -> None:
+    class Target:
+        def __init__(self) -> None:
+            self.items: list[MemoryItem] = []
+
+        async def add_summary(self, item: MemoryItem) -> str:
+            self.items.append(item)
+            return item.id
+
+    stm = ProductionInMemorySTM()
+    target = Target()
+    await stm.append(
+        MemoryItem(
+            content="remember my favorite color is blue",
+            session_id="chat-a",
+            user_id="u1",
+            agent_id="agent-1",
+            metadata={"role": "user"},
+        )
+    )
+
+    recent = await stm.get_recent("chat-a", n=1)
+    assert recent[0].user_id == "u1"
+    assert recent[0].agent_id == "agent-1"
+
+    flushed = await stm.flush_to("chat-a", target)
+
+    assert flushed == 1
+    assert target.items[0].user_id == "u1"
+    assert target.items[0].agent_id == "agent-1"

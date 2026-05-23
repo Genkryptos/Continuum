@@ -1,0 +1,230 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "llama-3.3-70b-versatile",
+  "started_at": "2026-05-23T12:18:43.461997+00:00",
+  "finished_at": "2026-05-23T12:21:37.052093+00:00",
+  "metrics": {
+    "n_questions": 5,
+    "accuracy": 1.0,
+    "avg_tokens": 4.6,
+    "recall": 1.0,
+    "latency_p50_ms": 40444.52983300016,
+    "latency_p95_ms": 45521.18900000005,
+    "total_cost_usd": 1.817e-05,
+    "failure_breakdown": {
+      "llm_error": 0,
+      "missing_fact": 0,
+      "wrong_retrieval": 0,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 0.0,
+    "avg_context_tokens_post_opt": 0.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {},
+    "by_question_type": {
+      "single-session-user": {
+        "n_questions": 5,
+        "accuracy": 1.0,
+        "recall": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "question_id": "e47becba",
+      "correct": true,
+      "latency_ms": 8109.957415999816,
+      "answer_tokens": 6,
+      "cost_usd": 4.74e-06,
+      "retrieved_session_ids": [
+        "answer_280352e9",
+        "02bd2b90_3"
+      ],
+      "expected_session_ids": [
+        "answer_280352e9"
+      ],
+      "answer": "A degree in Business Administration.",
+      "expected_answer": "Business Administration",
+      "failure_category": null,
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What degree did I graduate with?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "118b2229",
+      "correct": true,
+      "latency_ms": 45521.18900000005,
+      "answer_tokens": 5,
+      "cost_usd": 3.95e-06,
+      "retrieved_session_ids": [
+        "answer_40a90d51",
+        "7d8b5834_1"
+      ],
+      "expected_session_ids": [
+        "answer_40a90d51"
+      ],
+      "answer": "45 minutes each way.",
+      "expected_answer": "45 minutes each way",
+      "failure_category": null,
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "How long is my daily commute to work?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "51a45a95",
+      "correct": true,
+      "latency_ms": 38955.62645799964,
+      "answer_tokens": 3,
+      "cost_usd": 2.37e-06,
+      "retrieved_session_ids": [
+        "answer_d61669c7",
+        "98c198fb"
+      ],
+      "expected_session_ids": [
+        "answer_d61669c7"
+      ],
+      "answer": "At Target.",
+      "expected_answer": "Target",
+      "failure_category": null,
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "Where did I redeem a $5 coupon on coffee creamer?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "58bf7951",
+      "correct": true,
+      "latency_ms": 40444.52983300016,
+      "answer_tokens": 6,
+      "cost_usd": 4.74e-06,
+      "retrieved_session_ids": [
+        "answer_355c48bb",
+        "1587bd78_1"
+      ],
+      "expected_session_ids": [
+        "answer_355c48bb"
+      ],
+      "answer": "The Glass Menagerie.",
+      "expected_answer": "The Glass Menagerie",
+      "failure_category": null,
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What play did I attend at the local community theater?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "1e043500",
+      "correct": true,
+      "latency_ms": 40554.27262500052,
+      "answer_tokens": 3,
+      "cost_usd": 2.37e-06,
+      "retrieved_session_ids": [
+        "answer_3e012175",
+        "01bd9def"
+      ],
+      "expected_session_ids": [
+        "answer_3e012175"
+      ],
+      "answer": "Summer Vibes",
+      "expected_answer": "Summer Vibes",
+      "failure_category": null,
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What is the name of the playlist I created on Spotify?"
+        ],
+        "sub_answers": []
+      }
+    }
+  ]
+}

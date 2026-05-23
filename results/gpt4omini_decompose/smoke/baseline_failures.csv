@@ -1,3 +1,3 @@
 question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
-51a45a95,wrong_retrieval,Target,I don't know.,answer_d61669c7,answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7,,4656.9
-58bf7951,wrong_retrieval,The Glass Menagerie,I don't know.,answer_355c48bb,987b36db_2;answer_355c48bb;ultrachat_71618;sharegpt_LG0uJvY_0;answer_355c48bb;ultrachat_278141;answer_355c48bb;answer_355c48bb;sharegpt_OFiElWf_37;ultrachat_268434;ultrachat_268434;sharegpt_OFiElWf_37,,5061.3
+51a45a95,wrong_retrieval,Target,I don't know.,answer_d61669c7,answer_d61669c7;answer_d61669c7;answer_d61669c7;answer_d61669c7,,5002.5
+58bf7951,wrong_retrieval,The Glass Menagerie,I don't know.,answer_355c48bb,987b36db_2;answer_355c48bb;ultrachat_71618;sharegpt_LG0uJvY_0;answer_355c48bb;ultrachat_278141;answer_355c48bb;answer_355c48bb;sharegpt_OFiElWf_37;ultrachat_268434;ultrachat_268434;sharegpt_OFiElWf_37,,5789.6

@@ -456,6 +456,7 @@ class SummaryBlock:
     embedding: list[float] | None = None
     session_id: str | None = None
     agent_id: str | None = None
+    user_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     processed: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -473,6 +474,7 @@ class SummaryBlock:
             created_at=self.created_at,
             session_id=self.session_id,
             agent_id=self.agent_id,
+            user_id=self.user_id,
             embedding=self.embedding,
             processing_state=(
                 ProcessingState.PROCESSED if self.processed else ProcessingState.UNPROCESSED
@@ -505,6 +507,7 @@ class SummaryBlock:
             embedding=item.embedding,
             session_id=item.session_id,
             agent_id=item.agent_id,
+            user_id=item.user_id,
             created_at=item.created_at,
             processed=item.processing_state is ProcessingState.PROCESSED,
             metadata=dict(item.metadata),

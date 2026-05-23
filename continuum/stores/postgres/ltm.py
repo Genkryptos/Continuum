@@ -258,6 +258,12 @@ class PostgresLTM:
         kind = meta.get("kind")
         source_ids = meta.get("source_ids")
         tags = {k: v for k, v in meta.items() if k not in _RESERVED_TAG_KEYS}
+        if item.session_id is not None:
+            tags["session_id"] = item.session_id
+        if item.agent_id is not None:
+            tags["agent_id"] = item.agent_id
+        if item.user_id is not None:
+            tags["user_id"] = item.user_id
 
         vf = item.valid_range.valid_from if item.valid_range else None
         vt = item.valid_range.valid_to if item.valid_range else None
@@ -640,6 +646,9 @@ class PostgresLTM:
                 float(row["confidence"]) if row.get("confidence") is not None else 1.0
             ),
             created_at=created_at,
+            session_id=tags.get("session_id"),
+            agent_id=tags.get("agent_id"),
+            user_id=tags.get("user_id"),
             metadata=tags,
         )
 

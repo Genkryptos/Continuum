@@ -86,10 +86,19 @@ def _mtm(conn: MockConnection, **kw: Any) -> PostgresMTM:
     return PostgresMTM(conn_factory=_factory, **kw)
 
 
-def _node_row(*, idx: int, text: str, tokens: int, session: str | None = "s1") -> dict[str, Any]:
+def _node_row(
+    *,
+    idx: int,
+    text: str,
+    tokens: int,
+    session: str | None = "s1",
+    user: str | None = None,
+) -> dict[str, Any]:
     tags: dict[str, Any] = {"tokens": tokens}
     if session is not None:
         tags["session_id"] = session
+    if user is not None:
+        tags["user_id"] = user
     return {
         "id": str(uuid.UUID(int=idx)),
         "text": text,
@@ -114,11 +123,20 @@ class TestSummaryBlock:
 
     def test_to_memory_item(self) -> None:
         bid = uuid.uuid4()
-        b = SummaryBlock(text="abc", tokens=3, id=bid, session_id="s9", processed=True)
+        b = SummaryBlock(
+            text="abc",
+            tokens=3,
+            id=bid,
+            session_id="s9",
+            user_id="u7",
+            processed=True,
+        )
         mi = b.to_memory_item()
         assert mi.id == str(bid)
         assert mi.content == "abc"
         assert mi.tier == MemoryTier.MTM
+        assert mi.session_id == "s9"
+        assert mi.user_id == "u7"
         assert mi.processing_state == ProcessingState.PROCESSED
         assert mi.metadata["tokens"] == 3
 
@@ -127,6 +145,8 @@ class TestSummaryBlock:
             content="round trip text",
             tier=MemoryTier.MTM,
             session_id="s1",
+            user_id="u1",
+            agent_id="a1",
             metadata={"tokens": 4, "k": "v"},
             processing_state=ProcessingState.UNPROCESSED,
         )
@@ -134,6 +154,8 @@ class TestSummaryBlock:
         assert b.text == "round trip text"
         assert b.tokens == 4
         assert b.session_id == "s1"
+        assert b.user_id == "u1"
+        assert b.agent_id == "a1"
         assert b.processed is False
         assert b.metadata["k"] == "v"
         assert str(b.id) == mi.id  # uuid preserved
@@ -190,7 +212,7 @@ class TestAddSummary:
         conn = MockConnection()
         mtm = _mtm(conn)
         bid = uuid.uuid4()
-        block = SummaryBlock(text="alpha beta", id=bid, session_id="s1")
+        block = SummaryBlock(text="alpha beta", id=bid, session_id="s1", user_id="u1")
 
         returned = await mtm.add_summary(block)
 
@@ -202,6 +224,7 @@ class TestAddSummary:
         tags = json.loads(params["tags"])
         assert tags["tokens"] == 2  # "alpha beta" → 2 words
         assert tags["session_id"] == "s1"
+        assert tags["user_id"] == "u1"
 
     async def test_uses_existing_token_count(self) -> None:
         conn = MockConnection()
@@ -217,12 +240,14 @@ class TestAddSummary:
             content="from stm flush",
             tier=MemoryTier.STM,
             session_id="s2",
+            user_id="u2",
         )
         returned = await mtm.add_summary(item)  # flush_to passes MemoryItem
         assert isinstance(returned, uuid.UUID)
         sql, params = conn.executed[0]
         assert "'MTM'" in sql
         assert json.loads(params["tags"])["session_id"] == "s2"
+        assert json.loads(params["tags"])["user_id"] == "u2"
 
     async def test_embedding_cast_when_present(self) -> None:
         conn = MockConnection()
@@ -318,6 +343,20 @@ class TestRecent:
         assert "tags->>'session_id' = %(sid)s" in sql
         assert params["sid"] == "proj-x"
         assert "ORDER  BY created_at DESC" in sql
+
+    async def test_user_filter_and_excluded_session_in_sql(self) -> None:
+        conn = MockConnection(recent_rows=[])
+        mtm = _mtm(conn)
+        await mtm.recent(
+            token_budget=100,
+            user_id="user-1",
+            exclude_session_id="chat-current",
+        )
+        sql, params = conn.executed[0]
+        assert "tags->>'user_id' = %(uid)s" in sql
+        assert "tags->>'session_id' <> %(exclude_sid)s" in sql
+        assert params["uid"] == "user-1"
+        assert params["exclude_sid"] == "chat-current"
 
 
 # ---------------------------------------------------------------------------

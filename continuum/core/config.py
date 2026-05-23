@@ -829,6 +829,17 @@ class RetrieverConfig(BaseSettings):
         validation_alias=AliasChoices("mtm_top_k", "CONTINUUM_RETRIEVER_MTM_TOP_K"),
         description="Maximum MTM items returned after scoring and re-ranking.",
     )
+    cross_session_user_recall_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "cross_session_user_recall_enabled",
+            "CONTINUUM_RETRIEVER_CROSS_SESSION_USER_RECALL_ENABLED",
+        ),
+        description=(
+            "When query.user_id is set, include same-user memories from other "
+            "sessions in MTM/LTM retrieval while keeping STM session-local."
+        ),
+    )
     graph_expand_n: int = Field(
         default=10,
         ge=0,

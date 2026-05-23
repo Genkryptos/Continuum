@@ -1,0 +1,247 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "qwen/qwen3-14b",
+  "started_at": "2026-05-23T11:55:23.427028+00:00",
+  "finished_at": "2026-05-23T11:56:06.804653+00:00",
+  "metrics": {
+    "n_questions": 5,
+    "accuracy": 0.0,
+    "avg_tokens": 59.0,
+    "recall": 1.0,
+    "latency_p50_ms": 7117.568915999982,
+    "latency_p95_ms": 14934.620458000154,
+    "total_cost_usd": 0.0,
+    "failure_breakdown": {
+      "llm_error": 5,
+      "missing_fact": 0,
+      "wrong_retrieval": 0,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 0.0,
+    "avg_context_tokens_post_opt": 0.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {},
+    "by_question_type": {
+      "single-session-user": {
+        "n_questions": 5,
+        "accuracy": 0.0,
+        "recall": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "question_id": "e47becba",
+      "correct": false,
+      "latency_ms": 14934.620458000154,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_280352e9",
+        "02bd2b90_3",
+        "sharegpt_QZMeA7V_17",
+        "ultrachat_458322",
+        "sharegpt_T1EiHWI_13"
+      ],
+      "expected_session_ids": [
+        "answer_280352e9"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "Business Administration",
+      "failure_category": "llm_error",
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What degree did I graduate with?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "118b2229",
+      "correct": false,
+      "latency_ms": 7117.568915999982,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_40a90d51",
+        "7d8b5834_1",
+        "db73b7e4_4",
+        "728deb4d_5"
+      ],
+      "expected_session_ids": [
+        "answer_40a90d51"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "45 minutes each way",
+      "failure_category": "llm_error",
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "How long is my daily commute to work?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "51a45a95",
+      "correct": false,
+      "latency_ms": 6977.843916999973,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_d61669c7",
+        "98c198fb",
+        "5c44d9fe_1",
+        "217debf7",
+        "sharegpt_MKMWjX0_25",
+        "sharegpt_apWLb2c_0"
+      ],
+      "expected_session_ids": [
+        "answer_d61669c7"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "Target",
+      "failure_category": "llm_error",
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "Where did I redeem a $5 coupon on coffee creamer?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "58bf7951",
+      "correct": false,
+      "latency_ms": 7325.054750000163,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_355c48bb",
+        "1587bd78_1",
+        "ultrachat_304942",
+        "sharegpt_DGiqvVv_270",
+        "5b83c26e_1",
+        "ultrachat_71618"
+      ],
+      "expected_session_ids": [
+        "answer_355c48bb"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "The Glass Menagerie",
+      "failure_category": "llm_error",
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What play did I attend at the local community theater?"
+        ],
+        "sub_answers": []
+      }
+    },
+    {
+      "question_id": "1e043500",
+      "correct": false,
+      "latency_ms": 7020.468582999911,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "answer_3e012175",
+        "01bd9def",
+        "ultrachat_271928",
+        "sharegpt_6QUDIXG_24",
+        "sharegpt_bph7DTk_7",
+        "8020d945_2"
+      ],
+      "expected_session_ids": [
+        "answer_3e012175"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "Summer Vibes",
+      "failure_category": "llm_error",
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_fallback",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What is the name of the playlist I created on Spotify?"
+        ],
+        "sub_answers": []
+      }
+    }
+  ]
+}

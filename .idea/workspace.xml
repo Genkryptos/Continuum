@@ -5,18 +5,28 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="6ec9645c-f8c7-4b88-89a5-5e786869dbe4" name="Changes" comment="commit - 20 May">
-      <change beforePath="$PROJECT_DIR$/.claude/worktrees/silly-pike-9bcaef" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/worktrees/silly-pike-9bcaef" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.coverage" beforeDir="false" afterPath="$PROJECT_DIR$/.coverage" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/Continuum_Codex.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/continuum/core/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/core/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/continuum/core/session.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/core/session.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/continuum/extraction/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/extraction/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/continuum/promotion/promoter.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/promotion/promoter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/continuum/core/protocols.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/core/protocols.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/continuum/core/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/core/types.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/continuum/retrieval/retriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/retrieval/retriever.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/continuum/stores/postgres/ltm.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/stores/postgres/ltm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/continuum/stores/postgres/mtm.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/stores/postgres/mtm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requests.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/integration/test_stm_mtm_flow.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/integration/test_stm_mtm_flow.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/continuum/stores/stm/conversation_stm.py" beforeDir="false" afterPath="$PROJECT_DIR$/continuum/stores/stm/conversation_stm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evals/longmemeval/LongMemEval" beforeDir="false" afterPath="$PROJECT_DIR$/evals/longmemeval/LongMemEval" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evals/longmemeval/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/evals/longmemeval/baseline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evals/longmemeval/bootstrap_ollama.py" beforeDir="false" afterPath="$PROJECT_DIR$/evals/longmemeval/bootstrap_ollama.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evals/longmemeval/decompose.py" beforeDir="false" afterPath="$PROJECT_DIR$/evals/longmemeval/decompose.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/gpt4omini_decompose/smoke/baseline_2026-05-22.json" beforeDir="false" afterPath="$PROJECT_DIR$/results/gpt4omini_decompose/smoke/baseline_2026-05-22.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/gpt4omini_decompose/smoke/baseline_failures.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/gpt4omini_decompose/smoke/baseline_failures.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_cross_session_idle_flush.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/integration/test_cross_session_idle_flush.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/evals/test_decompose.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/evals/test_decompose.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/evals/test_longmemeval_baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/evals/test_longmemeval_baseline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_ltm.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/test_ltm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_mtm.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/test_mtm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_retriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/test_retriever.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_stm.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/test_stm.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,42 +71,43 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.test_compression_path_creates_summary_and_discards_old_messages.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_agent_stm.TestAgentSTM.test_negative_path_only_records_user_message_on_failure.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_counter.TestTknCounter.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_stm.TestConversationSTM.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_stm.TestConversationSTM.test_eviction_prefers_less_important_messages.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_stm.TestConversationSTM.test_reserved_for_response_reduces_effective_budget.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests for test_stm.TestThreadSafeAndSharedSTM.test_threadsafe_delegates_to_wrapped_stm.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_agent_mtm.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_agent_stm.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_counter.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_local_agent.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_mtm_services.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_stm.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python.__init__.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.agent.executor&quot;: &quot;Run&quot;,
-    &quot;Python.conftest.executor&quot;: &quot;Run&quot;,
-    &quot;Python.counter.executor&quot;: &quot;Run&quot;,
-    &quot;Python.databaseRetrival.executor&quot;: &quot;Run&quot;,
-    &quot;Python.lOpenai.executor&quot;: &quot;Run&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.maintest.executor&quot;: &quot;Run&quot;,
-    &quot;Python.openai.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_mtm_repository.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_mtm_retriever.executor&quot;: &quot;Run&quot;,
-    &quot;Python.web_search.executor&quot;: &quot;Run&quot;,
-    &quot;Python.web_search_server.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/mayanksahu/Continuum/documentation&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python tests.Python tests for test_agent_stm.TestAgentSTM.executor": "Run",
+    "Python tests.Python tests for test_agent_stm.TestAgentSTM.test_compression_path_creates_summary_and_discards_old_messages.executor": "Run",
+    "Python tests.Python tests for test_agent_stm.TestAgentSTM.test_negative_path_only_records_user_message_on_failure.executor": "Run",
+    "Python tests.Python tests for test_counter.TestTknCounter.executor": "Run",
+    "Python tests.Python tests for test_stm.TestConversationSTM.executor": "Run",
+    "Python tests.Python tests for test_stm.TestConversationSTM.test_eviction_prefers_less_important_messages.executor": "Run",
+    "Python tests.Python tests for test_stm.TestConversationSTM.test_reserved_for_response_reduces_effective_budget.executor": "Run",
+    "Python tests.Python tests for test_stm.TestThreadSafeAndSharedSTM.test_threadsafe_delegates_to_wrapped_stm.executor": "Run",
+    "Python tests.Python tests in test_agent_mtm.py.executor": "Run",
+    "Python tests.Python tests in test_agent_stm.py.executor": "Run",
+    "Python tests.Python tests in test_counter.py.executor": "Run",
+    "Python tests.Python tests in test_local_agent.py.executor": "Run",
+    "Python tests.Python tests in test_mtm_services.py.executor": "Run",
+    "Python tests.Python tests in test_stm.py.executor": "Run",
+    "Python.__init__.executor": "Debug",
+    "Python.agent.executor": "Run",
+    "Python.conftest.executor": "Run",
+    "Python.counter.executor": "Run",
+    "Python.databaseRetrival.executor": "Run",
+    "Python.lOpenai.executor": "Run",
+    "Python.main.executor": "Run",
+    "Python.maintest.executor": "Run",
+    "Python.openai.executor": "Run",
+    "Python.test_mtm_repository.executor": "Run",
+    "Python.test_mtm_retriever.executor": "Run",
+    "Python.web_search.executor": "Run",
+    "Python.web_search_server.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "codex-decomposed-answering",
+    "last_opened_file_path": "/Users/mayanksahu/Continuum/documentation",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/documentation" />

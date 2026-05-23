@@ -1,0 +1,13 @@
+2026-05-23 17:54:51,045 INFO provider=gemini model=gemini-2.0-flash rpm=25
+2026-05-23 17:54:51,080 INFO loading dataset from /Users/mayanksahu/Continuum_Codex/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
+2026-05-23 17:54:51,931 INFO loaded 500 rows
+2026-05-23 17:54:51,931 INFO scorer weights = {'relevance': 0.45, 'importance': 0.25, 'recency': 0.2, 'confidence': 0.1}   tau_hours = 168
+2026-05-23 17:54:51,931 INFO decomposed answering ENABLED — split question, retrieve and answer each part, synthesize final answer
+2026-05-23 17:54:51,931 INFO wiki memory ENABLED — compiled Markdown wiki retrieval, top 8 pages
+2026-05-23 17:54:51,931 INFO === SMOKE TEST (5 questions) ===
+2026-05-23 17:54:52,130 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:54:52,131 WARNING gemini 429 — adaptive pace now 3.60s/call; backoff 0.9s (retry 1/8)
+2026-05-23 17:54:54,465 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:54:54,467 WARNING gemini 429 — adaptive pace now 5.40s/call; backoff 2.1s (retry 2/8)
+2026-05-23 17:54:58,068 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-23 17:54:58,070 WARNING gemini 429 — adaptive pace now 8.10s/call; backoff 4.6s (retry 3/8)

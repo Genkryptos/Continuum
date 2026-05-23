@@ -13,12 +13,21 @@ import pytest
 from continuum.core.types import ContextBundle, MemoryItem, MemoryTier, TokenBudget
 from evals.longmemeval.decompose import (
     DecompositionRetriever,
+    build_decompose_prompt,
     parse_subquestions,
 )
 
 # ---------------------------------------------------------------------------
 # parse_subquestions
 # ---------------------------------------------------------------------------
+
+
+def test_build_decompose_prompt_contains_question() -> None:
+    prompt = build_decompose_prompt("Did X happen before Y?")
+
+    assert "Question: Did X happen before Y?" in prompt
+    assert prompt.rstrip().endswith("Sub-questions:")
+    assert "Return between 1 and 4 sub-questions" in prompt
 
 
 def test_parse_plain_lines() -> None:
@@ -52,6 +61,21 @@ def test_parse_caps_at_four() -> None:
 def test_parse_empty_falls_back_to_original() -> None:
     assert parse_subquestions("", original="the original") == ["the original"]
     assert parse_subquestions("   \n  \n", original="orig") == ["orig"]
+
+
+def test_parse_rejects_spurious_decomposition_for_single_fact_lookup() -> None:
+    out = parse_subquestions(
+        "\n".join(
+            [
+                "What is the distance from my home to my workplace?",
+                "What is the average speed of my commute?",
+                "How long does it take to travel that distance at that speed?",
+            ]
+        ),
+        original="How long is my daily commute to work?",
+    )
+
+    assert out == ["How long is my daily commute to work?"]
 
 
 # ---------------------------------------------------------------------------

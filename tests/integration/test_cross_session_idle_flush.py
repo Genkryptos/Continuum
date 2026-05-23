@@ -32,9 +32,11 @@ import uuid
 import pytest
 
 from continuum.core.config import ContinuumConfig
+from continuum.core.config import RetrieverConfig
 from continuum.core.session import ContinuumSession
 from continuum.core.types import MemoryItem, MemoryTier, ProcessingState
 from continuum.promotion.idle_flush import IdleStmFlush
+from continuum.retrieval import Retriever
 from continuum.stores.stm import InMemorySTM
 
 pytestmark = [pytest.mark.integration]
@@ -66,6 +68,27 @@ class _MinimalMTM:
             (it for it in self.items if s in (it.content or "").lower()),
             None,
         )
+
+    async def recent(
+        self,
+        token_budget: int,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        exclude_session_id: str | None = None,
+    ) -> list[MemoryItem]:
+        if token_budget <= 0:
+            return []
+        out: list[MemoryItem] = []
+        for item in reversed(self.items):
+            if session_id is not None and item.session_id != session_id:
+                continue
+            if user_id is not None and item.user_id != user_id:
+                continue
+            if exclude_session_id is not None and item.session_id == exclude_session_id:
+                continue
+            out.append(item)
+        return out
 
 
 @pytest.mark.asyncio
@@ -178,3 +201,45 @@ async def test_active_session_is_not_prematurely_flushed() -> None:
     # we explicitly want any partial STM persisted.
     await session.aclose()
     assert fired_count_before_close == 0
+
+
+@pytest.mark.asyncio
+async def test_same_user_can_recall_prior_session_mtm_but_other_user_cannot() -> None:
+    shared_mtm = _MinimalMTM()
+    stm_a = InMemorySTM()
+    await stm_a.append(MemoryItem(
+        content="my favorite color is blue",
+        tier=MemoryTier.STM,
+        session_id="chat-a",
+        user_id="u1",
+        metadata={"role": "user"},
+    ))
+    assert await stm_a.flush_to("chat-a", shared_mtm) == 1
+
+    session_b = ContinuumSession(
+        config=ContinuumConfig(),
+        stm=InMemorySTM(),
+        mtm=shared_mtm,
+        retriever=Retriever(RetrieverConfig(), mtm=shared_mtm),
+        session_id="chat-b",
+        user_id="u1",
+    )
+    await session_b.start()
+    hits_b = await session_b.search("What is my favorite color?", k=5)
+    await session_b.aclose()
+
+    assert "my favorite color is blue" in [item.content for item in hits_b]
+
+    session_c = ContinuumSession(
+        config=ContinuumConfig(),
+        stm=InMemorySTM(),
+        mtm=shared_mtm,
+        retriever=Retriever(RetrieverConfig(), mtm=shared_mtm),
+        session_id="chat-c",
+        user_id="u2",
+    )
+    await session_c.start()
+    hits_c = await session_c.search("What is my favorite color?", k=5)
+    await session_c.aclose()
+
+    assert "my favorite color is blue" not in [item.content for item in hits_c]

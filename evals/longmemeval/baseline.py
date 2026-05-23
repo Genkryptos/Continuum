@@ -89,6 +89,7 @@ class EvalRow:
     expected_answer: str
     messages: list[dict[str, Any]]
     answer_session_ids: list[str] = dataclasses.field(default_factory=list)
+    question_type: str = "unknown"
 
 
 @dataclasses.dataclass
@@ -106,6 +107,7 @@ class RowResult:
     expected_answer: str
     failure_category: str | None  # None when correct
     error: str | None = None  # populated on adapter exceptions
+    question_type: str = "unknown"
 
     # Optional optimizer telemetry (populated only when the adapter
     # exposes ``last_optimizer_stats``). All counts are tokens.
@@ -121,6 +123,7 @@ class RowResult:
     retrieval_ms: float = 0.0
     optimizer_ms: float = 0.0
     strategy_savings: dict[str, int] = dataclasses.field(default_factory=dict)
+    decomposition_stats: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -201,6 +204,30 @@ class BaselineResults:
                 out[k] = out.get(k, 0) + int(v)
         return out
 
+    @property
+    def by_question_type(self) -> dict[str, dict[str, float]]:
+        grouped: dict[str, list[RowResult]] = {}
+        for row in self.rows:
+            grouped.setdefault(row.question_type or "unknown", []).append(row)
+        out: dict[str, dict[str, float]] = {}
+        for question_type, rows in sorted(grouped.items()):
+            correct = sum(1 for r in rows if r.correct)
+            recall_vals: list[float] = []
+            for r in rows:
+                if not r.expected_session_ids:
+                    continue
+                hit = sum(
+                    1 for sid in r.expected_session_ids
+                    if sid in r.retrieved_session_ids
+                )
+                recall_vals.append(hit / len(r.expected_session_ids))
+            out[question_type] = {
+                "n_questions": len(rows),
+                "accuracy": correct / len(rows) if rows else 0.0,
+                "recall": statistics.fmean(recall_vals) if recall_vals else 0.0,
+            }
+        return out
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset": self.dataset,
@@ -226,6 +253,7 @@ class BaselineResults:
                 ),
                 "avg_optimizer_ms": self.avg_optimizer_ms,
                 "strategy_savings_total": self.strategy_savings_total,
+                "by_question_type": self.by_question_type,
             },
             "rows": [dataclasses.asdict(r) for r in self.rows],
         }
@@ -427,6 +455,7 @@ async def _run_one(
     opt = getattr(adapter, "last_optimizer_stats", None) or {}
     return RowResult(
         question_id=row.question_id,
+        question_type=row.question_type,
         correct=correct,
         latency_ms=latency_ms,
         answer_tokens=answer_tokens,
@@ -449,6 +478,9 @@ async def _run_one(
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),
         strategy_savings=dict(opt.get("strategy_savings", {})),
+        decomposition_stats=dict(
+            getattr(adapter, "last_decomposition_stats", None) or {}
+        ),
     )
 
 
@@ -496,12 +528,22 @@ def _extract_retrieved_session_ids(adapter: Any) -> list[str]:
     if ctx is None:
         return []
     ids: list[str] = []
+    seen: set[str] = set()
     for it in getattr(ctx, "items", []) or []:
-        sid = (
-            getattr(it, "metadata", {}) or {}
-        ).get("session_id") if hasattr(it, "metadata") else None
+        metadata = getattr(it, "metadata", {}) or {}
+        raw_ids: list[Any] = []
+        sid = metadata.get("session_id")
         if sid:
-            ids.append(str(sid))
+            raw_ids.append(sid)
+        session_ids = metadata.get("session_ids")
+        if isinstance(session_ids, list):
+            raw_ids.extend(session_ids)
+        for raw_id in raw_ids:
+            sid_s = str(raw_id)
+            if sid_s in seen:
+                continue
+            seen.add(sid_s)
+            ids.append(sid_s)
     return ids
 
 
@@ -560,6 +602,16 @@ def _print_summary(results: BaselineResults) -> None:
     print(f"  avg tokens:      {results.avg_tokens:.0f}")
     print(f"  latency p50/p95: {results.latency_p50:.0f}ms / {results.latency_p95:.0f}ms")
     print(f"  total cost:      ${results.total_cost_usd:.2f}")
+    by_type = results.by_question_type
+    if by_type:
+        print("  by question type:")
+        for question_type, metrics in by_type.items():
+            print(
+                f"    {question_type:<24} "
+                f"n={int(metrics['n_questions']):<3} "
+                f"acc={metrics['accuracy']:.1%} "
+                f"recall={metrics['recall']:.1%}"
+            )
     breakdown = _failure_breakdown(results.rows)
     print("  failure types:")
     for cat, n in breakdown.items():

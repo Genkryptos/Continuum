@@ -114,6 +114,8 @@ def message_to_item(
         Optional ownership fields forwarded to ``MemoryItem``.
     """
     meta: dict[str, Any] = dict(msg.meta)  # unfreeze MappingProxyType → dict
+    owner_agent_id = meta.pop("_agent_id", agent_id)
+    owner_user_id = meta.pop("_user_id", user_id)
     meta["role"] = msg.role
     meta["tokens"] = msg.tokens
     return MemoryItem(
@@ -123,8 +125,8 @@ def message_to_item(
         confidence=1.0,
         created_at=msg.timestamp,
         session_id=session_id,
-        agent_id=agent_id,
-        user_id=user_id,
+        agent_id=owner_agent_id,
+        user_id=owner_user_id,
         metadata=meta,
     )
 
@@ -148,6 +150,10 @@ def item_to_message(item: MemoryItem, tokenizer: TokenizerFn | None = None) -> M
     role = str(item.metadata.get("role", "user"))
     imp = _float_to_importance(item.importance)
     meta = {k: v for k, v in item.metadata.items() if k not in ("role", "tokens")}
+    if item.agent_id is not None:
+        meta["_agent_id"] = item.agent_id
+    if item.user_id is not None:
+        meta["_user_id"] = item.user_id
     return Message(
         role=role,
         content=item.content,
@@ -245,6 +251,10 @@ class InMemorySTM:
         role = str(item.metadata.get("role", "user"))
         imp = _float_to_importance(item.importance)
         meta = {k: v for k, v in item.metadata.items() if k not in ("role",)}
+        if item.agent_id is not None:
+            meta["_agent_id"] = item.agent_id
+        if item.user_id is not None:
+            meta["_user_id"] = item.user_id
 
         async with self._lock:
             engine = self._get_or_create(session_id)

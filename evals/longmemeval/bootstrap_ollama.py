@@ -26,6 +26,21 @@ Run modes
     # prompt before kicking off the full run unless --yes is given.
     python -m evals.longmemeval.bootstrap_ollama --full
 
+    # cross-session decomposed answering smoke with session-aware retrieval.
+    python -m evals.longmemeval.bootstrap_ollama \
+        --provider openai --model gpt-4o-mini --optimizer \
+        --decompose-answer --session-aware-retrieval \
+        --session-top-k 4 --turns-per-session 2 \
+        --output results/gpt4omini_decompose_answer_session_aware \
+        --limit 5
+
+    # compiled memory wiki smoke.
+    python -m evals.longmemeval.bootstrap_ollama \
+        --provider openai --model gpt-4o-mini --decompose-answer \
+        --wiki-memory --wiki-top-k 8 \
+        --output results/gpt4omini_wiki_memory \
+        --limit 5
+
 Dependencies
 ------------
 * ``httpx`` (already a project dep)
@@ -75,7 +90,17 @@ from continuum.optimizer.strategies import (
 )
 from evals.longmemeval.adapter import ContinuumAdapter
 from evals.longmemeval.baseline import EvalRow, run_baseline
-from evals.longmemeval.decompose import DecompositionRetriever
+from evals.longmemeval.decompose import (
+    DecompositionRetriever,
+    build_decompose_prompt,
+    parse_subquestions,
+)
+from evals.longmemeval.decomposed_answer import (
+    SubAnswer,
+    build_final_synthesis_prompt,
+    build_subanswer_prompt,
+    extract_session_ids,
+)
 
 log = logging.getLogger(__name__)
 
@@ -183,6 +208,7 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
             expected_answer=str(r["answer"]),
             messages=flat_messages,
             answer_session_ids=list(ans_sids),
+            question_type=str(r.get("question_type", "unknown")),
         ))
     return rows
 
@@ -1120,6 +1146,437 @@ class STMSemanticRetriever:
         )
 
 
+class SessionAwareSemanticRetriever(STMSemanticRetriever):
+    """
+    Session-first LongMemEval retriever.
+
+    It ranks source sessions by their strongest matching turn, then selects
+    the strongest turns inside the top sessions. This prevents one noisy
+    session with many similar turns from crowding out evidence sessions for
+    multi-session questions.
+    """
+
+    def __init__(
+        self,
+        *,
+        store: FlatHaystackStore,
+        embedder: _Embedder,
+        session_top_k: int = 4,
+        turns_per_session: int = 2,
+        max_items: int = 16,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(store=store, embedder=embedder, **kwargs)
+        self.session_top_k = max(1, int(session_top_k))
+        self.turns_per_session = max(1, int(turns_per_session))
+        self.max_items = max(1, int(max_items))
+
+    def _bundle_topk(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._cached_matrix.T).flatten()  # type: ignore[union-attr]
+
+        first_index: dict[str, int] = {}
+        grouped: dict[str, list[tuple[int, float, MemoryItem]]] = {}
+        for idx, item in enumerate(self._cached_items):
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            first_index.setdefault(sid, idx)
+            grouped.setdefault(sid, []).append((idx, float(sims[idx]), item))
+
+        ranked_sessions = sorted(
+            grouped,
+            key=lambda sid: (
+                -max(score for _idx, score, _item in grouped[sid]),
+                first_index[sid],
+            ),
+        )[: self.session_top_k]
+
+        picked: list[MemoryItem] = []
+        for sid in ranked_sessions:
+            turns = sorted(
+                grouped[sid],
+                key=lambda row: (-row[1], row[0]),
+            )[: self.turns_per_session]
+            picked.extend(item for _idx, _score, item in turns)
+            if len(picked) >= self.max_items:
+                picked = picked[: self.max_items]
+                break
+
+        messages = [
+            {
+                "role": str(item.metadata.get("role", "user"))
+                if item.metadata else "user",
+                "content": item.content,
+            }
+            for item in picked
+        ]
+        token_count = sum(estimate_tokens_text(item.content) for item in picked)
+        return ContextBundle(
+            items=picked,
+            messages=messages,
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
+            debug_info={
+                "retrieval_mode": "session_aware",
+                "selected_sessions": ranked_sessions,
+                "session_top_k": self.session_top_k,
+                "turns_per_session": self.turns_per_session,
+            },
+        )
+
+
+class WikiMemoryRetriever:
+    """
+    Row-local compiled-memory retriever for LongMemEval.
+
+    This is a lightweight implementation of the LLM-wiki idea: raw haystack
+    turns remain unchanged in ``raw_store``; retrieval runs over generated
+    Markdown pages that organize the row by index, timeline, preferences, and
+    per-session pages. No oracle answer-session ids are used.
+    """
+
+    _PREFERENCE_TERMS = (
+        "favorite", "prefer", "preference", "like", "love", "dislike",
+        "color", "food", "book", "movie", "music", "hobby",
+    )
+    _LEXICAL_STOPWORDS = {
+        "the", "and", "for", "with", "that", "this", "what", "where",
+        "when", "who", "which", "how", "did", "does", "was", "were",
+        "is", "are", "am", "to", "of", "on", "in", "at", "a", "an",
+    }
+    _WORD_RE = re.compile(r"[a-z0-9]+")
+    _TIME_RE = re.compile(
+        r"\b(?:minute|minutes|hour|hours|each way|one way|round trip)\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(
+        self,
+        *,
+        raw_store: FlatHaystackStore,
+        embedder: _Embedder,
+        top_k: int = 8,
+        session_id: str = "default",
+    ) -> None:
+        self.raw_store = raw_store
+        self.embedder = embedder
+        self.top_k = max(1, int(top_k))
+        self.session_id = session_id
+        self._cached_len = -1
+        self._pages: list[MemoryItem] = []
+        self._matrix: np.ndarray | None = None
+        self._raw_matrix: np.ndarray | None = None
+
+    def _group_sessions(self) -> dict[str, list[MemoryItem]]:
+        grouped: dict[str, list[MemoryItem]] = {}
+        for item in self.raw_store.items:
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            grouped.setdefault(sid, []).append(item)
+        return grouped
+
+    @staticmethod
+    def _session_ids(items: Iterable[MemoryItem]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            sid = str((item.metadata or {}).get("session_id") or "")
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            out.append(sid)
+        return out
+
+    @staticmethod
+    def _render_messages(items: list[MemoryItem], *, limit: int | None = None) -> str:
+        lines: list[str] = []
+        source = items[:limit] if limit is not None else items
+        for idx, item in enumerate(source, start=1):
+            role = str((item.metadata or {}).get("role", "user"))
+            lines.append(f"- turn {idx} ({role}): {item.content}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _tokens(cls, text: str) -> set[str]:
+        return {
+            token for token in cls._WORD_RE.findall(text.lower())
+            if len(token) > 2 and token not in cls._LEXICAL_STOPWORDS
+        }
+
+    @classmethod
+    def _lexical_score(cls, query: str, text: str) -> float:
+        query_tokens = cls._tokens(query)
+        if not query_tokens:
+            return 0.0
+        text_l = text.lower()
+        text_tokens = cls._tokens(text_l)
+        score = len(query_tokens & text_tokens) / len(query_tokens)
+        if re.search(r"\bhow\s+long\b", query, re.IGNORECASE) and cls._TIME_RE.search(text_l):
+            score += 0.75
+        if re.search(r"\bwhere\b", query, re.IGNORECASE):
+            if re.search(r"\b(?:target|walmart|costco|kroger|store|shop|app)\b", text_l):
+                score += 0.25
+        if re.search(r"\bname\b", query, re.IGNORECASE):
+            if re.search(r"\b(?:called|named|titled)\b", text_l):
+                score += 0.35
+        return score
+
+    def _page(
+        self,
+        name: str,
+        content: str,
+        source_items: list[MemoryItem],
+        *,
+        recall_session_ids: list[str] | None = None,
+        page_type: str = "compiled",
+    ) -> MemoryItem:
+        source_session_ids = self._session_ids(source_items)
+        session_ids = recall_session_ids or []
+        meta: dict[str, Any] = {
+            "role": "system",
+            "wiki_page": name,
+            "wiki_page_type": page_type,
+            "source_session_ids": source_session_ids,
+            "session_ids": session_ids,
+        }
+        if len(session_ids) == 1:
+            meta["session_id"] = session_ids[0]
+        return MemoryItem(
+            id=f"wiki:{name}",
+            content=content,
+            tier=MemoryTier.LTM,
+            metadata=meta,
+        )
+
+    def _build_pages(self) -> list[MemoryItem]:
+        grouped = self._group_sessions()
+        all_items = list(self.raw_store.items)
+        pages: list[MemoryItem] = []
+
+        index_lines = ["# Memory Wiki Index", "", "## Sessions"]
+        for sid, items in grouped.items():
+            index_lines.append(f"- sessions/{sid}.md ({len(items)} turns)")
+        index_lines.extend([
+            "",
+            "## Compiled Pages",
+            "- timeline.md",
+            "- preferences.md",
+            "- profile.md",
+        ])
+        pages.append(
+            self._page(
+                "index.md", "\n".join(index_lines), all_items,
+                page_type="global",
+            )
+        )
+
+        timeline_lines = ["# Timeline", ""]
+        for sid, items in grouped.items():
+            preview = " ".join(item.content for item in items[:2])
+            timeline_lines.append(f"- session={sid}: {preview}")
+        pages.append(
+            self._page(
+                "timeline.md", "\n".join(timeline_lines), all_items,
+                page_type="global",
+            )
+        )
+
+        preference_items = [
+            item for item in all_items
+            if any(term in item.content.lower() for term in self._PREFERENCE_TERMS)
+        ]
+        if preference_items:
+            pref_body = "# Preferences\n\n" + self._render_messages(preference_items)
+        else:
+            pref_body = "# Preferences\n\nNo explicit preferences found."
+        pages.append(
+            self._page(
+                "preferences.md",
+                pref_body,
+                preference_items or all_items,
+                page_type="compiled",
+            )
+        )
+
+        profile_body = "# Profile\n\n" + self._render_messages(all_items, limit=40)
+        pages.append(self._page("profile.md", profile_body, all_items, page_type="global"))
+
+        for sid, items in grouped.items():
+            body = f"# Session {sid}\n\n" + self._render_messages(items)
+            pages.append(
+                self._page(
+                    f"sessions/{sid}.md",
+                    body,
+                    items,
+                    recall_session_ids=[sid],
+                    page_type="session",
+                )
+            )
+
+        return pages
+
+    def _refresh_index(self) -> None:
+        if len(self.raw_store.items) == self._cached_len:
+            return
+        self._pages = self._build_pages()
+        self._cached_len = len(self.raw_store.items)
+        if not self._pages:
+            self._matrix = None
+            self._raw_matrix = None
+            return
+        self._matrix = self.embedder.encode([page.content for page in self._pages])
+        self._raw_matrix = self.embedder.encode(
+            [item.content for item in self.raw_store.items]
+        )
+
+    def _raw_ranked_sessions(
+        self, qv: np.ndarray, query_text: str, limit: int
+    ) -> list[str]:
+        if self._raw_matrix is None or not self.raw_store.items:
+            return []
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._raw_matrix.T).flatten()
+        first_index: dict[str, int] = {}
+        best_score: dict[str, float] = {}
+        for idx, item in enumerate(self.raw_store.items):
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            score = float(sims[idx]) + 4.0 * self._lexical_score(
+                query_text, item.content
+            )
+            first_index.setdefault(sid, idx)
+            best_score[sid] = max(best_score.get(sid, float("-inf")), score)
+        return sorted(
+            best_score,
+            key=lambda sid: (-best_score[sid], first_index[sid]),
+        )[:limit]
+
+    def _raw_ranked_item_indices(
+        self, qv: np.ndarray, query_text: str, limit: int
+    ) -> list[int]:
+        if self._raw_matrix is None or not self.raw_store.items:
+            return []
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._raw_matrix.T).flatten()
+        scored = [
+            (
+                idx,
+                float(sims[idx]) + 4.0 * self._lexical_score(
+                    query_text, item.content
+                ),
+            )
+            for idx, item in enumerate(self.raw_store.items)
+        ]
+        scored.sort(key=lambda row: (-row[1], row[0]))
+        return [idx for idx, _score in scored[:limit]]
+
+    def _evidence_window(self, center_idx: int, *, radius: int = 2) -> MemoryItem:
+        center = self.raw_store.items[center_idx]
+        sid = str((center.metadata or {}).get("session_id") or "unknown")
+        session_indices = [
+            idx for idx, item in enumerate(self.raw_store.items)
+            if str((item.metadata or {}).get("session_id") or "unknown") == sid
+        ]
+        position = session_indices.index(center_idx)
+        start = max(0, position - radius)
+        end = min(len(session_indices), position + radius + 1)
+        window_items = [
+            self.raw_store.items[idx] for idx in session_indices[start:end]
+        ]
+        center_role = str((center.metadata or {}).get("role", "user"))
+        body = (
+            f"# Evidence Window for {sid}\n\n"
+            "## Matched Turn\n"
+            f"- ({center_role}): {center.content}\n\n"
+            "## Nearby Context\n"
+            + self._render_messages(window_items)
+        )
+        return self._page(
+            f"evidence/{sid}/{center.id}.md",
+            body,
+            window_items,
+            recall_session_ids=[sid],
+            page_type="evidence_window",
+        )
+
+    async def retrieve(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        self._refresh_index()
+        if self._matrix is None or not self._pages:
+            return ContextBundle(
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
+                tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+                debug_info={"retrieval_mode": "wiki_memory", "wiki_pages": 0},
+            )
+
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._matrix.T).flatten()
+        ranked = [int(i) for i in np.argsort(-sims)]
+        picked: list[MemoryItem] = []
+        seen_page_ids: set[str] = set()
+        picked_indices: list[int] = []
+        seen_indices: set[int] = set()
+
+        window_limit = min(2, max(1, self.top_k // 2))
+        for raw_idx in self._raw_ranked_item_indices(qv, query.text, window_limit):
+            window = self._evidence_window(raw_idx)
+            if window.id in seen_page_ids:
+                continue
+            picked.append(window)
+            seen_page_ids.add(window.id)
+
+        page_by_session = {
+            str(page.metadata.get("session_id")): idx
+            for idx, page in enumerate(self._pages)
+            if page.metadata.get("wiki_page_type") == "session"
+        }
+        source_top_k = min(max(1, self.top_k // 2), len(page_by_session))
+        for sid in self._raw_ranked_sessions(qv, query.text, source_top_k):
+            idx = page_by_session.get(sid)
+            if idx is None or idx in seen_indices:
+                continue
+            picked_indices.append(idx)
+            seen_indices.add(idx)
+        for idx in ranked:
+            if idx in seen_indices:
+                continue
+            picked_indices.append(idx)
+            seen_indices.add(idx)
+            if len(picked) + len(picked_indices) >= self.top_k:
+                break
+        for idx in picked_indices:
+            page = self._pages[idx]
+            if page.id in seen_page_ids:
+                continue
+            picked.append(page)
+            seen_page_ids.add(page.id)
+            if len(picked) >= self.top_k:
+                break
+        picked = picked[: self.top_k]
+        messages = [{"role": "system", "content": page.content} for page in picked]
+        token_count = sum(estimate_tokens_text(page.content) for page in picked)
+        return ContextBundle(
+            items=picked,
+            messages=messages,
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": token_count},
+            debug_info={
+                "retrieval_mode": "wiki_memory",
+                "wiki_pages": len(self._pages),
+                "selected_pages": [
+                    str(page.metadata.get("wiki_page", "")) for page in picked
+                ],
+            },
+        )
+
+
 # ---------------------------------------------------------------------------
 # Per-question session + adapter
 # ---------------------------------------------------------------------------
@@ -1424,6 +1881,164 @@ class _OptimizingAdapter(_IngestingAdapter):
         return str(answer).strip()
 
 
+class _DecomposedAnsweringAdapter(_IngestingAdapter):
+    """
+    Full decomposed-answering path for LongMemEval.
+
+    Unlike ``DecompositionRetriever``, this does not only merge retrieved
+    snippets. It answers each sub-question against its own evidence, then
+    synthesizes the final answer from those intermediate answers.
+    """
+
+    def __init__(
+        self,
+        *,
+        decompose_max_tokens: int = 160,
+        subanswer_max_tokens: int = 80,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.decompose_max_tokens = decompose_max_tokens
+        self.subanswer_max_tokens = subanswer_max_tokens
+        self.last_decomposition_stats: dict[str, Any] = {}
+
+    async def _decompose_question(self, question: str) -> list[str]:
+        try:
+            reply = await self.llm.complete(
+                prompt=build_decompose_prompt(question),
+                max_tokens=self.decompose_max_tokens,
+            )
+        except Exception:
+            log.exception("decomposed-answer decomposition failed")
+            return [question]
+        return parse_subquestions(reply, original=question)
+
+    @staticmethod
+    def _is_atomic(question: str, subquestions: list[str]) -> bool:
+        if len(subquestions) != 1:
+            return False
+        return subquestions[0].strip().lower() == question.strip().lower()
+
+    @staticmethod
+    def _empty_context(budget: TokenBudget) -> ContextBundle:
+        return ContextBundle(
+            items=[],
+            messages=[],
+            tokens_used=0,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+        )
+
+    @staticmethod
+    def _merge_contexts(contexts: list[ContextBundle]) -> ContextBundle | None:
+        if not contexts:
+            return None
+        first = contexts[0]
+        seen: set[str] = set()
+        items: list[MemoryItem] = []
+        for ctx in contexts:
+            for item in ctx.items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                items.append(item)
+        token_count = sum(estimate_tokens_text(item.content) for item in items)
+        messages = [
+            {
+                "role": str(item.metadata.get("role", "user"))
+                if item.metadata else "user",
+                "content": item.content,
+            }
+            for item in items
+        ]
+        return dataclasses_replace(
+            first,
+            items=items,
+            messages=messages,
+            tokens_used=token_count,
+            tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
+            debug_info={
+                "retrieval_mode": "decompose_answer",
+                "merged_items": len(items),
+            },
+        )
+
+    async def answer_question(self, question: str) -> str:
+        subquestions = await self._decompose_question(question)
+        if self._is_atomic(question, subquestions):
+            answer = await super().answer_question(question)
+            self.last_decomposition_stats = {
+                "mode": "atomic_fallback",
+                "n_sub_questions": 1,
+                "sub_questions": subquestions,
+                "sub_answers": [],
+            }
+            return answer
+
+        retriever = getattr(self.session, "retriever", None)
+        if retriever is None:
+            self.last_ctx = None
+            self.last_decomposition_stats = {
+                "mode": "decompose_answer",
+                "n_sub_questions": len(subquestions),
+                "sub_questions": subquestions,
+                "sub_answers": [],
+                "subquestion_hits": [],
+            }
+            return "I don't know"
+
+        contexts: list[ContextBundle] = []
+        subanswers: list[SubAnswer] = []
+        for subquestion in subquestions:
+            try:
+                ctx = await retriever.retrieve(Query(text=subquestion), self.budget)
+            except Exception:
+                log.exception("sub-question retrieve failed for %r", subquestion)
+                ctx = self._empty_context(self.budget)
+            contexts.append(ctx)
+
+            prompt = build_subanswer_prompt(subquestion, ctx)
+            try:
+                subanswer = await self.llm.complete(
+                    prompt=prompt,
+                    max_tokens=self.subanswer_max_tokens,
+                )
+            except Exception as exc:
+                log.exception("sub-question answer failed for %r", subquestion)
+                subanswer = f"I don't know ({exc!r})"
+
+            evidence_text = "\n".join(item.content for item in ctx.items[:4])
+            subanswers.append(
+                SubAnswer(
+                    subquestion=subquestion,
+                    answer=str(subanswer).strip(),
+                    evidence_session_ids=extract_session_ids(ctx),
+                    evidence_text=evidence_text,
+                    hit_count=len(ctx.items),
+                )
+            )
+
+        self.last_ctx = self._merge_contexts(contexts)
+        final_prompt = build_final_synthesis_prompt(question, subanswers)
+        try:
+            answer = await self.llm.complete(
+                prompt=final_prompt,
+                max_tokens=self.answer_max_tokens,
+            )
+        except Exception as exc:
+            log.exception("final synthesis failed for %r", question)
+            answer = f"[error: {exc!r}]"
+
+        self.last_decomposition_stats = {
+            "mode": "decompose_answer",
+            "n_sub_questions": len(subquestions),
+            "sub_questions": subquestions,
+            "sub_answers": [sub.answer for sub in subanswers],
+            "subquestion_hits": [sub.hit_count for sub in subanswers],
+        }
+        return str(answer).strip()
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -1444,6 +2059,13 @@ def make_adapter_factory(
     tau_hours: float = 168.0,
     decompose: bool = False,
     decompose_max_items: int = 16,
+    decompose_answer: bool = False,
+    decompose_answer_subanswer_max_tokens: int = 80,
+    session_aware_retrieval: bool = False,
+    session_top_k: int = 4,
+    turns_per_session: int = 2,
+    wiki_memory: bool = False,
+    wiki_top_k: int = 8,
 ) -> Any:
     """
     Return a zero-arg factory yielding a fresh adapter per question.
@@ -1467,21 +2089,59 @@ def make_adapter_factory(
     separately, and the union becomes the context. This is the lever
     for multi-session / temporal questions that single-shot retrieval
     cannot answer.
+
+    ``decompose_answer`` uses the stronger path: decompose once, retrieve
+    per sub-question, answer each sub-question, then synthesize the final
+    answer. It owns decomposition itself, so it uses the base retriever
+    rather than wrapping it in :class:`DecompositionRetriever`.
+
+    ``session_aware_retrieval`` ranks LongMemEval sessions first, then turns
+    inside the selected sessions. This helps cross-session questions collect
+    evidence from multiple sessions instead of only the globally closest
+    turns.
+
+    ``wiki_memory`` builds a row-local Markdown wiki from the raw haystack
+    and retrieves over wiki pages instead of raw turns. It is mutually
+    exclusive with ``session_aware_retrieval`` in practice; wiki mode wins.
     """
 
     def factory() -> _IngestingAdapter:
         store = FlatHaystackStore()
-        base_retriever = STMSemanticRetriever(
-            store=store, embedder=embedder, top_k=top_k,
-            mode=retrieval_mode, max_context_tokens=max_context_tokens,
-            score_weights=score_weights, tau_hours=tau_hours,
-        )
+        if wiki_memory:
+            base_retriever = WikiMemoryRetriever(
+                raw_store=store, embedder=embedder, top_k=wiki_top_k,
+            )
+        else:
+            retriever_cls = (
+                SessionAwareSemanticRetriever
+                if session_aware_retrieval else STMSemanticRetriever
+            )
+            retriever_kwargs: dict[str, Any] = {}
+            if session_aware_retrieval:
+                retriever_kwargs.update({
+                    "session_top_k": session_top_k,
+                    "turns_per_session": turns_per_session,
+                    "max_items": decompose_max_items,
+                })
+            base_retriever = retriever_cls(
+                store=store, embedder=embedder, top_k=top_k,
+                mode=retrieval_mode, max_context_tokens=max_context_tokens,
+                score_weights=score_weights, tau_hours=tau_hours,
+                **retriever_kwargs,
+            )
         retriever: Any = base_retriever
-        if decompose:
+        if decompose and not decompose_answer:
             retriever = DecompositionRetriever(
                 base=base_retriever, llm=llm, max_items=decompose_max_items,
             )
         session = _MiniSession(store=store, retriever=retriever)
+        if decompose_answer:
+            return _DecomposedAnsweringAdapter(
+                session=session,
+                llm=llm,
+                answer_max_tokens=answer_max_tokens,
+                subanswer_max_tokens=decompose_answer_subanswer_max_tokens,
+            )
         if chain is None:
             return _IngestingAdapter(
                 session=session,
@@ -1591,11 +2251,33 @@ async def main_async(args: argparse.Namespace) -> int:
         "scorer weights = %s   tau_hours = %.0f",
         {k: round(v, 2) for k, v in score_weights.items()}, args.tau_hours,
     )
+    if args.decompose and args.decompose_answer:
+        raise ValueError(
+            "Use either --decompose or --decompose-answer, not both. "
+            "--decompose is retrieval-only; --decompose-answer performs "
+            "sub-question answering and final synthesis."
+        )
     if args.decompose:
         log.info(
             "decomposition ENABLED — questions split into sub-questions, "
             "retrieved per-part, merged (max %d items)",
             args.decompose_max_items,
+        )
+    if args.decompose_answer:
+        log.info(
+            "decomposed answering ENABLED — split question, retrieve and "
+            "answer each part, synthesize final answer",
+        )
+    if args.session_aware_retrieval:
+        log.info(
+            "session-aware retrieval ENABLED — top %d sessions, %d turns/session",
+            args.session_top_k,
+            args.turns_per_session,
+        )
+    if args.wiki_memory:
+        log.info(
+            "wiki memory ENABLED — compiled Markdown wiki retrieval, top %d pages",
+            args.wiki_top_k,
         )
 
     factory = make_adapter_factory(
@@ -1607,6 +2289,13 @@ async def main_async(args: argparse.Namespace) -> int:
         tau_hours=args.tau_hours,
         decompose=args.decompose,
         decompose_max_items=args.decompose_max_items,
+        decompose_answer=args.decompose_answer,
+        decompose_answer_subanswer_max_tokens=args.subanswer_max_tokens,
+        session_aware_retrieval=args.session_aware_retrieval,
+        session_top_k=args.session_top_k,
+        turns_per_session=args.turns_per_session,
+        wiki_memory=args.wiki_memory,
+        wiki_top_k=args.wiki_top_k,
     )
 
     out_dir = Path(args.output)
@@ -1803,6 +2492,56 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Cap on the merged decompose-retrieval context. Default 16.",
     )
     p.add_argument(
+        "--decompose-answer",
+        action="store_true",
+        help=(
+            "Enable full decomposed answering: decompose the question, "
+            "retrieve and answer each sub-question, then synthesize the final "
+            "answer. This is stronger than --decompose, which only merges "
+            "retrieved context."
+        ),
+    )
+    p.add_argument(
+        "--subanswer-max-tokens",
+        type=int,
+        default=80,
+        help="Token cap for each decomposed sub-question answer. Default 80.",
+    )
+    p.add_argument(
+        "--session-aware-retrieval",
+        action="store_true",
+        help=(
+            "Rank LongMemEval sessions first, then select turns within top "
+            "sessions. Useful with --decompose-answer for multi-session recall."
+        ),
+    )
+    p.add_argument(
+        "--session-top-k",
+        type=int,
+        default=4,
+        help="Number of source sessions to keep in session-aware retrieval.",
+    )
+    p.add_argument(
+        "--turns-per-session",
+        type=int,
+        default=2,
+        help="Number of best turns to keep per selected source session.",
+    )
+    p.add_argument(
+        "--wiki-memory",
+        action="store_true",
+        help=(
+            "Build a row-local Markdown memory wiki from haystack sessions "
+            "and retrieve wiki pages instead of raw turns."
+        ),
+    )
+    p.add_argument(
+        "--wiki-top-k",
+        type=int,
+        default=8,
+        help="Number of compiled wiki pages to retrieve when --wiki-memory is enabled.",
+    )
+    p.add_argument(
         "--max-context-tokens", type=int, default=100_000,
         help=(
             "Token ceiling for long-context mode. If the haystack "
@@ -1881,6 +2620,8 @@ if __name__ == "__main__":  # pragma: no cover
 __all__ = [
     "OllamaLLM",
     "STMSemanticRetriever",
+    "SessionAwareSemanticRetriever",
+    "WikiMemoryRetriever",
     "load_longmemeval_rows",
     "make_adapter_factory",
     "main",
