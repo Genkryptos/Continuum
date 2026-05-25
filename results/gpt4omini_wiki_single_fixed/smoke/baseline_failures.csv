@@ -1,0 +1,2 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,partial_recall,missing_expected_session_ids,error,latency_ms
+51a45a95,wrong_retrieval,Target,coffee creamer.,answer_d61669c7,answer_d61669c7;55e0c6db_2;6e0b1800_2;sharegpt_MKMWjX0_25;sharegpt_apWLb2c_0;07d1915d_1,1.000,,,5755.5

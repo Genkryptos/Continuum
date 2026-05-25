@@ -1,0 +1,5 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,partial_recall,missing_expected_session_ids,error,latency_ms
+c960da58,wrong_retrieval,20,I don't know,answer_e05e4612,answer_e05e4612;89d3053f;b65f51fb_5;737f3685_1;sharegpt_CdnyHep_0,1.000,,,10009.6
+94f70d80,wrong_retrieval,4 hours,2 hours,answer_c63c0458,answer_c63c0458;sharegpt_FvO2l0O_0;ec628e8d_2;2ae4f277_1;58ef5080,1.000,,,49366.4
+b86304ba,wrong_retrieval,The painting is worth triple what I paid for it.,1,answer_645b0329,sharegpt_xGoJZ6Z_0;answer_645b0329;8e9425ef_1;ae00973d_4;e831a29f_1;5cc9b056,1.000,,,217853.9
+25e5aa4f,wrong_retrieval,"University of California, Los Angeles (UCLA)",Stanford,answer_986de8c3,answer_986de8c3;18807892_4;478e02c2;sharegpt_SwdaeDm_15;sharegpt_rqvR1Ep_0;sharegpt_Db9cdoK_0,1.000,,,75187.0

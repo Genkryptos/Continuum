@@ -1,0 +1,891 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "gpt-4o-mini",
+  "started_at": "2026-05-24T01:27:57.451299+00:00",
+  "finished_at": "2026-05-24T01:29:10.556778+00:00",
+  "metrics": {
+    "n_questions": 5,
+    "accuracy": 0.8,
+    "avg_tokens": 3.0,
+    "recall": 0.9,
+    "latency_p50_ms": 16094.257042001118,
+    "latency_p95_ms": 16270.84616600041,
+    "total_cost_usd": 0.020357,
+    "failure_breakdown": {
+      "llm_error": 0,
+      "missing_fact": 0,
+      "wrong_retrieval": 1,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 0.0,
+    "avg_context_tokens_post_opt": 0.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {},
+    "by_question_type": {
+      "multi-session": {
+        "n_questions": 5,
+        "accuracy": 0.8,
+        "recall": 0.9
+      }
+    }
+  },
+  "rows": [
+    {
+      "question_id": "0a995998",
+      "correct": false,
+      "latency_ms": 16270.84616600041,
+      "answer_tokens": 4,
+      "cost_usd": 0.003981,
+      "retrieved_session_ids": [
+        "answer_afa9873b_1",
+        "answer_afa9873b_2",
+        "answer_afa9873b_3",
+        "ultrachat_331531",
+        "fa46a10e",
+        "85846900_2",
+        "25091584_1"
+      ],
+      "expected_session_ids": [
+        "answer_afa9873b_2",
+        "answer_afa9873b_3",
+        "answer_afa9873b_1"
+      ],
+      "answer": "5 items of clothing",
+      "expected_answer": "3",
+      "failure_category": "wrong_retrieval",
+      "expected_session_count": 3,
+      "retrieved_expected_session_count": 3,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "multi-session",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 10,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 2,
+        "sub_questions": [
+          "How many items of clothing do I need to pick up from a store?",
+          "How many items of clothing do I need to return to a store?"
+        ],
+        "sub_answers": [
+          "Matching facts: \n- \"I still need to pick up the new pair\" (referring to boots exchanged from Zara)\n- \"I still need to pick up my dry cleaning for the navy blue blazer\"\n\nSub-answer: 2 items of clothing (new pair of boots and navy blue blazer).",
+          "Matching facts: \n- The user needs to return a pair of boots to Zara.\n- The user exchanged the boots for a larger size but hasn't picked them up yet.\n\nSub-answer: 1 item (a pair of boots)."
+        ],
+        "subquestion_hits": [
+          6,
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [
+            {
+              "item": "new pair of boots",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "navy blue blazer",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "pair of boots",
+              "source_sub_q": 2,
+              "duplicate_of": null
+            },
+            {
+              "item": "black jeans from Levi's",
+              "source_sub_q": 2,
+              "duplicate_of": null
+            },
+            {
+              "item": "white button-down shirt from H&M",
+              "source_sub_q": 2,
+              "duplicate_of": null
+            },
+            {
+              "item": "dry cleaning for the navy blue blazer",
+              "source_sub_q": 2,
+              "duplicate_of": "navy blue blazer"
+            }
+          ],
+          "unique_count_declared": 5,
+          "unique_count_computed": 5,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 125,
+        "n_candidates_relevant": 6,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "7 business",
+            "normalized_value": "7",
+            "candidate_type": "count",
+            "unit": "business",
+            "source_session_id": "85846900_2",
+            "source_text": "# Evidence Window for 85846900_2\n\n## Matched Turn\n- (assistant): USPS Priority Mail is a popular choice for many e-commerce businesses, and it's great that you're considering it.\n\nNow, let's talk abou",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "3 pounds",
+            "normalized_value": "3",
+            "candidate_type": "count",
+            "unit": "pounds",
+            "source_session_id": "85846900_2",
+            "source_text": "# Evidence Window for 85846900_2\n\n## Matched Turn\n- (assistant): USPS Priority Mail is a popular choice for many e-commerce businesses, and it's great that you're considering it.\n\nNow, let's talk abou",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 works",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "works",
+            "source_session_id": "85846900_2",
+            "source_text": "# Evidence Window for 85846900_2\n\n## Matched Turn\n- (assistant): USPS Priority Mail is a popular choice for many e-commerce businesses, and it's great that you're considering it.\n\nNow, let's talk abou",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 that",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "that",
+            "source_session_id": "25091584_1",
+            "source_text": "# Evidence Window for 25091584_1\n\n## Matched Turn\n- (assistant): You're making great progress on organizing your fabric stash!\n\nNow, let's tackle your sewing book collection and patterns. Here are som",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "4 yard",
+            "normalized_value": "4",
+            "candidate_type": "count",
+            "unit": "yard",
+            "source_session_id": "25091584_1",
+            "source_text": "# Evidence Window for 25091584_1\n\n## Matched Turn\n- (assistant): You're making great progress on organizing your fabric stash!\n\nNow, let's tackle your sewing book collection and patterns. Here are som",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 yard",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "yard",
+            "source_session_id": "25091584_1",
+            "source_text": "# Evidence Window for 25091584_1\n\n## Matched Turn\n- (assistant): You're making great progress on organizing your fabric stash!\n\nNow, let's tackle your sewing book collection and patterns. Here are som",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 25113,
+        "completion_tokens_total": 356,
+        "cost_usd": 0.003981,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 10,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "6d550036",
+      "correct": true,
+      "latency_ms": 11594.871957997384,
+      "answer_tokens": 2,
+      "cost_usd": 0.003326,
+      "retrieved_session_ids": [
+        "2e4430d8_2",
+        "answer_ec904b3c_1",
+        "dae3906e_2",
+        "sharegpt_J7ZAFLd_0",
+        "sharegpt_zciCXP1_12",
+        "sharegpt_nVi6tIt_0",
+        "answer_ec904b3c_4",
+        "sharegpt_JlhNyfC_0"
+      ],
+      "expected_session_ids": [
+        "answer_ec904b3c_1",
+        "answer_ec904b3c_4",
+        "answer_ec904b3c_3",
+        "answer_ec904b3c_2"
+      ],
+      "answer": "2 projects",
+      "expected_answer": "2",
+      "failure_category": null,
+      "expected_session_count": 4,
+      "retrieved_expected_session_count": 2,
+      "partial_recall": 0.5,
+      "missing_expected_session_ids": [
+        "answer_ec904b3c_3",
+        "answer_ec904b3c_2"
+      ],
+      "error": null,
+      "question_type": "multi-session",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 9,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 2,
+        "sub_questions": [
+          "How many projects have I led?",
+          "How many projects am I currently leading?"
+        ],
+        "sub_answers": [
+          "Matching facts: \n- The user has led a team of five engineers.\n- The user led the data analysis team for a Marketing Research class project.\n\nSub-answer: 2 projects.",
+          "Matching facts: \n- The user mentioned they have been leading a team of five engineers.\n\nSub-answer: 1 project."
+        ],
+        "subquestion_hits": [
+          6,
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [
+            {
+              "item": "team of five engineers",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "data analysis team for a Marketing Research class project",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "team of five engineers",
+              "source_sub_q": 2,
+              "duplicate_of": "team of five engineers"
+            }
+          ],
+          "unique_count_declared": 2,
+          "unique_count_computed": 2,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 106,
+        "n_candidates_relevant": 6,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "600 lumens",
+            "normalized_value": "600",
+            "candidate_type": "count",
+            "unit": "lumens",
+            "source_session_id": "dae3906e_2",
+            "source_text": "# Evidence Window for dae3906e_2\n\n## Matched Turn\n- (assistant): Congratulations on the new lampshade! Choosing the right bulb can make a big difference in the ambiance and functionality of your livin",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "100 rural",
+            "normalized_value": "100",
+            "candidate_type": "count",
+            "unit": "rural",
+            "source_session_id": "sharegpt_J7ZAFLd_0",
+            "source_text": "# Evidence Window for sharegpt_J7ZAFLd_0\n\n## Matched Turn\n- (user): I am planning a project in Nigeria that connects 100 rural villages to running water. Who can be the stakeholders that will benefit ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "100 villages",
+            "normalized_value": "100",
+            "candidate_type": "count",
+            "unit": "villages",
+            "source_session_id": "sharegpt_J7ZAFLd_0",
+            "source_text": "# Evidence Window for sharegpt_J7ZAFLd_0\n\n## Matched Turn\n- (user): I am planning a project in Nigeria that connects 100 rural villages to running water. Who can be the stakeholders that will benefit ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "700 attendees",
+            "normalized_value": "700",
+            "candidate_type": "count",
+            "unit": "attendees",
+            "source_session_id": "sharegpt_zciCXP1_12",
+            "source_text": "# Evidence Window for sharegpt_zciCXP1_12\n\n## Matched Turn\n- (user): Answer the following quesiton in a better way.\nHow does your project differ from similar ones?\\*\nWe would answer this question from",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 different",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "different",
+            "source_session_id": "sharegpt_zciCXP1_12",
+            "source_text": "# Evidence Window for sharegpt_zciCXP1_12\n\n## Matched Turn\n- (user): Answer the following quesiton in a better way.\nHow does your project differ from similar ones?\\*\nWe would answer this question from",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 that",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "that",
+            "source_session_id": "answer_ec904b3c_1",
+            "source_text": "# Evidence Window for answer_ec904b3c_1\n\n## Matched Turn\n- (assistant): With your background in marketing research and experience leading a data analysis team, you're off to a great start!\n\nChoosing b",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 21355,
+        "completion_tokens_total": 204,
+        "cost_usd": 0.003326,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 9,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "gpt4_59c863d7",
+      "correct": true,
+      "latency_ms": 16094.257042001118,
+      "answer_tokens": 3,
+      "cost_usd": 0.005433,
+      "retrieved_session_ids": [
+        "answer_593bdffd_2",
+        "answer_593bdffd_4",
+        "answer_593bdffd_1",
+        "answer_593bdffd_3",
+        "sharegpt_4SlDk1K_0",
+        "sharegpt_Opm4kTV_0"
+      ],
+      "expected_session_ids": [
+        "answer_593bdffd_4",
+        "answer_593bdffd_1",
+        "answer_593bdffd_3",
+        "answer_593bdffd_2"
+      ],
+      "answer": "5 model kits",
+      "expected_answer": "I have worked on or bought five model kits. The scales of the models are: Revell F-15 Eagle (scale not mentioned), Tamiya 1/48 scale Spitfire Mk.V, 1/16 scale German Tiger I tank, 1/72 scale B-29 bomber, and 1/24 scale '69 Camaro.",
+      "failure_category": null,
+      "expected_session_count": 4,
+      "retrieved_expected_session_count": 4,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "multi-session",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 8,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 2,
+        "sub_questions": [
+          "How many model kits have I worked on?",
+          "How many model kits have I bought?"
+        ],
+        "sub_answers": [
+          "Matching facts: \n- Tamiya 1/48 scale Spitfire Mk.V\n- Revell F-15 Eagle kit\n- 1/72 scale B-29 bomber\n- 1/24 scale '69 Camaro model\n- 1/16 scale German Tiger I tank\n\nSub-answer: 5 model kits.",
+          "I don't know."
+        ],
+        "subquestion_hits": [
+          6,
+          6
+        ],
+        "aggregation": {
+          "parse_status": "json_decode_error: Expecting ',' delimiter"
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 104,
+        "n_candidates_relevant": 20,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "69 Camaro",
+            "normalized_value": "69",
+            "candidate_type": "count",
+            "unit": "Camaro",
+            "source_session_id": "answer_593bdffd_4",
+            "source_text": "# Evidence Window for answer_593bdffd_4\n\n## Matched Turn\n- (user): I've been thinking about adding some wire details to my 1/24 scale '69 Camaro model as well. Do you have any tips on how to solder wi",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "29 model",
+            "normalized_value": "29",
+            "candidate_type": "count",
+            "unit": "model",
+            "source_session_id": "answer_593bdffd_4",
+            "source_text": "# Evidence Window for answer_593bdffd_4\n\n## Matched Turn\n- (user): I've been thinking about adding some wire details to my 1/24 scale '69 Camaro model as well. Do you have any tips on how to solder wi",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "29 bomber",
+            "normalized_value": "29",
+            "candidate_type": "count",
+            "unit": "bomber",
+            "source_session_id": "answer_593bdffd_1",
+            "source_text": "# Evidence Window for answer_593bdffd_1\n\n## Matched Turn\n- (user): I'm actually thinking of working on a 1/72 scale B-29 bomber next, and I'd like to try out some new techniques like photo-etching and",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 area",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "area",
+            "source_session_id": "answer_593bdffd_1",
+            "source_text": "# Evidence Window for answer_593bdffd_1\n\n## Matched Turn\n- (user): I'm actually thinking of working on a 1/72 scale B-29 bomber next, and I'd like to try out some new techniques like photo-etching and",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "15 Eagle",
+            "normalized_value": "15",
+            "candidate_type": "count",
+            "unit": "Eagle",
+            "source_session_id": "answer_593bdffd_1",
+            "source_text": "# Evidence Window for answer_593bdffd_1\n\n## Matched Turn\n- (user): I'm actually thinking of working on a 1/72 scale B-29 bomber next, and I'd like to try out some new techniques like photo-etching and",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "10 turns",
+            "normalized_value": "10",
+            "candidate_type": "count",
+            "unit": "turns",
+            "source_session_id": "",
+            "source_text": "# Memory Wiki Index\n\n## Sessions\n- sessions/ultrachat_566770.md (10 turns)\n- sessions/answer_593bdffd_4.md (12 turns)\n- sessions/0cd57281_1.md (12 turns)\n- sessions/e60a93ff_2.md (12 turns)\n- sessions",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 5,
+        "prompt_tokens_total": 34242,
+        "completion_tokens_total": 495,
+        "cost_usd": 0.005433,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 8,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "b5ef892d",
+      "correct": true,
+      "latency_ms": 9203.25295800285,
+      "answer_tokens": 2,
+      "cost_usd": 0.002074,
+      "retrieved_session_ids": [
+        "answer_a8b4290f_2",
+        "answer_a8b4290f_1",
+        "sharegpt_XWqXdom_0",
+        "answer_a8b4290f_3",
+        "1a44346c_1",
+        "35dcacdc_2"
+      ],
+      "expected_session_ids": [
+        "answer_a8b4290f_3",
+        "answer_a8b4290f_1",
+        "answer_a8b4290f_2"
+      ],
+      "answer": "8 days",
+      "expected_answer": "8 days.",
+      "failure_category": null,
+      "expected_session_count": 3,
+      "retrieved_expected_session_count": 3,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "multi-session",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "How many days did I spend on camping trips in the United States this year?"
+        ],
+        "sub_answers": [
+          "Matching facts:\n- 3-day solo camping trip to Big Sur in early April\n- 5-day camping trip to Yellowstone National Park last month\n\nSub-answer: 8 days."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [
+            {
+              "item": "3-day solo camping trip to Big Sur",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "5-day camping trip to Yellowstone National Park",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "5-day camping trip to Yellowstone National Park",
+              "source_sub_q": 2,
+              "duplicate_of": "5-day camping trip to Yellowstone National Park"
+            }
+          ],
+          "unique_count_declared": 2,
+          "unique_count_computed": 2,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 216,
+        "n_candidates_relevant": 15,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "1 Speedgoat",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "Speedgoat",
+            "source_session_id": "answer_a8b4290f_2",
+            "source_text": "# Evidence Window for answer_a8b4290f_2\n\n## Matched Turn\n- (user): I'm looking for some new hiking boots. Do you have any recommendations for waterproof boots that are good for multi-day backpacking t",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 votes",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "votes",
+            "source_session_id": "sharegpt_XWqXdom_0",
+            "source_text": "# Evidence Window for sharegpt_XWqXdom_0\n\n## Matched Turn\n- (user): for this product: \"Amazon Essentials Boys and Toddlers' Fleece Pullover Hoodie Sweatshirts\" with this description:\n60% Cotton, 40% P",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "1 vote",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "vote",
+            "source_session_id": "sharegpt_XWqXdom_0",
+            "source_text": "# Evidence Window for sharegpt_XWqXdom_0\n\n## Matched Turn\n- (user): for this product: \"Amazon Essentials Boys and Toddlers' Fleece Pullover Hoodie Sweatshirts\" with this description:\n60% Cotton, 40% P",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "0 votes",
+            "normalized_value": "0",
+            "candidate_type": "count",
+            "unit": "votes",
+            "source_session_id": "sharegpt_XWqXdom_0",
+            "source_text": "# Evidence Window for sharegpt_XWqXdom_0\n\n## Matched Turn\n- (user): for this product: \"Amazon Essentials Boys and Toddlers' Fleece Pullover Hoodie Sweatshirts\" with this description:\n60% Cotton, 40% P",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2022 Size",
+            "normalized_value": "2022",
+            "candidate_type": "count",
+            "unit": "Size",
+            "source_session_id": "sharegpt_XWqXdom_0",
+            "source_text": "# Evidence Window for sharegpt_XWqXdom_0\n\n## Matched Turn\n- (user): for this product: \"Amazon Essentials Boys and Toddlers' Fleece Pullover Hoodie Sweatshirts\" with this description:\n60% Cotton, 40% P",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "5 stars",
+            "normalized_value": "5",
+            "candidate_type": "count",
+            "unit": "stars",
+            "source_session_id": "sharegpt_XWqXdom_0",
+            "source_text": "# Evidence Window for sharegpt_XWqXdom_0\n\n## Matched Turn\n- (user): for this product: \"Amazon Essentials Boys and Toddlers' Fleece Pullover Hoodie Sweatshirts\" with this description:\n60% Cotton, 40% P",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 3,
+        "prompt_tokens_total": 13037,
+        "completion_tokens_total": 197,
+        "cost_usd": 0.002074,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "e831120c",
+      "correct": true,
+      "latency_ms": 16221.913000001223,
+      "answer_tokens": 4,
+      "cost_usd": 0.005543,
+      "retrieved_session_ids": [
+        "answer_86c505e7_1",
+        "answer_86c505e7_2",
+        "sharegpt_sDfu38Q_0",
+        "63388005",
+        "e9e19917_2",
+        "f192beb0_2",
+        "sharegpt_CK9naiz_63",
+        "8fb3fe3a_1"
+      ],
+      "expected_session_ids": [
+        "answer_86c505e7_1",
+        "answer_86c505e7_2"
+      ],
+      "answer": "3.5 weeks",
+      "expected_answer": "3.5 weeks",
+      "failure_category": null,
+      "expected_session_count": 2,
+      "retrieved_expected_session_count": 2,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "multi-session",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 9,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 2,
+        "sub_questions": [
+          "How many weeks did it take to watch all the Marvel Cinematic Universe movies?",
+          "How many weeks did it take to watch the main Star Wars films?"
+        ],
+        "sub_answers": [
+          "Matching facts: \n- \"I watched all the MCU movies, all 22 of them. I did it in about two weeks, it was a lot but worth it.\"\n\nSub-answer: 2 weeks.",
+          "Matching facts: \n- The user mentioned they watched all the main Star Wars films in a week and a half.\n\nSub-answer: 1.5 weeks."
+        ],
+        "subquestion_hits": [
+          6,
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [
+            {
+              "item": "Marvel Cinematic Universe movies",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            },
+            {
+              "item": "Star Wars films",
+              "source_sub_q": 2,
+              "duplicate_of": null
+            },
+            {
+              "item": "Marvel Cinematic Universe movies",
+              "source_sub_q": 1,
+              "duplicate_of": "Marvel Cinematic Universe movies"
+            },
+            {
+              "item": "main Star Wars films",
+              "source_sub_q": 2,
+              "duplicate_of": "Star Wars films"
+            }
+          ],
+          "unique_count_declared": 2,
+          "unique_count_computed": 2,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 208,
+        "n_candidates_relevant": 16,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "22 Marvel",
+            "normalized_value": "22",
+            "candidate_type": "count",
+            "unit": "Marvel",
+            "source_session_id": "answer_86c505e7_1",
+            "source_text": "# Evidence Window for answer_86c505e7_1\n\n## Matched Turn\n- (user): I'm trying to organize my movie watching history, can you help me create a list or something? By the way, I've had some crazy movie b",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "0 through",
+            "normalized_value": "0",
+            "candidate_type": "count",
+            "unit": "through",
+            "source_session_id": "sharegpt_sDfu38Q_0",
+            "source_text": "# Evidence Window for sharegpt_sDfu38Q_0\n\n## Matched Turn\n- (user): Summarize the following.\nTitle: \"(88) 'Prometheus Rising' by Robert Anton Wilson - Chapter 7, with Alley Wurds @ VR Mystery School -",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "9 called",
+            "normalized_value": "9",
+            "candidate_type": "count",
+            "unit": "called",
+            "source_session_id": "sharegpt_sDfu38Q_0",
+            "source_text": "# Evidence Window for sharegpt_sDfu38Q_0\n\n## Matched Turn\n- (user): Summarize the following.\nTitle: \"(88) 'Prometheus Rising' by Robert Anton Wilson - Chapter 7, with Alley Wurds @ VR Mystery School -",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 like",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "like",
+            "source_session_id": "sharegpt_sDfu38Q_0",
+            "source_text": "# Evidence Window for sharegpt_sDfu38Q_0\n\n## Matched Turn\n- (user): Summarize the following.\nTitle: \"(88) 'Prometheus Rising' by Robert Anton Wilson - Chapter 7, with Alley Wurds @ VR Mystery School -",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 sometimes",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "sometimes",
+            "source_session_id": "sharegpt_sDfu38Q_0",
+            "source_text": "# Evidence Window for sharegpt_sDfu38Q_0\n\n## Matched Turn\n- (user): Summarize the following.\nTitle: \"(88) 'Prometheus Rising' by Robert Anton Wilson - Chapter 7, with Alley Wurds @ VR Mystery School -",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 circuits",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "circuits",
+            "source_session_id": "sharegpt_sDfu38Q_0",
+            "source_text": "# Evidence Window for sharegpt_sDfu38Q_0\n\n## Matched Turn\n- (user): Summarize the following.\nTitle: \"(88) 'Prometheus Rising' by Robert Anton Wilson - Chapter 7, with Alley Wurds @ VR Mystery School -",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 35901,
+        "completion_tokens_total": 263,
+        "cost_usd": 0.005543,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 9,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    }
+  ]
+}

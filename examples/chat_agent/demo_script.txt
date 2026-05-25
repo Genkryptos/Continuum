@@ -1,0 +1,39 @@
+# examples/chat_agent/demo_script.txt — the scripted walkthrough.
+#
+# Lines starting with `#` and blank lines are skipped by the agent.
+# Each non-comment line is either a slash-command or a chat turn.
+# Played end-to-end this should run in well under 60 seconds.
+
+# ── Act 1: plant a fact ─────────────────────────────────────────────
+Hi! Quick intro — I live in NYC and just adopted a dog named Rex.
+
+/show ltm
+
+# ── Act 2: chitchat (noise) ─────────────────────────────────────────
+The weather has been really nice this week.
+
+/show stm
+
+# ── Act 3: supersede an existing fact ───────────────────────────────
+Update: I just moved to Boston for a new job!
+
+/show ltm
+
+# ── Act 4: the old fact is still there, just marked superseded ─────
+/show ltm --all
+
+# ── Act 5: retrieval respects supersession ─────────────────────────
+/query where do I live
+
+/query what is my dog's name
+
+# ── Act 6: another supersession ────────────────────────────────────
+We had to say goodbye to Rex; our new puppy Luna arrived this week.
+
+/show ltm
+
+/show ltm --all
+
+/query what is my dog's name
+
+/exit

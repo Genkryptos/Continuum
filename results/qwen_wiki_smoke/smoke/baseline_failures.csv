@@ -1,0 +1,4 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+0a995998,missing_fact,3,I don't know.,answer_afa9873b_2;answer_afa9873b_3;answer_afa9873b_1,,,6257.7
+6d550036,missing_fact,2,I don't know.,answer_ec904b3c_1;answer_ec904b3c_4;answer_ec904b3c_3;answer_ec904b3c_2,,,6017.4
+gpt4_59c863d7,missing_fact,"I have worked on or bought five model kits. The scales of the models are: Revell F-15 Eagle (scale not mentioned), Tamiya 1/48 scale Spitfire Mk.V, 1/16 scale German Tiger I tank, 1/72 scale B-29 bomber, and 1/24 scale '69 Camaro.","I don't know. The context provided does not mention anything about model kits, purchases, or projects related to physical models. It focuses exclusively on machine learning models (e.g., linear",answer_593bdffd_4;answer_593bdffd_1;answer_593bdffd_3;answer_593bdffd_2,,,7057.3

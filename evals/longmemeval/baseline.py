@@ -47,6 +47,7 @@ import dataclasses
 import datetime as dt
 import json
 import logging
+import re
 import statistics
 import time
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -89,6 +90,8 @@ class EvalRow:
     expected_answer: str
     messages: list[dict[str, Any]]
     answer_session_ids: list[str] = dataclasses.field(default_factory=list)
+    question_type: str = "unknown"
+    user_id: str | None = None
 
 
 @dataclasses.dataclass
@@ -105,7 +108,12 @@ class RowResult:
     answer: str
     expected_answer: str
     failure_category: str | None  # None when correct
+    expected_session_count: int = 0
+    retrieved_expected_session_count: int = 0
+    partial_recall: float = 0.0
+    missing_expected_session_ids: list[str] = dataclasses.field(default_factory=list)
     error: str | None = None  # populated on adapter exceptions
+    question_type: str = "unknown"
 
     # Optional optimizer telemetry (populated only when the adapter
     # exposes ``last_optimizer_stats``). All counts are tokens.
@@ -121,6 +129,13 @@ class RowResult:
     retrieval_ms: float = 0.0
     optimizer_ms: float = 0.0
     strategy_savings: dict[str, int] = dataclasses.field(default_factory=dict)
+    decomposition_stats: dict[str, Any] = dataclasses.field(default_factory=dict)
+    #: Per-row LLM-call telemetry populated by `_DecomposedAnsweringAdapter`
+    #: (real prompt/completion token counts, cost, validator state,
+    #: regeneration attempts, abstain reason, wiki retrieval counts).
+    #: The fix for `retrieved_count = 0` and `retrieval_ms = 0` despite
+    #: non-empty `retrieved_session_ids` lives in this field.
+    telemetry: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -201,6 +216,30 @@ class BaselineResults:
                 out[k] = out.get(k, 0) + int(v)
         return out
 
+    @property
+    def by_question_type(self) -> dict[str, dict[str, float]]:
+        grouped: dict[str, list[RowResult]] = {}
+        for row in self.rows:
+            grouped.setdefault(row.question_type or "unknown", []).append(row)
+        out: dict[str, dict[str, float]] = {}
+        for question_type, rows in sorted(grouped.items()):
+            correct = sum(1 for r in rows if r.correct)
+            recall_vals: list[float] = []
+            for r in rows:
+                if not r.expected_session_ids:
+                    continue
+                hit = sum(
+                    1 for sid in r.expected_session_ids
+                    if sid in r.retrieved_session_ids
+                )
+                recall_vals.append(hit / len(r.expected_session_ids))
+            out[question_type] = {
+                "n_questions": len(rows),
+                "accuracy": correct / len(rows) if rows else 0.0,
+                "recall": statistics.fmean(recall_vals) if recall_vals else 0.0,
+            }
+        return out
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset": self.dataset,
@@ -226,6 +265,7 @@ class BaselineResults:
                 ),
                 "avg_optimizer_ms": self.avg_optimizer_ms,
                 "strategy_savings_total": self.strategy_savings_total,
+                "by_question_type": self.by_question_type,
             },
             "rows": [dataclasses.asdict(r) for r in self.rows],
         }
@@ -236,6 +276,7 @@ class BaselineResults:
 AdapterFactory = Callable[[], Any]
 DatasetLoader = Callable[[str], Iterable[EvalRow]]
 Scorer = Callable[[str, str], bool]
+RowScorer = Callable[[EvalRow, str], bool | Awaitable[bool]]
 
 
 
@@ -261,8 +302,8 @@ def default_scorer(answer: str, expected: str) -> bool:
     # LongMemEval rows include ints / numeric-string answers for counting
     # and date questions. Coerce defensively so the scorer never crashes
     # mid-run on a non-string ground-truth.
-    a = str(answer).strip().lower()
-    e = str(expected).strip().lower()
+    a = _normalise_answer_text(str(answer).strip().lower())
+    e = _normalise_answer_text(str(expected).strip().lower())
     if not a or not e:
         return False
     if e in a or a in e:
@@ -277,7 +318,44 @@ def default_scorer(answer: str, expected: str) -> bool:
 
 
 def _tokenise(s: str) -> list[str]:
-    return [t for t in s.replace(",", " ").split() if t]
+    return re.findall(r"[a-z0-9]+", s.lower())
+
+
+_NUMBER_PHRASES = {
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "one and a half": "1.5",
+    "two and a half": "2.5",
+    "three and a half": "3.5",
+    "four and a half": "4.5",
+    "five and a half": "5.5",
+    "six and a half": "6.5",
+    "seven and a half": "7.5",
+    "eight and a half": "8.5",
+    "nine and a half": "9.5",
+    "ten and a half": "10.5",
+}
+
+
+def _normalise_answer_text(text: str) -> str:
+    out = text.lower()
+    for phrase, value in sorted(
+        _NUMBER_PHRASES.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        out = re.sub(rf"\b{re.escape(phrase)}\b", value, out)
+    out = re.sub(r"(?<!\d)[^\w\s.]+|[.](?!\d)", " ", out)
+    return re.sub(r"\s+", " ", out).strip()
 
 
 #: Per-model USD price per 1 K **output** tokens (input cost ignored —
@@ -309,10 +387,13 @@ async def run_baseline(
     answerer: str = "gpt-4o-mini",
     output_dir: Path | str | None = None,
     scorer: Scorer | None = None,
+    row_scorer: RowScorer | None = None,
     limit: int | None = None,
     price_per_1k_out: dict[str, float] | None = None,
     now: Callable[[], dt.datetime] | None = None,
     token_counter: Callable[[str], int] | None = None,
+    trace_writer: Any | None = None,
+    run_id: str | None = None,
 ) -> BaselineResults:
     """
     Drive the baseline evaluation. Pure-async; never raises into the
@@ -348,6 +429,7 @@ async def run_baseline(
     out_root = Path(output_dir) if output_dir else Path("results")
     clock = now or _utc_now
     counter = token_counter or _default_token_counter
+    effective_run_id = run_id or _utc_now().strftime("%Y%m%dT%H%M%S")
 
     started = clock()
     rows: list[RowResult] = []
@@ -360,6 +442,7 @@ async def run_baseline(
             row=row,
             adapter=adapter_factory(),
             scorer=scorer,
+            row_scorer=row_scorer,
             answerer=answerer,
             prices=prices,
             count_tokens=counter,
@@ -370,6 +453,20 @@ async def run_baseline(
             idx + 1, "?" if limit is None else limit,
             row.question_id, result.correct, result.latency_ms,
         )
+        # Per-row JSONL trace — `trace_writer` may be a TraceWriter or any
+        # object that exposes `.write(row_dict)`. We avoid importing the
+        # trace module here to keep baseline.py free of new top-level deps.
+        if trace_writer is not None:
+            try:
+                from evals.longmemeval.trace import trace_row_from_result
+                trace_writer.write(trace_row_from_result(
+                    result,
+                    run_id=effective_run_id,
+                    dataset=dataset,
+                    question_text=row.question,
+                ))
+            except Exception:  # pragma: no cover — never fail the run on trace I/O
+                log.exception("trace writer failed for row %s", row.question_id)
 
     finished = clock()
     results = BaselineResults(
@@ -393,6 +490,7 @@ async def _run_one(
     answerer: str,
     prices: dict[str, float],
     count_tokens: Callable[[str], int],
+    row_scorer: RowScorer | None = None,
 ) -> RowResult:
     """Run a single question. All exceptions captured into the result."""
     error: str | None = None
@@ -412,7 +510,16 @@ async def _run_one(
     retrieved = _extract_retrieved_session_ids(adapter)
 
     answer_tokens = count_tokens(answer)
-    correct = bool(answer) and scorer(answer, row.expected_answer)
+    if row_scorer is not None:
+        correct = bool(answer) and bool(
+            await _maybe_await(row_scorer(row, answer))
+        )
+    else:
+        correct = bool(answer) and scorer(answer, row.expected_answer)
+    recall_diag = _recall_diagnostics(
+        expected=row.answer_session_ids,
+        retrieved=retrieved,
+    )
     failure_category = (
         None if correct
         else _classify_failure(
@@ -420,22 +527,46 @@ async def _run_one(
             retrieved=retrieved, expected=row.answer_session_ids,
         )
     )
-    cost = (answer_tokens / 1000.0) * prices.get(answerer, 0.0)
-
     # Optional optimizer telemetry — the adapter publishes this dict on
     # itself after answer_question() if a chain ran. Absent in baseline.
     opt = getattr(adapter, "last_optimizer_stats", None) or {}
+    # Per-row LLM telemetry (counter wraps every LLM client call). When
+    # present, it's the source of truth for retrieved_count / latency /
+    # tokens — the previous logs had zeros here while retrieved_session_ids
+    # was non-empty. Falls back to optimizer stats when telemetry absent.
+    telem = getattr(adapter, "last_telemetry", None) or {}
+    # Cost: prefer the real telemetry figure (it adds across every LLM
+    # call, including decompose + sub-answers + synthesis + repair).
+    # Fallback to the legacy per-answer-token estimate for back-compat.
+    measured_cost = float(telem.get("cost_usd", 0.0))
+    legacy_cost = (answer_tokens / 1000.0) * prices.get(answerer, 0.0)
+    cost_final = measured_cost if measured_cost > 0 else legacy_cost
+    # retrieved_count: telemetry's selected_evidence_count is the
+    # honest answer; the optimizer field is zero on the wiki+decompose
+    # path. Use whichever is non-zero.
+    retrieved_count_final = (
+        int(telem.get("selected_evidence_count", 0))
+        or int(opt.get("retrieved_count", 0))
+        or len(retrieved)
+    )
     return RowResult(
         question_id=row.question_id,
+        question_type=row.question_type,
         correct=correct,
         latency_ms=latency_ms,
         answer_tokens=answer_tokens,
-        cost_usd=cost,
+        cost_usd=cost_final,
         retrieved_session_ids=retrieved,
         expected_session_ids=list(row.answer_session_ids),
         answer=str(answer),
         expected_answer=row.expected_answer,
         failure_category=failure_category,
+        expected_session_count=recall_diag["expected_session_count"],
+        retrieved_expected_session_count=recall_diag[
+            "retrieved_expected_session_count"
+        ],
+        partial_recall=recall_diag["partial_recall"],
+        missing_expected_session_ids=recall_diag["missing_expected_session_ids"],
         error=error,
         pre_opt_total_tokens=int(opt.get("pre_total", 0)),
         post_opt_total_tokens=int(opt.get("post_total", 0)),
@@ -445,10 +576,14 @@ async def _run_one(
         post_opt_stm_tokens=int(opt.get("post_stm", 0)),
         post_opt_mtm_tokens=int(opt.get("post_mtm", 0)),
         post_opt_ltm_tokens=int(opt.get("post_ltm", 0)),
-        retrieved_count=int(opt.get("retrieved_count", 0)),
+        retrieved_count=retrieved_count_final,
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),
         strategy_savings=dict(opt.get("strategy_savings", {})),
+        decomposition_stats=dict(
+            getattr(adapter, "last_decomposition_stats", None) or {}
+        ),
+        telemetry=dict(telem),
     )
 
 
@@ -467,6 +602,21 @@ def _classify_failure(
     if not any(sid in retrieved for sid in expected):
         return "missing_fact"
     return "wrong_retrieval"
+
+
+def _recall_diagnostics(
+    *, expected: Sequence[str], retrieved: Sequence[str]
+) -> dict[str, Any]:
+    expected_list = list(expected)
+    retrieved_set = set(retrieved)
+    missing = [sid for sid in expected_list if sid not in retrieved_set]
+    hit_count = len(expected_list) - len(missing)
+    return {
+        "expected_session_count": len(expected_list),
+        "retrieved_expected_session_count": hit_count,
+        "partial_recall": hit_count / len(expected_list) if expected_list else 0.0,
+        "missing_expected_session_ids": missing,
+    }
 
 
 def _failure_breakdown(rows: list[RowResult]) -> dict[str, int]:
@@ -496,12 +646,22 @@ def _extract_retrieved_session_ids(adapter: Any) -> list[str]:
     if ctx is None:
         return []
     ids: list[str] = []
+    seen: set[str] = set()
     for it in getattr(ctx, "items", []) or []:
-        sid = (
-            getattr(it, "metadata", {}) or {}
-        ).get("session_id") if hasattr(it, "metadata") else None
+        metadata = getattr(it, "metadata", {}) or {}
+        raw_ids: list[Any] = []
+        sid = metadata.get("session_id")
         if sid:
-            ids.append(str(sid))
+            raw_ids.append(sid)
+        session_ids = metadata.get("session_ids")
+        if isinstance(session_ids, list):
+            raw_ids.extend(session_ids)
+        for raw_id in raw_ids:
+            sid_s = str(raw_id)
+            if sid_s in seen:
+                continue
+            seen.add(sid_s)
+            ids.append(sid_s)
     return ids
 
 
@@ -533,6 +693,8 @@ def _persist(
             "model_answer",
             "expected_session_ids",
             "retrieved_session_ids",
+            "partial_recall",
+            "missing_expected_session_ids",
             "error",
             "latency_ms",
         ])
@@ -544,6 +706,8 @@ def _persist(
                 r.answer,
                 ";".join(r.expected_session_ids),
                 ";".join(r.retrieved_session_ids),
+                f"{r.partial_recall:.3f}",
+                ";".join(r.missing_expected_session_ids),
                 r.error or "",
                 f"{r.latency_ms:.1f}",
             ])
@@ -560,6 +724,16 @@ def _print_summary(results: BaselineResults) -> None:
     print(f"  avg tokens:      {results.avg_tokens:.0f}")
     print(f"  latency p50/p95: {results.latency_p50:.0f}ms / {results.latency_p95:.0f}ms")
     print(f"  total cost:      ${results.total_cost_usd:.2f}")
+    by_type = results.by_question_type
+    if by_type:
+        print("  by question type:")
+        for question_type, metrics in by_type.items():
+            print(
+                f"    {question_type:<24} "
+                f"n={int(metrics['n_questions']):<3} "
+                f"acc={metrics['accuracy']:.1%} "
+                f"recall={metrics['recall']:.1%}"
+            )
     breakdown = _failure_breakdown(results.rows)
     print("  failure types:")
     for cat, n in breakdown.items():

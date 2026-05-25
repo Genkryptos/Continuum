@@ -1,0 +1,48 @@
+{
+  "benchmark": "supersession_correctness",
+  "timestamp": "20260523T143530",
+  "config": {
+    "n_scenarios": 50
+  },
+  "systems": [
+    {
+      "system": "naive_append",
+      "available": true,
+      "n_scenarios": 50,
+      "n_correct": 19,
+      "n_stale_returned": 31,
+      "n_no_answer": 0,
+      "correctness_pct": 38.0,
+      "avg_supersede_turns": 0.0,
+      "note": "Append-only fact store + cosine top-1. The 'everyone else' default \u2014 every fact persists forever, no link between contradictions."
+    },
+    {
+      "system": "continuum_supersession",
+      "available": true,
+      "n_scenarios": 50,
+      "n_correct": 50,
+      "n_stale_returned": 0,
+      "n_no_answer": 0,
+      "correctness_pct": 100.0,
+      "avg_supersede_turns": 3.02,
+      "note": "In-memory simulation of Continuum's LTM schema: stores facts with superseded_by edges, filters to current (non-superseded) rows before ranking. Detection is rule-based here; in production it comes from the Mem0Promoter's LLM contradiction check."
+    },
+    {
+      "system": "mem0",
+      "available": false,
+      "n_scenarios": 50,
+      "n_correct": 0,
+      "n_stale_returned": 0,
+      "n_no_answer": 0,
+      "correctness_pct": 0.0,
+      "avg_supersede_turns": 0.0,
+      "note": "skipped: mem0 v1 doesn't expose supersession \u2014 it overwrites in place when its contradiction check fires (a different failure mode that loses history). A real comparison would require running mem0 and inspecting whether prior facts are accessible at all afterwards."
+    }
+  ],
+  "narrative": "Across 50 scripted update-then-query scenarios (location, employer, pet, marital status, vehicle, hobby), continuum_supersession returns the *current* fact 100.0% of the time vs naive_append at 38.0% \u2014 a +62.0pp delta. Naive returned a stale (now-superseded) fact in 31/50 cases, where continuum_supersession returned stale 0/50. The supersession check is O(1) per fact-add and adds no measurable cost at retrieval \u2014 it's a schema-level filter, not a re-rank. This is the only category in the Phase-3B benchmark suite where Continuum's architecture wins by construction over a raw vector store, regardless of model or embedder.",
+  "acceptance": {
+    "bar_pct": 95.0,
+    "target_system": "continuum_supersession",
+    "passed": true
+  }
+}

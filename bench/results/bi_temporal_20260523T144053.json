@@ -1,0 +1,55 @@
+{
+  "benchmark": "bi_temporal",
+  "timestamp": "20260523T144053",
+  "config": {
+    "n_scenarios": 20
+  },
+  "systems": [
+    {
+      "system": "naive_latest",
+      "available": true,
+      "n_total": 20,
+      "n_correct": 4,
+      "correctness_pct": 20.0,
+      "point_in_time": "0/15 (0.0%)",
+      "retroactive": "4/5 (80.0%)",
+      "note": "Ignores as_of entirely; returns the latest stored fact. The model equivalent of 'I'll just tell you the current state and hope that's what you meant.'"
+    },
+    {
+      "system": "naive_chronological",
+      "available": true,
+      "n_total": 20,
+      "n_correct": 15,
+      "correctness_pct": 75.0,
+      "point_in_time": "15/15 (100.0%)",
+      "retroactive": "0/5 (0.0%)",
+      "note": "Latest fact whose recorded_at \u2264 as_of. Catches point-in-time when the system learned facts in real-time but silently fails retroactive corrections (correction's recorded_at is after the queried as_of)."
+    },
+    {
+      "system": "continuum_bitemporal",
+      "available": true,
+      "n_total": 20,
+      "n_correct": 20,
+      "correctness_pct": 100.0,
+      "point_in_time": "15/15 (100.0%)",
+      "retroactive": "5/5 (100.0%)",
+      "note": "Full bi-temporal lookup using valid_from + recorded_at. Returns the fact whose valid_from is closest-but-not-after as_of, regardless of when the system learned it. Handles retroactive corrections by construction."
+    },
+    {
+      "system": "mem0",
+      "available": false,
+      "n_total": 20,
+      "n_correct": 0,
+      "correctness_pct": 0.0,
+      "point_in_time": "n/a",
+      "retroactive": "n/a",
+      "note": "skipped: mem0 has no temporal columns at all. The fairest characterisation is 'framework not applicable' rather than scoring a 0% \u2014 they don't claim to answer this question."
+    }
+  ],
+  "narrative": "Across 20 bi-temporal scenarios (15 point-in-time + 5 retroactive corrections), continuum_bitemporal answers 100.0% correctly. naive_latest sits at 20.0% (it can only stumble onto a correct answer when as_of happens to be the present); naive_chronological reaches 75.0% on point-in-time but collapses on retroactive corrections (0/5) \u2014 its recorded_at filter sees the correction as 'after' the queried date and silently ignores it. The bi-temporal model is differentiator territory: no append-only memory or vector store handles 'what did the user say about X *as of* Y?' without these two timestamp columns.",
+  "acceptance": {
+    "bar": "all queries correct (n=20)",
+    "target_system": "continuum_bitemporal",
+    "passed": true
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "report": "findings/longmemeval_2026-05.md",
+    "report_date": "2026-05-23",
+    "scorer": "substring (primary); LLM-judge optional",
+    "tolerance_pp": 2.0,
+    "tolerance_note": "Numbers may drift slightly across re-runs because (a) the OpenAI API is non-deterministic at temperature=0, (b) gpt-4o-mini's snapshot may have rolled, (c) embedder versions may shift cosine scores within tie-bands. ±2pp covers all three across our 7 prior runs."
+  },
+  "runs": [
+    {
+      "name": "gpt4omini_topk",
+      "description": "gpt-4o-mini baseline — top-k=4 retrieval + optimizer chain. Reproduces §2 row 6 of the report.",
+      "command_args": [
+        "--provider", "openai",
+        "--model", "gpt-4o-mini",
+        "--rpm", "400",
+        "--optimizer",
+        "--top-k", "4",
+        "--embedder-device", "cpu",
+        "--full", "--yes"
+      ],
+      "expected": {
+        "accuracy_pct":   26.2,
+        "recall_pct":     77.4,
+        "n_questions":    500,
+        "missing_fact":   32,
+        "wrong_retrieval": 337
+      },
+      "source_json": "results/gpt4omini_topk/baseline_2026-05-22.json"
+    },
+    {
+      "name": "gpt4omini_decompose",
+      "description": "gpt-4o-mini + DecompositionRetriever — splits multi-hop questions into sub-questions, retrieves per part. Reproduces §2 row 4.",
+      "command_args": [
+        "--provider", "openai",
+        "--model", "gpt-4o-mini",
+        "--rpm", "400",
+        "--decompose",
+        "--top-k", "4",
+        "--embedder-device", "cpu",
+        "--full", "--yes"
+      ],
+      "expected": {
+        "accuracy_pct":   29.2,
+        "recall_pct":     76.3,
+        "n_questions":    500,
+        "missing_fact":   35,
+        "wrong_retrieval": 319
+      },
+      "source_json": "results/gpt4omini_decompose/baseline_2026-05-22.json"
+    }
+  ]
+}

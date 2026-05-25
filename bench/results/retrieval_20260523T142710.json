@@ -1,0 +1,83 @@
+{
+  "benchmark": "retrieval_quality",
+  "timestamp": "20260523T142710",
+  "config": {
+    "n_sessions": 80,
+    "n_queries": 12
+  },
+  "systems": [
+    {
+      "system": "naive_cosine",
+      "available": true,
+      "n_queries": 12,
+      "n_sessions": 80,
+      "recall_at_1": 0.375,
+      "recall_at_4": 1.0,
+      "recall_at_16": 1.0,
+      "p50_ms_per_query": 5.437,
+      "p95_ms_per_query": 5.709,
+      "note": "Raw all-MiniLM-L6-v2 cosine + numpy argsort. The lower bound for dense retrieval \u2014 no scoring, no tier awareness."
+    },
+    {
+      "system": "continuum_topk_only",
+      "available": true,
+      "n_queries": 12,
+      "n_sessions": 80,
+      "recall_at_1": 0.375,
+      "recall_at_4": 1.0,
+      "recall_at_16": 1.0,
+      "p50_ms_per_query": 7.327,
+      "p95_ms_per_query": 8.023,
+      "note": "STMSemanticRetriever with the composite scorer ablated (weights all on relevance). Isolates how much lift the scorer adds on top of pure-cosine ordering."
+    },
+    {
+      "system": "continuum_stm",
+      "available": true,
+      "n_queries": 12,
+      "n_sessions": 80,
+      "recall_at_1": 0.375,
+      "recall_at_4": 1.0,
+      "recall_at_16": 1.0,
+      "p50_ms_per_query": 6.477,
+      "p95_ms_per_query": 6.726,
+      "note": "STMSemanticRetriever with default composite scorer (relevance 0.45 / importance 0.25 / recency 0.20 / confidence 0.10). The eval-used Continuum retriever."
+    },
+    {
+      "system": "faiss_hnsw",
+      "available": false,
+      "n_queries": 0,
+      "n_sessions": 0,
+      "recall_at_1": 0.0,
+      "recall_at_4": 0.0,
+      "recall_at_16": 0.0,
+      "p50_ms_per_query": 0.0,
+      "p95_ms_per_query": 0.0,
+      "note": "skipped: faiss-cpu not installed. On this corpus size (<1K vectors), FAISS HNSW would be near-identical to brute-force cosine \u2014 its value is at the 10K+ scale where naive numpy stops fitting in cache."
+    },
+    {
+      "system": "pgvector",
+      "available": false,
+      "n_queries": 0,
+      "n_sessions": 0,
+      "recall_at_1": 0.0,
+      "recall_at_4": 0.0,
+      "recall_at_16": 0.0,
+      "p50_ms_per_query": 0.0,
+      "p95_ms_per_query": 0.0,
+      "note": "skipped: requires Postgres infrastructure. Continuum's PostgresMTM/LTM already use pgvector \u2014 see tests/integration/test_pgvector_upgrade.py for the integration smoke that exercises it under load."
+    },
+    {
+      "system": "openai_assistants",
+      "available": false,
+      "n_queries": 0,
+      "n_sessions": 0,
+      "recall_at_1": 0.0,
+      "recall_at_4": 0.0,
+      "recall_at_16": 0.0,
+      "p50_ms_per_query": 0.0,
+      "p95_ms_per_query": 0.0,
+      "note": "skipped: creates billed remote resources (vector store + assistant) and would falsify a free local benchmark. A separate follow-up can add it behind an explicit --enable-paid flag."
+    }
+  ],
+  "narrative": "On this synthetic corpus of 80 sessions \u00d7 12 queries with planted ground-truth, recall@4 lands at: naive_cosine 100.0%, continuum_topk_only 100.0%, continuum_stm (full composite scorer) 100.0%. Composite scorer over pure cosine: +0.0pp. Continuum vs raw cosine: +0.0pp. Median per-query latency: naive 5.4ms, continuum 6.5ms \u2014 the scorer cost is in the micros, retrieval is dominated by the embedder forward pass."
+}

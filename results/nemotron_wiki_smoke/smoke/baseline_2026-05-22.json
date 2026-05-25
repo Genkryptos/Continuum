@@ -1,0 +1,119 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "nvidia/nemotron-3-nano-4b",
+  "started_at": "2026-05-22T22:41:32.456251+00:00",
+  "finished_at": "2026-05-22T22:45:28.244292+00:00",
+  "metrics": {
+    "n_questions": 3,
+    "accuracy": 0.3333333333333333,
+    "avg_tokens": 26.666666666666668,
+    "recall": 0.0,
+    "latency_p50_ms": 46540.76766700018,
+    "latency_p95_ms": 170576.3624579995,
+    "total_cost_usd": 0.0,
+    "failure_breakdown": {
+      "llm_error": 1,
+      "missing_fact": 1,
+      "wrong_retrieval": 0,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 57.0,
+    "avg_context_tokens_post_opt": 57.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {}
+  },
+  "rows": [
+    {
+      "question_id": "0a995998",
+      "correct": false,
+      "latency_ms": 170576.3624579995,
+      "answer_tokens": 4,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [
+        "ultrachat_331531"
+      ],
+      "expected_session_ids": [
+        "answer_afa9873b_2",
+        "answer_afa9873b_3",
+        "answer_afa9873b_1"
+      ],
+      "answer": "I don't know",
+      "expected_answer": "3",
+      "failure_category": "missing_fact",
+      "error": null,
+      "pre_opt_total_tokens": 57,
+      "post_opt_total_tokens": 57,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 57,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 57,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 1,
+      "retrieval_ms": 108.8204580009915,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "6d550036",
+      "correct": true,
+      "latency_ms": 18670.159542001784,
+      "answer_tokens": 59,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [],
+      "expected_session_ids": [
+        "answer_ec904b3c_1",
+        "answer_ec904b3c_4",
+        "answer_ec904b3c_3",
+        "answer_ec904b3c_2"
+      ],
+      "answer": "[error: RuntimeError('lmstudio: HTTPStatusError(\"Client error \\'400 Bad Request\\' for url \\'http://localhost:1234/v1/chat/completions\\'\\\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400\")')]",
+      "expected_answer": "2",
+      "failure_category": null,
+      "error": null,
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.025749992346391082,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    },
+    {
+      "question_id": "gpt4_59c863d7",
+      "correct": false,
+      "latency_ms": 46540.76766700018,
+      "answer_tokens": 17,
+      "cost_usd": 0.0,
+      "retrieved_session_ids": [],
+      "expected_session_ids": [
+        "answer_593bdffd_4",
+        "answer_593bdffd_1",
+        "answer_593bdffd_3",
+        "answer_593bdffd_2"
+      ],
+      "answer": "[error: RuntimeError(\"lmstudio: ConnectError('All connection attempts failed')\")]",
+      "expected_answer": "I have worked on or bought five model kits. The scales of the models are: Revell F-15 Eagle (scale not mentioned), Tamiya 1/48 scale Spitfire Mk.V, 1/16 scale German Tiger I tank, 1/72 scale B-29 bomber, and 1/24 scale '69 Camaro.",
+      "failure_category": "llm_error",
+      "error": null,
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 0,
+      "retrieval_ms": 0.01345800410490483,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {}
+    }
+  ]
+}

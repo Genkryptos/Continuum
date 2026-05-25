@@ -16,7 +16,9 @@
 .DEFAULT_GOAL := help
 .PHONY: test test-fast test-integration test-cov benchmark \
         lint typecheck format check \
-        install install-dev clean help
+        install install-dev clean help \
+        repro-longmemeval bench-ingest bench-retrieval bench-supersession \
+        bench-bitemporal bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,15 @@ PYTHON  := python3
 PYTEST  := $(PYTHON) -m pytest
 RUFF    := $(PYTHON) -m ruff
 MYPY    := $(PYTHON) -m mypy
+
+# Targets that import Continuum's framework modules (which transitively
+# need PyYAML, httpx, sentence-transformers, etc.) need an interpreter
+# with the dev deps installed. We prefer the Python.org framework build
+# when available because that's where the runtime deps were pinned
+# during the LongMemEval sweep — overrideable via BENCH_PYTHON=path.
+BENCH_PYTHON ?= $(shell test -x /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+                && echo /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+                || echo python3)
 
 SRC     := continuum
 TESTS   := tests
@@ -91,6 +102,51 @@ clean: ## Remove caches, coverage artefacts, and build output
 	find . -type d -name htmlcov      -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -f .coverage coverage.xml
+
+# ── Reproducibility — LongMemEval findings (Prompt 42) ───────────────────────
+
+repro-longmemeval: ## Reproduce the LongMemEval-S headline numbers from findings/longmemeval_2026-05.md
+	@bash findings/longmemeval/repro/run_repro.sh
+
+# ── Memory-operation benchmarks (Phase 3B, Prompt 43+) ───────────────────────
+
+bench-ingest: ## Run the ingest-throughput benchmark (Continuum vs raw vs mem0)
+	@$(BENCH_PYTHON) -m bench.ingest_throughput --sessions 50 --turns 6
+
+bench-retrieval: ## Run the retrieval-quality benchmark (recall@k vs naive cosine)
+	@$(BENCH_PYTHON) -m bench.retrieval_quality --sessions 200 --queries 30
+
+bench-supersession: ## Run the supersession-correctness benchmark (Continuum's killer feature)
+	@$(BENCH_PYTHON) -m bench.supersession_correctness --scenarios 50
+
+bench-bitemporal: ## Run the bi-temporal "as of date Y" benchmark (Continuum-only feature)
+	@$(BENCH_PYTHON) -m bench.bi_temporal --scenarios 20
+
+bench-all: bench-ingest bench-retrieval bench-supersession bench-bitemporal ## Run every Phase-3B memory-operation benchmark in sequence
+
+bench-gate: ## Verify the latest bench-all run against the README's contract thresholds
+	@$(BENCH_PYTHON) scripts/check_bench_regressions.py
+
+# ── Demos (Phase 3C, Prompt 47+) ─────────────────────────────────────────────
+
+demo-chat: ## Replay the scripted Continuum chat-agent demo (no infra, <1s)
+	@bash examples/chat_agent/demo.sh
+
+# ── Packaging (Phase 3E, Prompt 54) ──────────────────────────────────────────
+
+build: ## Build wheel + sdist into dist/ — hatchling
+	@$(BENCH_PYTHON) -m build --wheel --sdist
+	@echo
+	@ls -lh dist/
+
+build-verify: build ## Build, then verify a clean install in a fresh venv
+	@TMP_VENV="$$(mktemp -d)/continuum_pip_verify"; \
+	echo "=== clean-venv install into $$TMP_VENV ==="; \
+	$(BENCH_PYTHON) -m venv "$$TMP_VENV"; \
+	"$$TMP_VENV/bin/pip" install --quiet dist/continuum_memory-*.whl; \
+	echo "=== smoke import + minimal session ==="; \
+	"$$TMP_VENV/bin/python" scripts/verify_clean_install.py; \
+	rm -rf "$$TMP_VENV"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 

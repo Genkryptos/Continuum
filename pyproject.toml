@@ -11,31 +11,64 @@ build-backend = "hatchling.build"
 
 [project]
 name        = "continuum-memory"
-version     = "0.1.0"
-description = "AI agent memory framework with layered STM / MTM / LTM"
+version     = "0.3.0"
+description = "Production-grade memory infrastructure for AI agents — tiered STM / MTM / LTM with first-class supersession and bi-temporal queries."
 readme      = "README.md"
 license     = { file = "LICENSE" }
 requires-python = ">=3.11"
 
-keywords = ["ai", "memory", "agent", "llm", "vector-database", "pgvector"]
+# Authors / maintainers. Edit before publishing.
+authors = [
+    { name = "Mayank Sahu" },
+]
+maintainers = [
+    { name = "Mayank Sahu" },
+]
 
+keywords = [
+    "ai", "agent", "memory", "llm", "rag",
+    "vector-database", "pgvector", "supersession", "bi-temporal",
+]
+
+# Beta: framework is stable, tests pass strict mypy + ruff, four
+# memory-operation benchmarks land, two LongMemEval reproducibility
+# artefacts shipped. API may still shift before 1.0.
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
+    "Framework :: AsyncIO",
 ]
 
-# Core deps: only what every install needs (pydantic config + YAML loader).
+# Core deps: only what every install needs to import + run an
+# in-memory `ContinuumSession`. Optional extras (Postgres, embedders,
+# LLM providers, the optimizer chain) live under
+# [project.optional-dependencies] below.
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.4",
     "PyYAML>=6.0",
+    "tenacity>=8.2",      # retry policy used in ContinuumSession + extractors
 ]
+
+# Project URLs — show up on PyPI sidebar. Must come AFTER any bare
+# keys in [project] (TOML disallows splitting a table and returning
+# with un-namespaced keys later).
+[project.urls]
+Homepage      = "https://github.com/mayanksahu/Continuum"
+Documentation = "https://github.com/mayanksahu/Continuum/tree/main/docs"
+Repository    = "https://github.com/mayanksahu/Continuum"
+Issues        = "https://github.com/mayanksahu/Continuum/issues"
+Changelog     = "https://github.com/mayanksahu/Continuum/blob/main/CHANGELOG.md"
 
 
 # ── Optional extras ───────────────────────────────────────────────────────────
@@ -91,13 +124,68 @@ dev = [
 # ── Package discovery ─────────────────────────────────────────────────────────
 
 [tool.hatch.build.targets.wheel]
-# Flat layout: the distributable package lives at ./continuum/
-packages = ["continuum"]
+# Flat layout: the distributable package lives at ./continuum/,
+# plus a tiny ./memory/stm/ legacy module that
+# continuum.stores.stm.conversation_stm re-exports. The other
+# top-level dirs (helper/, agent/, api/, continuum_mcp/) are
+# pre-Continuum scaffolding and explicitly NOT shipped.
+packages = ["continuum", "memory"]
 
 [tool.hatch.build.targets.wheel.force-include]
 # PEP 561: ship the inline-types marker so downstream `mypy`/`pyright`
 # type-check against continuum's own annotations.
 "continuum/py.typed" = "continuum/py.typed"
+
+# Wheel-wide excludes: keep the legacy memory/mtm/ tree out (it
+# transitively imports `helper/`, which is not part of the package),
+# and skip the usual cache + build artefacts.
+[tool.hatch.build]
+exclude = [
+    "memory/mtm/**",
+    "memory/**/__pycache__",
+    "memory/**/*.pyc",
+]
+
+# Sdist build: ship source + tests + docs + migrations, but explicitly
+# exclude evaluation outputs, benchmark JSON dumps, vendored datasets,
+# and assorted dev-only caches. Without these excludes the sdist ends
+# up over 100 MB because of the vendored LongMemEval dataset and the
+# results/ archive — none of which a downstream pip user needs.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/continuum",
+    "/tests",
+    "/docs",
+    "/bench",
+    "/examples",
+    "/migrations",
+    "/findings/longmemeval_2026-05.md",
+    "/findings/longmemeval/repro",
+    "/findings/charts/*.py",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/Makefile",
+    "/pyproject.toml",
+    "/pytest.ini",
+]
+exclude = [
+    "**/__pycache__",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/*.pyc",
+    "/results",
+    "/dist",
+    "/build",
+    "/evals/longmemeval/LongMemEval",
+    "/evals/longmemeval/.wiki_cache*",
+    "/findings/charts/*.png",
+    "/.claude",
+    "/.git",
+    "/.venv",
+    "/nohup.out",
+]
 
 
 # ── pytest ────────────────────────────────────────────────────────────────────

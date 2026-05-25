@@ -56,7 +56,10 @@ DECOMPOSE_SYSTEM_PROMPT = (
     "— no pronouns or references to other sub-questions.\n"
     "2. If the question is already a single-fact lookup, return it "
     "unchanged as the only sub-question.\n"
-    "3. Return between 1 and 4 sub-questions, one per line. Output "
+    "3. Do not invent hidden variables or calculations that are not "
+    "explicitly requested. For example, a question like \"How long is my "
+    "commute?\" is one direct memory lookup, not distance plus speed.\n"
+    "4. Return between 1 and 4 sub-questions, one per line. Output "
     "ONLY the sub-questions — no numbering, no bullets, no explanation, "
     "no preamble.\n"
 )
@@ -64,13 +67,38 @@ DECOMPOSE_SYSTEM_PROMPT = (
 _NUMBER_PREFIX = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s*")
 #: Hard cap on sub-questions — keeps cost + token bloat bounded.
 _MAX_SUBQUESTIONS = 4
+_QUESTION_START = re.compile(
+    r"^\s*(?:what|where|when|who|which|how\s+(?:long|many|much|old))\b",
+    re.IGNORECASE,
+)
+_PERSONAL_REF = re.compile(r"\b(?:i|me|my|mine)\b", re.IGNORECASE)
+_COMPOSITION_CUE = re.compile(
+    r"\b(?:and|or|before|after|earlier|later|first|last|both|between|"
+    r"compare|compared|difference|changed|update|newer|older|more|less)\b",
+    re.IGNORECASE,
+)
 
 
-def _build_decompose_prompt(question: str) -> str:
+def _looks_like_single_fact_personal_lookup(question: str) -> bool:
+    """Heuristic guard against LLM decompositions that invent reasoning."""
+    q = question.strip()
+    if re.search(r"\bhave\s+i\b", q, re.IGNORECASE):
+        return False
+    return (
+        bool(_QUESTION_START.search(q))
+        and bool(_PERSONAL_REF.search(q))
+        and not bool(_COMPOSITION_CUE.search(q))
+    )
+
+
+def build_decompose_prompt(question: str) -> str:
     return (
         DECOMPOSE_SYSTEM_PROMPT
         + f"\nQuestion: {question}\nSub-questions:"
     )
+
+
+_build_decompose_prompt = build_decompose_prompt
 
 
 def parse_subquestions(reply: str, *, original: str) -> list[str]:
@@ -96,6 +124,8 @@ def parse_subquestions(reply: str, *, original: str) -> list[str]:
         out.append(line)
         if len(out) >= _MAX_SUBQUESTIONS:
             break
+    if len(out) > 1 and _looks_like_single_fact_personal_lookup(original):
+        return [original]
     return out or [original]
 
 
@@ -150,7 +180,7 @@ class DecompositionRetriever:
         """Ask the LLM to split *question*; degrade to [question] on error."""
         try:
             reply = await self.llm.complete(
-                prompt=_build_decompose_prompt(question),
+                prompt=build_decompose_prompt(question),
                 max_tokens=self.decompose_max_tokens,
             )
         except Exception:
@@ -213,5 +243,6 @@ class DecompositionRetriever:
 __all__ = [
     "DecompositionRetriever",
     "parse_subquestions",
+    "build_decompose_prompt",
     "DECOMPOSE_SYSTEM_PROMPT",
 ]

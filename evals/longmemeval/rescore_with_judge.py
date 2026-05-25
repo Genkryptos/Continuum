@@ -212,10 +212,25 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
                                        / "longmemeval_s_cleaned.json",
         help="Path to the LongMemEval source JSON (for question lookup).",
     )
-    p.add_argument("--judge-model", default="llama-3.1-8b-instant",
-                   help="Groq model used for judging. Cheap is fine.")
+    p.add_argument(
+        "--provider", default="groq",
+        choices=["groq", "openai"],
+        help=(
+            "Which LLM provider hosts the judge. 'groq' needs "
+            "GROQ_API_KEY; 'openai' needs OPENAI_API_KEY. Pick the "
+            "one whose key you've already got loaded."
+        ),
+    )
+    p.add_argument(
+        "--judge-model", default=None,
+        help=(
+            "Model used for judging. Defaults: 'llama-3.1-8b-instant' "
+            "on groq, 'gpt-4o-mini' on openai. Cheap is fine — the "
+            "judge just needs to compare strings semantically."
+        ),
+    )
     p.add_argument("--rpm", type=int, default=28,
-                   help="Client-side RPM cap for Groq judge calls.")
+                   help="Client-side RPM cap for judge calls.")
     p.add_argument(
         "--limit", type=int, default=None,
         help="Re-grade only the first N rows (handy for validation).",
@@ -230,8 +245,18 @@ async def main_async(args: argparse.Namespace) -> int:
     if not args.input.exists():
         raise SystemExit(f"input file not found: {args.input}")
 
-    log.info("loading judge model %s @ %d RPM", args.judge_model, args.rpm)
-    llm = GroqLLM(model=args.judge_model, rpm=args.rpm)
+    judge_model = args.judge_model or (
+        "gpt-4o-mini" if args.provider == "openai" else "llama-3.1-8b-instant"
+    )
+    log.info(
+        "loading judge provider=%s model=%s @ %d RPM",
+        args.provider, judge_model, args.rpm,
+    )
+    if args.provider == "openai":
+        from evals.longmemeval.bootstrap_ollama import OpenAILLM
+        llm = OpenAILLM(model=judge_model, rpm=args.rpm)
+    else:
+        llm = GroqLLM(model=judge_model, rpm=args.rpm)
     judge = LLMJudgeScorer(llm=llm)
 
     log.info("re-scoring %s …", args.input)

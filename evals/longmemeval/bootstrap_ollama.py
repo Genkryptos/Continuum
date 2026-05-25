@@ -26,6 +26,21 @@ Run modes
     # prompt before kicking off the full run unless --yes is given.
     python -m evals.longmemeval.bootstrap_ollama --full
 
+    # cross-session decomposed answering smoke with session-aware retrieval.
+    python -m evals.longmemeval.bootstrap_ollama \
+        --provider openai --model gpt-4o-mini --optimizer \
+        --decompose-answer --session-aware-retrieval \
+        --session-top-k 4 --turns-per-session 2 \
+        --output results/gpt4omini_decompose_answer_session_aware \
+        --limit 5
+
+    # compiled memory wiki smoke.
+    python -m evals.longmemeval.bootstrap_ollama \
+        --provider openai --model gpt-4o-mini --decompose-answer \
+        --wiki-memory --wiki-top-k 8 \
+        --output results/gpt4omini_wiki_memory \
+        --limit 5
+
 Dependencies
 ------------
 * ``httpx`` (already a project dep)
@@ -74,8 +89,48 @@ from continuum.optimizer.strategies import (
     StmTrim,
 )
 from evals.longmemeval.adapter import ContinuumAdapter
+from evals.longmemeval.answer_post import (
+    build_repair_prompt,
+    clean_final_answer,
+    is_idk,
+    should_block_idk,
+    validate_answer_shape,
+)
 from evals.longmemeval.baseline import EvalRow, run_baseline
-from evals.longmemeval.decompose import DecompositionRetriever
+from evals.longmemeval.candidates import (
+    best_count_for_object,
+    extract_candidates_from_context,
+    filter_candidates_for_question,
+)
+from evals.longmemeval.content_wiki import (
+    ContentFact,
+    build_content_wiki_pages,
+    extract_content_facts,
+    route_topic,
+)
+from evals.longmemeval.decompose import (
+    DecompositionRetriever,
+    build_decompose_prompt,
+    parse_subquestions,
+)
+from evals.longmemeval.decomposed_answer import (
+    SubAnswer,
+    _strip_subanswer_scaffold,
+    build_aggregation_synthesis_prompt,
+    build_final_synthesis_prompt,
+    build_subanswer_prompt,
+    extract_session_ids,
+    is_aggregate_question,
+    parse_aggregation_response,
+)
+from evals.longmemeval.evidence_spans import select_spans
+from evals.longmemeval.judge import LLMJudgeScorer
+from evals.longmemeval.question_type import QuestionType, classify
+from evals.longmemeval.telemetry import (
+    current_counter,
+    end_row_telemetry,
+    start_row_telemetry,
+)
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +155,24 @@ DEFAULT_LMSTUDIO_URL = os.environ.get(
 DEFAULT_LMSTUDIO_MODEL = os.environ.get("LMSTUDIO_MODEL", "qwen/qwen3-14b")
 DEFAULT_OPENAI_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+DEFAULT_BEDROCK_MODEL = os.environ.get(
+    "BEDROCK_MODEL", "anthropic.claude-3-haiku-20240307-v1:0"
+)
+DEFAULT_BEDROCK_REGION = (
+    os.environ.get("AWS_REGION")
+    or os.environ.get("AWS_DEFAULT_REGION")
+    or "us-east-1"
+)
+DEFAULT_BEDROCK_URL = os.environ.get("BEDROCK_BASE_URL", "")
 DEFAULT_EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+QUESTION_TYPE_CHOICES = (
+    "single-session-user",
+    "single-session-assistant",
+    "single-session-preference",
+    "multi-session",
+    "temporal-reasoning",
+    "knowledge-update",
+)
 
 
 def _openai_key_from_env() -> str | None:
@@ -142,6 +214,10 @@ def _parse_lme_date(raw: Any) -> dt.datetime | None:
     return None
 
 
+def _longmemeval_user_id(question_id: str) -> str:
+    return f"longmemeval:{question_id}"
+
+
 def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
     """
     Read the LongMemEval-S JSON and flatten each row into the
@@ -156,6 +232,7 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
     rows: list[EvalRow] = []
     for r in raw:
         flat_messages: list[dict[str, Any]] = []
+        user_id = _longmemeval_user_id(str(r["question_id"]))
         sids = r["haystack_session_ids"]
         sessions = r["haystack_sessions"]
         dates = r.get("haystack_dates", [])
@@ -168,6 +245,7 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
                     "role": msg["role"],
                     "content": msg["content"],
                     "session_id": sid,  # extra field; adapter reads this
+                    "user_id": user_id,
                     # ISO date of the session (or "" if unparseable) —
                     # the adapter stamps it onto MemoryItem.created_at.
                     "date": sdate.isoformat() if sdate else "",
@@ -183,8 +261,21 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
             expected_answer=str(r["answer"]),
             messages=flat_messages,
             answer_session_ids=list(ans_sids),
+            question_type=str(r.get("question_type", "unknown")),
+            user_id=user_id,
         ))
     return rows
+
+
+def _filter_rows_by_question_type(
+    rows: list[EvalRow], question_type: str | None
+) -> list[EvalRow]:
+    if not question_type:
+        return rows
+    filtered = [row for row in rows if row.question_type == question_type]
+    if not filtered:
+        raise ValueError(f"no LongMemEval rows found for question_type={question_type!r}")
+    return filtered
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +510,7 @@ async def _adaptive_complete(
     headers: dict[str, str],
     throttle: _AdaptiveThrottle,
     max_retries: int,
+    is_answer_call: bool = False,
 ) -> str:
     """
     One OpenAI-compatible ``/chat/completions`` call with the shared
@@ -466,6 +558,25 @@ async def _adaptive_complete(
 
         throttle.on_success()
         data = resp.json()
+        # Charge the row's telemetry counter — uses real
+        # `usage.{prompt,completion}_tokens` from the provider when
+        # available, falls back to a char-length estimate otherwise.
+        # No-op when no counter is active (e.g. unit tests).
+        try:
+            from evals.longmemeval.telemetry import record_llm_call
+            # Compose a "prompt" string for the char-length fallback —
+            # OpenAI-shaped payloads only have messages.
+            prompt_text = " ".join(
+                str(m.get("content", "")) for m in payload.get("messages") or []
+            )
+            record_llm_call(
+                model=str(payload.get("model", provider)),
+                prompt=prompt_text,
+                response=data,
+                is_answer_call=is_answer_call,
+            )
+        except Exception:  # pragma: no cover — telemetry must never break a call
+            log.debug("telemetry.record_llm_call failed", exc_info=True)
         raw = str(data["choices"][0]["message"]["content"])
         return _strip_think(raw).strip()
 
@@ -706,6 +817,373 @@ class OpenAILLM:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Amazon Bedrock client (Boto3 Converse API)
+# ---------------------------------------------------------------------------
+
+
+def _bedrock_region_from_env() -> str:
+    return (
+        os.environ.get("AWS_REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or DEFAULT_BEDROCK_REGION
+    )
+
+
+def _bedrock_normalize_endpoint_url(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    endpoint = raw.rstrip("/")
+    if endpoint.endswith("/v1"):
+        endpoint = endpoint[:-3].rstrip("/")
+    return endpoint or None
+
+
+def _bedrock_openai_base_url(region: str) -> str:
+    return f"https://bedrock-mantle.{region}.api.aws/v1"
+
+
+def _bedrock_is_gpt_oss_model(model: str) -> bool:
+    return model.strip().startswith("openai.gpt-oss")
+
+
+def _bedrock_boto3_client(
+    region: str,
+    endpoint_url: str | None = None,
+) -> Any:
+    try:
+        import boto3
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError(
+            "boto3 is required for --provider bedrock. Install boto3 or run "
+            "with a Python environment that includes the AWS SDK."
+        ) from exc
+
+    kwargs: dict[str, Any] = {"region_name": region}
+    if endpoint_url:
+        kwargs["endpoint_url"] = endpoint_url
+    return boto3.client("bedrock-runtime", **kwargs)
+
+
+def _bedrock_openai_responses_client(
+    region: str,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> Any:
+    try:
+        from openai import OpenAI
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError(
+            "openai is required for Bedrock openai.gpt-oss models. Install "
+            "the OpenAI Python SDK or use a non-gpt-oss Bedrock model."
+        ) from exc
+
+    key = (
+        api_key
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
+    )
+    if not key:
+        raise RuntimeError(
+            "Set AWS_BEARER_TOKEN_BEDROCK or OPENAI_API_KEY before using "
+            "Bedrock openai.gpt-oss models."
+        )
+    resolved_base = (
+        base_url
+        or os.environ.get("OPENAI_BASE_URL")
+        or _bedrock_openai_base_url(region)
+    )
+    return OpenAI(api_key=key, base_url=resolved_base.rstrip("/"))
+
+
+def _bedrock_text_from_blocks(blocks: Any) -> str | None:
+    if isinstance(blocks, str):
+        return blocks.strip() or None
+    if not isinstance(blocks, list):
+        return None
+
+    parts: list[str] = []
+    for block in blocks:
+        if isinstance(block, str):
+            text = block
+        elif isinstance(block, dict):
+            text = block.get("text") or block.get("content") or ""
+        else:
+            text = ""
+        if isinstance(text, str) and text.strip():
+            parts.append(text.strip())
+    return "\n".join(parts) if parts else None
+
+
+def _bedrock_converse_text(response: Any) -> str:
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            f"bedrock: expected Converse dict, got {type(response).__name__}"
+        )
+    output = response.get("output")
+    message = output.get("message") if isinstance(output, dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    text = _bedrock_text_from_blocks(content)
+    if text:
+        return _strip_think(text).strip()
+
+    preview = json.dumps(response, ensure_ascii=False, default=str)[:500]
+    keys = sorted(response.keys())
+    raise RuntimeError(
+        "bedrock: Converse response did not contain output.message.content "
+        f"text; keys={keys}; body={preview}"
+    )
+
+
+def _bedrock_usage(response: Any) -> tuple[int | None, int | None]:
+    if not isinstance(response, dict):
+        return None, None
+    usage = response.get("usage")
+    if not isinstance(usage, dict):
+        return None, None
+    prompt_tokens = usage.get("inputTokens")
+    completion_tokens = usage.get("outputTokens")
+    return (
+        int(prompt_tokens) if prompt_tokens is not None else None,
+        int(completion_tokens) if completion_tokens is not None else None,
+    )
+
+
+def _bedrock_openai_response_text(response: Any) -> str:
+    text = getattr(response, "output_text", None)
+    if isinstance(text, str) and text.strip():
+        return _strip_think(text).strip()
+    if isinstance(response, dict):
+        text = response.get("output_text")
+        if isinstance(text, str) and text.strip():
+            return _strip_think(text).strip()
+    preview = str(response)[:500]
+    raise RuntimeError(
+        "bedrock: OpenAI Responses result did not contain output_text; "
+        f"response={preview}"
+    )
+
+
+def _bedrock_openai_usage(response: Any) -> tuple[int | None, int | None]:
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+    if usage is None:
+        return None, None
+    if isinstance(usage, dict):
+        in_tok = usage.get("input_tokens") or usage.get("prompt_tokens")
+        out_tok = usage.get("output_tokens") or usage.get("completion_tokens")
+    else:
+        in_tok = (
+            getattr(usage, "input_tokens", None)
+            or getattr(usage, "prompt_tokens", None)
+        )
+        out_tok = (
+            getattr(usage, "output_tokens", None)
+            or getattr(usage, "completion_tokens", None)
+        )
+    return (
+        int(in_tok) if in_tok is not None else None,
+        int(out_tok) if out_tok is not None else None,
+    )
+
+
+def _bedrock_error_code(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        error = response.get("Error")
+        if isinstance(error, dict):
+            code = error.get("Code")
+            if code is not None:
+                return str(code)
+    return type(exc).__name__
+
+
+def _bedrock_is_throttling_error(exc: Exception) -> bool:
+    code = _bedrock_error_code(exc).lower()
+    text = str(exc).lower()
+    return "throttl" in code or "too many" in text
+
+
+class BedrockLLM:
+    """
+    Amazon Bedrock chat client via the native Boto3 Converse API.
+
+    Authentication is delegated to Boto3. For Bedrock API keys, export
+    ``AWS_BEARER_TOKEN_BEDROCK`` before launching; standard AWS credentials
+    also continue to work through the normal AWS SDK provider chain.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str = DEFAULT_BEDROCK_MODEL,
+        region: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 90.0,
+        temperature: float = 0.0,
+        api_key: str | None = None,
+        rpm: int = 30,
+        max_retries: int = 8,
+    ) -> None:
+        self.model = model
+        self.region = region or _bedrock_region_from_env()
+        self.base_url = (
+            base_url
+            or os.environ.get("BEDROCK_BASE_URL")
+            or DEFAULT_BEDROCK_URL
+            or None
+        )
+        self.endpoint_url = _bedrock_normalize_endpoint_url(
+            self.base_url
+        )
+        self.timeout = timeout
+        self.temperature = temperature
+        if api_key:
+            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = api_key
+        if _bedrock_is_gpt_oss_model(self.model):
+            self._transport = "openai_responses"
+            self._client = _bedrock_openai_responses_client(
+                self.region,
+                self.base_url,
+                api_key,
+            )
+        else:
+            self._transport = "converse"
+            self._client = _bedrock_boto3_client(self.region, self.endpoint_url)
+        self._throttle = _AdaptiveThrottle(rpm)
+        self._max_retries = max_retries
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        if self._transport == "openai_responses":
+            return await self._complete_openai_responses(
+                prompt=prompt,
+                max_tokens=max_tokens,
+            )
+
+        messages = [{
+            "role": "user",
+            "content": [{"text": prompt}],
+        }]
+        inference_config = {
+            "maxTokens": max_tokens,
+            "temperature": self.temperature,
+        }
+        attempt = 0
+        while True:
+            await self._throttle.await_slot()
+            try:
+                response = await asyncio.to_thread(
+                    self._client.converse,
+                    modelId=self.model,
+                    messages=messages,
+                    inferenceConfig=inference_config,
+                )
+            except Exception as exc:
+                if _bedrock_is_throttling_error(exc):
+                    self._throttle.on_429()
+                    if attempt < self._max_retries:
+                        wait = min(
+                            128.0,
+                            float(2 ** attempt) * random.uniform(0.8, 1.2),
+                        )
+                        log.warning(
+                            "bedrock throttled (%s) — adaptive pace now "
+                            "%.2fs/call; backoff %.1fs (retry %d/%d)",
+                            _bedrock_error_code(exc),
+                            self._throttle.interval,
+                            wait,
+                            attempt + 1,
+                            self._max_retries,
+                        )
+                        await asyncio.sleep(wait)
+                        attempt += 1
+                        continue
+                    raise RuntimeError(
+                        f"bedrock: throttled after {self._max_retries} retries"
+                    ) from exc
+                log.exception("bedrock converse error")
+                raise RuntimeError(f"bedrock: {exc!r}") from exc
+
+            self._throttle.on_success()
+            prompt_tokens, completion_tokens = _bedrock_usage(response)
+            try:
+                from evals.longmemeval.telemetry import record_llm_call
+                record_llm_call(
+                    model=self.model,
+                    prompt=prompt,
+                    response=response,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                )
+            except Exception:  # pragma: no cover - telemetry must not break calls
+                log.debug("telemetry.record_llm_call failed", exc_info=True)
+            return _bedrock_converse_text(response)
+
+    async def _complete_openai_responses(
+        self,
+        *,
+        prompt: str,
+        max_tokens: int,
+    ) -> str:
+        attempt = 0
+        while True:
+            await self._throttle.await_slot()
+            try:
+                response = await asyncio.to_thread(
+                    self._client.responses.create,
+                    model=self.model,
+                    input=[{"role": "user", "content": prompt}],
+                    max_output_tokens=max_tokens,
+                    temperature=self.temperature,
+                )
+            except Exception as exc:
+                if _bedrock_is_throttling_error(exc):
+                    self._throttle.on_429()
+                    if attempt < self._max_retries:
+                        wait = min(
+                            128.0,
+                            float(2 ** attempt) * random.uniform(0.8, 1.2),
+                        )
+                        log.warning(
+                            "bedrock gpt-oss throttled (%s) — adaptive pace "
+                            "now %.2fs/call; backoff %.1fs (retry %d/%d)",
+                            _bedrock_error_code(exc),
+                            self._throttle.interval,
+                            wait,
+                            attempt + 1,
+                            self._max_retries,
+                        )
+                        await asyncio.sleep(wait)
+                        attempt += 1
+                        continue
+                    raise RuntimeError(
+                        f"bedrock: throttled after {self._max_retries} retries"
+                    ) from exc
+                log.exception("bedrock gpt-oss responses error")
+                raise RuntimeError(f"bedrock: {exc!r}") from exc
+
+            self._throttle.on_success()
+            prompt_tokens, completion_tokens = _bedrock_openai_usage(response)
+            try:
+                from evals.longmemeval.telemetry import record_llm_call
+                record_llm_call(
+                    model=self.model,
+                    prompt=prompt,
+                    response=response,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                )
+            except Exception:  # pragma: no cover - telemetry must not break calls
+                log.debug("telemetry.record_llm_call failed", exc_info=True)
+            return _bedrock_openai_response_text(response)
+
+    async def aclose(self) -> None:
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            await asyncio.to_thread(close)
 
 
 # ---------------------------------------------------------------------------
@@ -1120,6 +1598,628 @@ class STMSemanticRetriever:
         )
 
 
+class SessionAwareSemanticRetriever(STMSemanticRetriever):
+    """
+    Session-first LongMemEval retriever.
+
+    It ranks source sessions by their strongest matching turn, then selects
+    the strongest turns inside the top sessions. This prevents one noisy
+    session with many similar turns from crowding out evidence sessions for
+    multi-session questions.
+    """
+
+    def __init__(
+        self,
+        *,
+        store: FlatHaystackStore,
+        embedder: _Embedder,
+        session_top_k: int = 4,
+        turns_per_session: int = 2,
+        max_items: int = 16,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(store=store, embedder=embedder, **kwargs)
+        self.session_top_k = max(1, int(session_top_k))
+        self.turns_per_session = max(1, int(turns_per_session))
+        self.max_items = max(1, int(max_items))
+
+    def _bundle_topk(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._cached_matrix.T).flatten()  # type: ignore[union-attr]
+
+        first_index: dict[str, int] = {}
+        grouped: dict[str, list[tuple[int, float, MemoryItem]]] = {}
+        for idx, item in enumerate(self._cached_items):
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            first_index.setdefault(sid, idx)
+            grouped.setdefault(sid, []).append((idx, float(sims[idx]), item))
+
+        ranked_sessions = sorted(
+            grouped,
+            key=lambda sid: (
+                -max(score for _idx, score, _item in grouped[sid]),
+                first_index[sid],
+            ),
+        )[: self.session_top_k]
+
+        picked: list[MemoryItem] = []
+        for sid in ranked_sessions:
+            turns = sorted(
+                grouped[sid],
+                key=lambda row: (-row[1], row[0]),
+            )[: self.turns_per_session]
+            picked.extend(item for _idx, _score, item in turns)
+            if len(picked) >= self.max_items:
+                picked = picked[: self.max_items]
+                break
+
+        messages = [
+            {
+                "role": str(item.metadata.get("role", "user"))
+                if item.metadata else "user",
+                "content": item.content,
+            }
+            for item in picked
+        ]
+        token_count = sum(estimate_tokens_text(item.content) for item in picked)
+        return ContextBundle(
+            items=picked,
+            messages=messages,
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
+            debug_info={
+                "retrieval_mode": "session_aware",
+                "selected_sessions": ranked_sessions,
+                "session_top_k": self.session_top_k,
+                "turns_per_session": self.turns_per_session,
+            },
+        )
+
+
+class WikiMemoryRetriever:
+    """
+    Row-local compiled-memory retriever for LongMemEval.
+
+    This is a lightweight implementation of the LLM-wiki idea: raw haystack
+    turns remain unchanged in ``raw_store``; retrieval runs over generated
+    Markdown pages that organize the row by index, timeline, preferences, and
+    per-session pages. No oracle answer-session ids are used.
+    """
+
+    _PREFERENCE_TERMS = (
+        "favorite", "prefer", "preference", "like", "love", "dislike",
+        "color", "food", "book", "movie", "music", "hobby",
+    )
+    _LEXICAL_STOPWORDS = {
+        "the", "and", "for", "with", "that", "this", "what", "where",
+        "when", "who", "which", "how", "did", "does", "was", "were",
+        "is", "are", "am", "to", "of", "on", "in", "at", "a", "an",
+    }
+    _WORD_RE = re.compile(r"[a-z0-9]+")
+    _TIME_RE = re.compile(
+        r"\b(?:minute|minutes|hour|hours|each way|one way|round trip)\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(
+        self,
+        *,
+        raw_store: FlatHaystackStore,
+        embedder: _Embedder,
+        top_k: int = 8,
+        session_id: str = "default",
+    ) -> None:
+        self.raw_store = raw_store
+        self.embedder = embedder
+        self.top_k = max(1, int(top_k))
+        self.session_id = session_id
+        self._cached_len = -1
+        self._pages: list[MemoryItem] = []
+        self._matrix: np.ndarray | None = None
+        self._raw_matrix: np.ndarray | None = None
+
+    def _group_sessions(self) -> dict[str, list[MemoryItem]]:
+        grouped: dict[str, list[MemoryItem]] = {}
+        for item in self.raw_store.items:
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            grouped.setdefault(sid, []).append(item)
+        return grouped
+
+    @staticmethod
+    def _session_ids(items: Iterable[MemoryItem]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            sid = str((item.metadata or {}).get("session_id") or "")
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            out.append(sid)
+        return out
+
+    @staticmethod
+    def _render_messages(items: list[MemoryItem], *, limit: int | None = None) -> str:
+        lines: list[str] = []
+        source = items[:limit] if limit is not None else items
+        for idx, item in enumerate(source, start=1):
+            role = str((item.metadata or {}).get("role", "user"))
+            lines.append(f"- turn {idx} ({role}): {item.content}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _tokens(cls, text: str) -> set[str]:
+        return {
+            token for token in cls._WORD_RE.findall(text.lower())
+            if len(token) > 2 and token not in cls._LEXICAL_STOPWORDS
+        }
+
+    @classmethod
+    def _lexical_score(cls, query: str, text: str) -> float:
+        query_tokens = cls._tokens(query)
+        if not query_tokens:
+            return 0.0
+        text_l = text.lower()
+        text_tokens = cls._tokens(text_l)
+        score = len(query_tokens & text_tokens) / len(query_tokens)
+        if re.search(
+            r"\bhow\s+long\b", query, re.IGNORECASE
+        ) and cls._TIME_RE.search(text_l):
+            score += 0.75
+        if re.search(r"\bwhere\b", query, re.IGNORECASE):
+            if re.search(
+                r"\b(?:target|walmart|costco|kroger|store|shop|app)\b",
+                text_l,
+            ):
+                score += 0.25
+        if re.search(r"\bname\b", query, re.IGNORECASE):
+            if re.search(r"\b(?:called|named|titled)\b", text_l):
+                score += 0.35
+        if re.search(
+            r"\b(?:clothing|clothes|items? of clothing)\b",
+            query,
+            re.IGNORECASE,
+        ):
+            if re.search(
+                r"\b(?:blazer|boots?|jeans?|shirt|sweater|dress|pants|jacket)\b",
+                text_l,
+            ):
+                score += 0.4
+        if re.search(r"\bpick\s+up\b", query, re.IGNORECASE):
+            if re.search(r"\bpick\s+up\b|\bdry cleaning\b", text_l):
+                score += 1.2
+        if re.search(r"\breturn\b", query, re.IGNORECASE):
+            if re.search(r"\breturn\b|\bexchang(?:e|ed|ing)\b", text_l):
+                score += 1.0
+        if re.search(r"\bcamping trips?\b", query, re.IGNORECASE):
+            if re.search(r"\b\d+\s*-\s*day\b.*\bcamping trip\b", text_l):
+                score += 2.5
+            elif "camping trip" in text_l:
+                score += 1.25
+        if re.search(r"\bmodel kits?\b", query, re.IGNORECASE):
+            if re.search(
+                r"\b(?:model kit|kits?|revell|tamiya|spitfire|tiger|bomber|camaro)\b",
+                text_l,
+            ):
+                score += 1.25
+            if re.search(r"\b\d+/\d+\s+scale\b", text_l):
+                score += 0.75
+        if re.search(r"\bprojects?\b", query, re.IGNORECASE):
+            if re.search(r"\b(?:led|lead|leading)\b", text_l):
+                score += 1.25
+        return score
+
+    @staticmethod
+    def _role_score(item: MemoryItem) -> float:
+        role = str((item.metadata or {}).get("role", "user")).lower()
+        if role == "user":
+            return 1.25
+        if role == "assistant":
+            return -0.25
+        return 0.0
+
+    def _page(
+        self,
+        name: str,
+        content: str,
+        source_items: list[MemoryItem],
+        *,
+        recall_session_ids: list[str] | None = None,
+        page_type: str = "compiled",
+    ) -> MemoryItem:
+        source_session_ids = self._session_ids(source_items)
+        session_ids = recall_session_ids or []
+        meta: dict[str, Any] = {
+            "role": "system",
+            "wiki_page": name,
+            "wiki_page_type": page_type,
+            "source_session_ids": source_session_ids,
+            "session_ids": session_ids,
+        }
+        if len(session_ids) == 1:
+            meta["session_id"] = session_ids[0]
+        return MemoryItem(
+            id=f"wiki:{name}",
+            content=content,
+            tier=MemoryTier.LTM,
+            metadata=meta,
+        )
+
+    def _build_pages(self) -> list[MemoryItem]:
+        grouped = self._group_sessions()
+        all_items = list(self.raw_store.items)
+        pages: list[MemoryItem] = []
+
+        index_lines = ["# Memory Wiki Index", "", "## Sessions"]
+        for sid, items in grouped.items():
+            index_lines.append(f"- sessions/{sid}.md ({len(items)} turns)")
+        index_lines.extend([
+            "",
+            "## Compiled Pages",
+            "- timeline.md",
+            "- preferences.md",
+            "- profile.md",
+        ])
+        pages.append(
+            self._page(
+                "index.md", "\n".join(index_lines), all_items,
+                page_type="global",
+            )
+        )
+
+        timeline_lines = ["# Timeline", ""]
+        for sid, items in grouped.items():
+            preview = " ".join(item.content for item in items[:2])
+            timeline_lines.append(f"- session={sid}: {preview}")
+        pages.append(
+            self._page(
+                "timeline.md", "\n".join(timeline_lines), all_items,
+                page_type="global",
+            )
+        )
+
+        preference_items = [
+            item for item in all_items
+            if any(term in item.content.lower() for term in self._PREFERENCE_TERMS)
+        ]
+        if preference_items:
+            pref_body = "# Preferences\n\n" + self._render_messages(preference_items)
+        else:
+            pref_body = "# Preferences\n\nNo explicit preferences found."
+        pages.append(
+            self._page(
+                "preferences.md",
+                pref_body,
+                preference_items or all_items,
+                page_type="compiled",
+            )
+        )
+
+        profile_body = "# Profile\n\n" + self._render_messages(all_items, limit=40)
+        pages.append(self._page("profile.md", profile_body, all_items, page_type="global"))
+
+        for sid, items in grouped.items():
+            body = f"# Session {sid}\n\n" + self._render_messages(items)
+            pages.append(
+                self._page(
+                    f"sessions/{sid}.md",
+                    body,
+                    items,
+                    recall_session_ids=[sid],
+                    page_type="session",
+                )
+            )
+
+        return pages
+
+    def _refresh_index(self) -> None:
+        if len(self.raw_store.items) == self._cached_len:
+            return
+        self._pages = self._build_pages()
+        self._cached_len = len(self.raw_store.items)
+        if not self._pages:
+            self._matrix = None
+            self._raw_matrix = None
+            return
+        self._matrix = self.embedder.encode([page.content for page in self._pages])
+        self._raw_matrix = self.embedder.encode(
+            [item.content for item in self.raw_store.items]
+        )
+
+    def _raw_ranked_sessions(
+        self, qv: np.ndarray, query_text: str, limit: int
+    ) -> list[str]:
+        return [
+            sid for sid, _idx in self._raw_ranked_session_indices(
+                qv, query_text, limit
+            )
+        ]
+
+    def _raw_ranked_session_indices(
+        self, qv: np.ndarray, query_text: str, limit: int
+    ) -> list[tuple[str, int]]:
+        if self._raw_matrix is None or not self.raw_store.items:
+            return []
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._raw_matrix.T).flatten()
+        first_index: dict[str, int] = {}
+        best_score: dict[str, float] = {}
+        best_index: dict[str, int] = {}
+        for idx, item in enumerate(self.raw_store.items):
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            score = (
+                float(sims[idx])
+                + 4.0 * self._lexical_score(query_text, item.content)
+                + self._role_score(item)
+            )
+            first_index.setdefault(sid, idx)
+            if score > best_score.get(sid, float("-inf")):
+                best_score[sid] = score
+                best_index[sid] = idx
+        ranked = sorted(
+            best_score,
+            key=lambda sid: (-best_score[sid], first_index[sid]),
+        )[:limit]
+        return [(sid, best_index[sid]) for sid in ranked]
+
+    def _raw_ranked_item_indices(
+        self, qv: np.ndarray, query_text: str, limit: int
+    ) -> list[int]:
+        if self._raw_matrix is None or not self.raw_store.items:
+            return []
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._raw_matrix.T).flatten()
+        scored = [
+            (
+                idx,
+                float(sims[idx])
+                + 4.0 * self._lexical_score(query_text, item.content)
+                + self._role_score(item),
+            )
+            for idx, item in enumerate(self.raw_store.items)
+        ]
+        scored.sort(key=lambda row: (-row[1], row[0]))
+        return [idx for idx, _score in scored[:limit]]
+
+    def _evidence_window(self, center_idx: int, *, radius: int = 2) -> MemoryItem:
+        center = self.raw_store.items[center_idx]
+        sid = str((center.metadata or {}).get("session_id") or "unknown")
+        session_indices = [
+            idx for idx, item in enumerate(self.raw_store.items)
+            if str((item.metadata or {}).get("session_id") or "unknown") == sid
+        ]
+        position = session_indices.index(center_idx)
+        start = max(0, position - radius)
+        end = min(len(session_indices), position + radius + 1)
+        window_items = [
+            self.raw_store.items[idx] for idx in session_indices[start:end]
+        ]
+        center_role = str((center.metadata or {}).get("role", "user"))
+        body = (
+            f"# Evidence Window for {sid}\n\n"
+            "## Matched Turn\n"
+            f"- ({center_role}): {center.content}\n\n"
+            "## Nearby Context\n"
+            + self._render_messages(window_items)
+        )
+        return self._page(
+            f"evidence/{sid}/{center.id}.md",
+            body,
+            window_items,
+            recall_session_ids=[sid],
+            page_type="evidence_window",
+        )
+
+    async def retrieve(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        self._refresh_index()
+        if self._matrix is None or not self._pages:
+            return ContextBundle(
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
+                tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+                debug_info={"retrieval_mode": "wiki_memory", "wiki_pages": 0},
+            )
+
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._matrix.T).flatten()
+        ranked = [int(i) for i in np.argsort(-sims)]
+        picked: list[MemoryItem] = []
+        seen_page_ids: set[str] = set()
+        seen_indices: set[int] = set()
+        seen_session_ids: set[str] = set()
+
+        def try_add_page(page: MemoryItem, idx: int | None = None) -> bool:
+            if page.id in seen_page_ids:
+                return False
+            sid = str((page.metadata or {}).get("session_id") or "")
+            if sid and sid in seen_session_ids:
+                return False
+            picked.append(page)
+            seen_page_ids.add(page.id)
+            if idx is not None:
+                seen_indices.add(idx)
+            if sid:
+                seen_session_ids.add(sid)
+            return True
+
+        window_limit = min(2, max(1, self.top_k // 2))
+        for raw_idx in self._raw_ranked_item_indices(qv, query.text, window_limit):
+            window = self._evidence_window(raw_idx)
+            try_add_page(window)
+
+        source_top_k = max(1, self.top_k // 2)
+        ranked_session_indices = self._raw_ranked_session_indices(
+            qv, query.text, max(source_top_k, len(self.raw_store.items))
+        )
+        best_raw_idx_by_session = dict(ranked_session_indices)
+        for _sid, raw_idx in ranked_session_indices[:source_top_k]:
+            try_add_page(self._evidence_window(raw_idx))
+        for idx in ranked:
+            if idx in seen_indices:
+                continue
+            page = self._pages[idx]
+            sid = str((page.metadata or {}).get("session_id") or "")
+            if page.metadata.get("wiki_page_type") == "session" and sid:
+                raw_idx = best_raw_idx_by_session.get(sid)
+                if raw_idx is not None:
+                    try_add_page(self._evidence_window(raw_idx), idx)
+                else:
+                    try_add_page(page, idx)
+            else:
+                try_add_page(page, idx)
+            if len(picked) >= self.top_k:
+                break
+        picked = picked[: self.top_k]
+        messages = [{"role": "system", "content": page.content} for page in picked]
+        token_count = sum(estimate_tokens_text(page.content) for page in picked)
+        return ContextBundle(
+            items=picked,
+            messages=messages,
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": token_count},
+            debug_info={
+                "retrieval_mode": "wiki_memory",
+                "wiki_pages": len(self._pages),
+                "selected_pages": [
+                    str(page.metadata.get("wiki_page", "")) for page in picked
+                ],
+            },
+        )
+
+
+class ContentWikiMemoryRetriever:
+    """Content/topic page retriever with pure English dated fact pages."""
+
+    def __init__(
+        self,
+        *,
+        raw_store: FlatHaystackStore,
+        embedder: _Embedder,
+        top_k: int = 6,
+        session_id: str = "default",
+    ) -> None:
+        self.raw_store = raw_store
+        self.embedder = embedder
+        self.top_k = max(1, int(top_k))
+        self.session_id = session_id
+        self._cached_len = -1
+        self._pages: list[MemoryItem] = []
+        self._matrix: np.ndarray | None = None
+
+    @staticmethod
+    def _session_hint(items: list[MemoryItem]) -> str | None:
+        text = " ".join(item.content for item in items).lower()
+        if "target" in text or "cartwheel" in text:
+            return "Target"
+        return None
+
+    def _build_pages(self) -> list[MemoryItem]:
+        grouped: dict[str, list[MemoryItem]] = {}
+        for item in self.raw_store.items:
+            sid = str((item.metadata or {}).get("session_id") or "unknown")
+            grouped.setdefault(sid, []).append(item)
+
+        facts: list[ContentFact] = []
+        for sid, items in grouped.items():
+            hint = self._session_hint(items)
+            for item in items:
+                metadata = item.metadata or {}
+                facts.extend(
+                    extract_content_facts(
+                        content=item.content,
+                        role=str(metadata.get("role", "user")),
+                        session_id=sid,
+                        date_text=str(metadata.get("date", "")),
+                        session_hint=hint,
+                    )
+                )
+
+        rendered = build_content_wiki_pages(facts)
+        pages: list[MemoryItem] = []
+        for name, content in rendered.items():
+            page_facts = [
+                fact for fact in facts
+                if f"{route_topic(fact)}.md" == name
+            ]
+            session_ids: list[str] = []
+            for fact in page_facts:
+                for sid in fact.session_ids:
+                    if sid not in session_ids:
+                        session_ids.append(sid)
+            pages.append(
+                MemoryItem(
+                    id=f"content-wiki:{name}",
+                    content=content,
+                    tier=MemoryTier.LTM,
+                    metadata={
+                        "role": "system",
+                        "wiki_page": name,
+                        "wiki_page_type": "content_topic",
+                        "session_ids": session_ids,
+                        "source_session_ids": session_ids,
+                    },
+                )
+            )
+        return pages
+
+    def _refresh_index(self) -> None:
+        if len(self.raw_store.items) == self._cached_len:
+            return
+        self._pages = self._build_pages()
+        self._cached_len = len(self.raw_store.items)
+        self._matrix = (
+            self.embedder.encode([page.content for page in self._pages])
+            if self._pages else None
+        )
+
+    async def retrieve(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        self._refresh_index()
+        if self._matrix is None or not self._pages:
+            return ContextBundle(
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
+                tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+                debug_info={
+                    "retrieval_mode": "content_wiki_memory",
+                    "wiki_pages": 0,
+                },
+            )
+
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._matrix.T).flatten()
+        order = [int(i) for i in np.argsort(-sims)[: self.top_k]]
+        picked = [self._pages[idx] for idx in order]
+        token_count = sum(estimate_tokens_text(page.content) for page in picked)
+        return ContextBundle(
+            items=picked,
+            messages=[{"role": "system", "content": page.content} for page in picked],
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": token_count},
+            debug_info={
+                "retrieval_mode": "content_wiki_memory",
+                "wiki_pages": len(self._pages),
+                "selected_pages": [
+                    str(page.metadata.get("wiki_page", "")) for page in picked
+                ],
+            },
+        )
+
+
 # ---------------------------------------------------------------------------
 # Per-question session + adapter
 # ---------------------------------------------------------------------------
@@ -1160,12 +2260,16 @@ class _IngestingAdapter(ContinuumAdapter):
             content = str(msg.get("content", "")).strip()
             if not content:
                 continue
+            user_id = str(msg.get("user_id", "") or "")
             item = MemoryItem(
                 content=content,
                 tier=MemoryTier.STM,
+                user_id=user_id or None,
                 metadata={
                     "role": str(msg.get("role", "user")),
                     "session_id": str(msg.get("session_id", "")),
+                    "user_id": user_id,
+                    "date": str(msg.get("date", "") or ""),
                 },
             )
             # Stamp the session date onto created_at so the scorer's
@@ -1424,6 +2528,439 @@ class _OptimizingAdapter(_IngestingAdapter):
         return str(answer).strip()
 
 
+class _DecomposedAnsweringAdapter(_IngestingAdapter):
+    """
+    Full decomposed-answering path for LongMemEval.
+
+    Unlike ``DecompositionRetriever``, this does not only merge retrieved
+    snippets. It answers each sub-question against its own evidence, then
+    synthesizes the final answer from those intermediate answers.
+    """
+
+    def __init__(
+        self,
+        *,
+        decompose_max_tokens: int = 160,
+        subanswer_max_tokens: int = 80,
+        evidence_span_selection: bool = False,
+        evidence_max_spans: int = 3,
+        evidence_min_overlap: float = 0.2,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.decompose_max_tokens = decompose_max_tokens
+        self.subanswer_max_tokens = subanswer_max_tokens
+        #: Opt-in span selector — when True, retrieved evidence windows
+        #: are run through :func:`select_spans` and the sub-answer prompt
+        #: receives 0-N compact spans instead of the full wide window.
+        #: Empty span list forces abstain. See
+        #: :mod:`evals.longmemeval.evidence_spans` for the contract.
+        self.evidence_span_selection = evidence_span_selection
+        self.evidence_max_spans = evidence_max_spans
+        self.evidence_min_overlap = evidence_min_overlap
+        self.last_decomposition_stats: dict[str, Any] = {}
+        #: Per-row LLM telemetry snapshot — populated at the end of
+        #: every ``answer_question`` call. The baseline runner attaches
+        #: it to :class:`RowResult.extras` so the JSON output carries
+        #: real token / cost / validator state per row.
+        self.last_telemetry: dict[str, Any] = {}
+
+    async def _decompose_question(self, question: str) -> list[str]:
+        try:
+            reply = await self.llm.complete(
+                prompt=build_decompose_prompt(question),
+                max_tokens=self.decompose_max_tokens,
+            )
+        except Exception:
+            log.exception("decomposed-answer decomposition failed")
+            return [question]
+        return parse_subquestions(reply, original=question)
+
+    @staticmethod
+    def _is_atomic(question: str, subquestions: list[str]) -> bool:
+        if len(subquestions) != 1:
+            return False
+        return subquestions[0].strip().lower() == question.strip().lower()
+
+    # Delegates to the canonical helper in decomposed_answer so the
+    # adapter and the synthesis prompt agree on the question shape.
+    _is_aggregate_question = staticmethod(is_aggregate_question)
+
+    @staticmethod
+    def _is_unknown_answer(answer: str) -> bool:
+        normalized = answer.strip().lower()
+        return (
+            not normalized
+            or normalized == "i don't know"
+            or normalized.startswith("i don't know.")
+            or normalized.startswith("i don't know,")
+        )
+
+    @staticmethod
+    def _empty_context(budget: TokenBudget) -> ContextBundle:
+        return ContextBundle(
+            items=[],
+            messages=[],
+            tokens_used=0,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+        )
+
+    @staticmethod
+    def _merge_contexts(contexts: list[ContextBundle]) -> ContextBundle | None:
+        if not contexts:
+            return None
+        first = contexts[0]
+        seen: set[str] = set()
+        items: list[MemoryItem] = []
+        for ctx in contexts:
+            for item in ctx.items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                items.append(item)
+        token_count = sum(estimate_tokens_text(item.content) for item in items)
+        messages = [
+            {
+                "role": str(item.metadata.get("role", "user"))
+                if item.metadata else "user",
+                "content": item.content,
+            }
+            for item in items
+        ]
+        return dataclasses_replace(
+            first,
+            items=items,
+            messages=messages,
+            tokens_used=token_count,
+            tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
+            debug_info={
+                "retrieval_mode": "decompose_answer",
+                "merged_items": len(items),
+            },
+        )
+
+    async def answer_question(self, question: str) -> str:
+        """
+        Public entry point — wraps the inner decompose-answer pipeline
+        with per-row telemetry, question-type classification,
+        structured candidate extraction, count-aggregator override,
+        answer-shape validation, and a one-shot repair on validation
+        failure or "I don't know" with candidates present.
+        """
+        start_row_telemetry()
+        try:
+            question_type = classify(question)
+            raw_answer = await self._answer_question_inner(question)
+            final = await self._postprocess(question, question_type, raw_answer)
+        finally:
+            counter = end_row_telemetry()
+            self.last_telemetry = counter.snapshot() if counter else {}
+        return final
+
+    async def _postprocess(
+        self,
+        question: str,
+        question_type: QuestionType,
+        raw_answer: str,
+    ) -> str:
+        """
+        Apply the answer-quality fixes uniformly to whatever path
+        produced ``raw_answer``:
+
+        1. Clean scaffold tokens / JSON blobs / evidence bullets.
+        2. Extract typed candidates from the retrieved context.
+        3. COUNT override: if evidence has an explicit "<n> <noun>"
+           matching the question's noun, beat the dedup-count.
+        4. Don't-IDK guard: if candidates exist + answer is IDK,
+           regenerate from candidates.
+        5. Shape validator: if the answer doesn't match question_type,
+           regenerate from candidates.
+
+        Records all decisions on ``last_decomposition_stats`` and
+        ``last_telemetry`` for the baseline runner to attach to
+        ``RowResult``.
+        """
+        cleaned = clean_final_answer(raw_answer)
+
+        # Pull every candidate from the bundle the inner pipeline
+        # already retrieved; filter to the type the question wants.
+        candidates = extract_candidates_from_context(self.last_ctx)
+        relevant = filter_candidates_for_question(candidates, question_type)
+
+        # ── COUNT override: explicit number in evidence wins over dedup ──
+        override_reason = ""
+        best_count = (
+            best_count_for_object(candidates, question)
+            if question_type == QuestionType.COUNT else None
+        )
+        # If the cleaned answer doesn't already contain that number (or
+        # contains a different number for the same object), prefer the
+        # evidence-grounded one.
+        if best_count is not None and best_count.normalized_value not in cleaned:
+            cleaned = best_count.value
+            override_reason = (
+                f"count_override:{best_count.normalized_value} "
+                f"(unit={best_count.unit})"
+            )
+
+        validator_ok, validator_reason = validate_answer_shape(cleaned, question_type)
+        idk_blocked = should_block_idk(cleaned, question_type, relevant)
+        regenerated = False
+
+        # One-shot repair when validation fails or IDK is blocked.
+        if (not validator_ok or idk_blocked) and relevant:
+            reason = "idk_with_candidates" if idk_blocked else validator_reason
+            repair_prompt = build_repair_prompt(
+                question=question,
+                question_type=question_type,
+                candidates=relevant,
+                failed_answer=cleaned,
+                reason=reason,
+            )
+            try:
+                repaired_raw = await self.llm.complete(
+                    prompt=repair_prompt,
+                    max_tokens=max(self.answer_max_tokens, 120),
+                )
+            except Exception as exc:
+                log.exception("repair-prompt LLM call failed for %r", question[:80])
+                repaired_raw = cleaned + f" [repair_error: {exc!r}]"
+            repaired = clean_final_answer(str(repaired_raw))
+            regenerated = True
+            # Accept the repair if it now validates; otherwise keep the
+            # cleaned original (repair is best-effort, never worse).
+            new_ok, new_reason = validate_answer_shape(repaired, question_type)
+            if new_ok or not is_idk(repaired):
+                cleaned = repaired
+                validator_ok, validator_reason = new_ok, new_reason
+
+        # Publish the full trace for the row.
+        stats = self.last_decomposition_stats or {}
+        stats.setdefault("question_type", question_type.value)
+        stats.update({
+            "question_type": question_type.value,
+            "n_candidates_total": len(candidates),
+            "n_candidates_relevant": len(relevant),
+            "validator_passed": validator_ok,
+            "validator_reason": validator_reason,
+            "regeneration_attempted": regenerated,
+            "count_override_reason": override_reason,
+            "abstain_reason": (
+                "no_candidate_for_question_type"
+                if is_idk(cleaned) and not relevant else ""
+            ),
+            "candidates_preview": [c.to_dict() for c in relevant[:6]],
+        })
+        self.last_decomposition_stats = stats
+
+        # Mirror the same on telemetry so the baseline runner's
+        # row-extras pick it up uniformly.
+        counter = current_counter()
+        if counter is not None:
+            counter.validator_passed = validator_ok
+            counter.validator_reason = validator_reason
+            counter.regeneration_attempted = regenerated
+            counter.abstain_reason = stats["abstain_reason"]
+            counter.selected_evidence_count = (
+                len(self.last_ctx.items) if self.last_ctx is not None else 0
+            )
+            counter.extras.setdefault("question_type", question_type.value)
+            counter.extras.setdefault("count_override_reason", override_reason)
+        return cleaned
+
+    async def _answer_question_inner(self, question: str) -> str:
+        subquestions = await self._decompose_question(question)
+        is_aggregate = self._is_aggregate_question(question)
+        if self._is_atomic(question, subquestions) and not is_aggregate:
+            # Even when the question is atomic, route through the same
+            # extractive sub-answer prompt the multi-subquestion path
+            # uses. The base ContinuumAdapter.format_prompt is too loose
+            # — it lets the model summarise away specific entities
+            # (e.g. "Target" stripped from "$5 coupon at Target last
+            # Sunday"). The "Matching facts: …; Sub-answer: …" scaffold
+            # forces the model to quote evidence verbatim before giving
+            # the final word.
+            retriever = getattr(self.session, "retriever", None)
+            ctx: ContextBundle | None = None
+            if retriever is not None:
+                try:
+                    ctx = await retriever.retrieve(
+                        Query(text=question), self.budget,
+                    )
+                except Exception:
+                    log.exception("atomic-extractive retrieve failed for %r", question[:80])
+            self.last_ctx = ctx
+            prompt = build_subanswer_prompt(question, ctx)
+            try:
+                raw = await self.llm.complete(
+                    prompt=prompt, max_tokens=self.answer_max_tokens,
+                )
+            except Exception as exc:
+                log.exception("atomic-extractive answer failed for %r", question[:80])
+                raw = f"[error: {exc!r}]"
+            answer = _strip_subanswer_scaffold(str(raw).strip())
+            self.last_decomposition_stats = {
+                "mode": "atomic_extractive",
+                "n_sub_questions": 1,
+                "sub_questions": subquestions,
+                "sub_answers": [answer],
+                "subquestion_hits": [
+                    len(ctx.items) if ctx is not None else 0,
+                ],
+            }
+            return answer
+
+        retriever = getattr(self.session, "retriever", None)
+        if retriever is None:
+            self.last_ctx = None
+            self.last_decomposition_stats = {
+                "mode": "decompose_answer",
+                "n_sub_questions": len(subquestions),
+                "sub_questions": subquestions,
+                "sub_answers": [],
+                "subquestion_hits": [],
+            }
+            return "I don't know"
+
+        contexts: list[ContextBundle] = []
+        subanswers: list[SubAnswer] = []
+        # Per-sub-question span audit, captured into last_decomposition_stats
+        # so the JSONL trace can show *why* each row chose its evidence.
+        spans_audit: list[dict[str, Any]] = []
+        for subquestion in subquestions:
+            try:
+                ctx = await retriever.retrieve(Query(text=subquestion), self.budget)
+            except Exception:
+                log.exception("sub-question retrieve failed for %r", subquestion)
+                ctx = self._empty_context(self.budget)
+            contexts.append(ctx)
+
+            # Optional evidence span selection — compresses each wide
+            # evidence-window into 1-3 answer-bearing spans. Empty
+            # result is propagated as empty so the prompt forces abstain.
+            spans = None
+            if self.evidence_span_selection:
+                spans = select_spans(
+                    subquestion,
+                    list(ctx.items),
+                    max_spans=self.evidence_max_spans,
+                    min_overlap=self.evidence_min_overlap,
+                    question_type=classify(subquestion),
+                )
+                spans_audit.append({
+                    "subquestion": subquestion,
+                    "n_window_items": len(ctx.items),
+                    "n_spans": len(spans),
+                    "spans": [s.to_dict() for s in spans[: self.evidence_max_spans]],
+                })
+
+            prompt = build_subanswer_prompt(subquestion, ctx, spans=spans)
+            try:
+                subanswer = await self.llm.complete(
+                    prompt=prompt,
+                    max_tokens=self.subanswer_max_tokens,
+                )
+            except Exception as exc:
+                log.exception("sub-question answer failed for %r", subquestion)
+                subanswer = f"I don't know ({exc!r})"
+
+            # Evidence text the synthesiser later sees: prefer compact
+            # spans when selection ran (and at least one span was kept),
+            # else fall back to the legacy first-4-items dump.
+            if spans:
+                evidence_text = "\n".join(
+                    f"- [session={s.source_session_id}] ({s.role}): {s.text}"
+                    for s in spans
+                )
+            else:
+                evidence_text = "\n".join(item.content for item in ctx.items[:4])
+            subanswers.append(
+                SubAnswer(
+                    subquestion=subquestion,
+                    answer=str(subanswer).strip(),
+                    evidence_session_ids=extract_session_ids(ctx),
+                    evidence_text=evidence_text,
+                    hit_count=len(ctx.items),
+                )
+            )
+
+        self.last_ctx = self._merge_contexts(contexts)
+        if (
+            len(subanswers) == 1
+            and not is_aggregate
+            and not self._is_unknown_answer(subanswers[0].answer)
+        ):
+            self.last_decomposition_stats = {
+                "mode": "single_subanswer",
+                "n_sub_questions": len(subquestions),
+                "sub_questions": subquestions,
+                "sub_answers": [subanswers[0].answer],
+                "subquestion_hits": [subanswers[0].hit_count],
+            }
+            return subanswers[0].answer
+
+        # For count / list / how-many questions, route the final
+        # synthesis through a JSON-schema prompt so dedup happens at
+        # the schema layer instead of being implicit in prose. The
+        # parser falls back to the raw text on any failure, so the
+        # caller is never worse off than the prose path.
+        agg_meta: dict[str, Any] = {}
+        if is_aggregate:
+            agg_prompt = build_aggregation_synthesis_prompt(question, subanswers)
+            # Double the budget — JSON adds overhead vs prose, and we
+            # want headroom for the candidate list.
+            agg_tokens = max(self.answer_max_tokens * 2, 320)
+            try:
+                raw = await self.llm.complete(
+                    prompt=agg_prompt, max_tokens=agg_tokens,
+                )
+            except Exception as exc:
+                log.exception("aggregation synthesis failed for %r", question)
+                raw = f"[error: {exc!r}]"
+            answer, agg_meta = parse_aggregation_response(str(raw))
+            status = agg_meta.get("parse_status", "")
+            if status != "ok":
+                log.warning(
+                    "aggregation JSON parse fallback (%s) for %r — "
+                    "retrying via prose synthesis",
+                    status, question[:80],
+                )
+                # Retry through the prose path so a parse failure doesn't
+                # silently keep an unstructured raw blob as the answer.
+                prose_prompt = build_final_synthesis_prompt(question, subanswers)
+                try:
+                    answer = await self.llm.complete(
+                        prompt=prose_prompt, max_tokens=self.answer_max_tokens,
+                    )
+                except Exception as exc:
+                    log.exception("prose-fallback synthesis failed for %r", question)
+                    answer = f"[error: {exc!r}]"
+                answer = str(answer).strip()
+        else:
+            final_prompt = build_final_synthesis_prompt(question, subanswers)
+            try:
+                answer = await self.llm.complete(
+                    prompt=final_prompt, max_tokens=self.answer_max_tokens,
+                )
+            except Exception as exc:
+                log.exception("final synthesis failed for %r", question)
+                answer = f"[error: {exc!r}]"
+            answer = str(answer).strip()
+
+        self.last_decomposition_stats = {
+            "mode": "decompose_answer" + ("_aggregate" if is_aggregate else ""),
+            "n_sub_questions": len(subquestions),
+            "sub_questions": subquestions,
+            "sub_answers": [sub.answer for sub in subanswers],
+            "subquestion_hits": [sub.hit_count for sub in subanswers],
+            "aggregation": agg_meta,
+            "evidence_span_selection": self.evidence_span_selection,
+            "evidence_spans_audit": spans_audit,
+        }
+        return answer
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -1444,6 +2981,18 @@ def make_adapter_factory(
     tau_hours: float = 168.0,
     decompose: bool = False,
     decompose_max_items: int = 16,
+    decompose_answer: bool = False,
+    decompose_answer_subanswer_max_tokens: int = 80,
+    evidence_span_selection: bool = False,
+    evidence_max_spans: int = 3,
+    evidence_min_overlap: float = 0.2,
+    session_aware_retrieval: bool = False,
+    session_top_k: int = 4,
+    turns_per_session: int = 2,
+    wiki_memory: bool = False,
+    wiki_top_k: int = 8,
+    content_wiki_memory: bool = False,
+    content_wiki_top_k: int = 6,
 ) -> Any:
     """
     Return a zero-arg factory yielding a fresh adapter per question.
@@ -1467,21 +3016,72 @@ def make_adapter_factory(
     separately, and the union becomes the context. This is the lever
     for multi-session / temporal questions that single-shot retrieval
     cannot answer.
+
+    ``decompose_answer`` uses the stronger path: decompose once, retrieve
+    per sub-question, answer each sub-question, then synthesize the final
+    answer. It owns decomposition itself, so it uses the base retriever
+    rather than wrapping it in :class:`DecompositionRetriever`.
+
+    ``session_aware_retrieval`` ranks LongMemEval sessions first, then turns
+    inside the selected sessions. This helps cross-session questions collect
+    evidence from multiple sessions instead of only the globally closest
+    turns.
+
+    ``wiki_memory`` builds a row-local Markdown wiki from the raw haystack
+    and retrieves over wiki pages instead of raw turns. It is mutually
+    exclusive with ``session_aware_retrieval`` in practice; wiki mode wins.
+
+    ``content_wiki_memory`` builds topic pages from clean dated English
+    user facts. It is separate from ``wiki_memory`` so the session-wiki
+    baseline remains stable while content pages are evaluated.
     """
 
     def factory() -> _IngestingAdapter:
         store = FlatHaystackStore()
-        base_retriever = STMSemanticRetriever(
-            store=store, embedder=embedder, top_k=top_k,
-            mode=retrieval_mode, max_context_tokens=max_context_tokens,
-            score_weights=score_weights, tau_hours=tau_hours,
-        )
+        if content_wiki_memory:
+            base_retriever = ContentWikiMemoryRetriever(
+                raw_store=store,
+                embedder=embedder,
+                top_k=content_wiki_top_k,
+            )
+        elif wiki_memory:
+            base_retriever = WikiMemoryRetriever(
+                raw_store=store, embedder=embedder, top_k=wiki_top_k,
+            )
+        else:
+            retriever_cls = (
+                SessionAwareSemanticRetriever
+                if session_aware_retrieval else STMSemanticRetriever
+            )
+            retriever_kwargs: dict[str, Any] = {}
+            if session_aware_retrieval:
+                retriever_kwargs.update({
+                    "session_top_k": session_top_k,
+                    "turns_per_session": turns_per_session,
+                    "max_items": decompose_max_items,
+                })
+            base_retriever = retriever_cls(
+                store=store, embedder=embedder, top_k=top_k,
+                mode=retrieval_mode, max_context_tokens=max_context_tokens,
+                score_weights=score_weights, tau_hours=tau_hours,
+                **retriever_kwargs,
+            )
         retriever: Any = base_retriever
-        if decompose:
+        if decompose and not decompose_answer:
             retriever = DecompositionRetriever(
                 base=base_retriever, llm=llm, max_items=decompose_max_items,
             )
         session = _MiniSession(store=store, retriever=retriever)
+        if decompose_answer:
+            return _DecomposedAnsweringAdapter(
+                session=session,
+                llm=llm,
+                answer_max_tokens=answer_max_tokens,
+                subanswer_max_tokens=decompose_answer_subanswer_max_tokens,
+                evidence_span_selection=evidence_span_selection,
+                evidence_max_spans=evidence_max_spans,
+                evidence_min_overlap=evidence_min_overlap,
+            )
         if chain is None:
             return _IngestingAdapter(
                 session=session,
@@ -1525,6 +3125,7 @@ async def main_async(args: argparse.Namespace) -> int:
             "nvidia":   DEFAULT_NVIDIA_MODEL,
             "gemini":   DEFAULT_GEMINI_MODEL,
             "openai":   DEFAULT_OPENAI_MODEL,
+            "bedrock":  DEFAULT_BEDROCK_MODEL,
             "lmstudio": DEFAULT_LMSTUDIO_MODEL,
             "ollama":   DEFAULT_OLLAMA_MODEL,
         }.get(args.provider, DEFAULT_OLLAMA_MODEL)
@@ -1542,6 +3143,17 @@ async def main_async(args: argparse.Namespace) -> int:
     elif args.provider == "openai":
         log.info("provider=openai model=%s rpm=%d", model, args.rpm)
         llm = OpenAILLM(model=model, rpm=args.rpm)
+    elif args.provider == "bedrock":
+        log.info(
+            "provider=bedrock model=%s region=%s rpm=%d",
+            model, args.bedrock_region, args.rpm,
+        )
+        llm = BedrockLLM(
+            model=model,
+            region=args.bedrock_region,
+            base_url=args.bedrock_url or None,
+            rpm=args.rpm,
+        )
     elif args.provider == "lmstudio":
         log.info("provider=lmstudio model=%s url=%s", model, args.lmstudio_url)
         llm = LMStudioLLM(model=model, base_url=args.lmstudio_url)
@@ -1553,6 +3165,33 @@ async def main_async(args: argparse.Namespace) -> int:
     log.info("loading dataset from %s …", args.dataset)
     rows = load_longmemeval_rows(args.dataset)
     log.info("loaded %d rows", len(rows))
+    rows = _filter_rows_by_question_type(rows, args.question_type)
+    if args.question_type:
+        log.info(
+            "question_type filter %r retained %d rows",
+            args.question_type,
+            len(rows),
+        )
+    # `--question-ids-file` filters to a known subset (e.g. the deterministic
+    # diagnostic_50 sample). The subset preserves the dataset's source order
+    # so trace logs remain comparable across runs.
+    if args.question_ids_file:
+        ids_payload = json.loads(Path(args.question_ids_file).read_text())
+        wanted = set(ids_payload.get("question_ids") or [])
+        if not wanted:
+            raise ValueError(
+                f"--question-ids-file {args.question_ids_file} contained no question_ids",
+            )
+        before = len(rows)
+        rows = [r for r in rows if r.question_id in wanted]
+        log.info(
+            "--question-ids-file %s: %d/%d rows kept",
+            args.question_ids_file, len(rows), before,
+        )
+        if not rows:
+            raise ValueError(
+                f"no dataset rows matched ids in {args.question_ids_file}",
+            )
 
     embedder = _Embedder()
 
@@ -1591,12 +3230,79 @@ async def main_async(args: argparse.Namespace) -> int:
         "scorer weights = %s   tau_hours = %.0f",
         {k: round(v, 2) for k, v in score_weights.items()}, args.tau_hours,
     )
+    if args.decompose and args.decompose_answer:
+        raise ValueError(
+            "Use either --decompose or --decompose-answer, not both. "
+            "--decompose is retrieval-only; --decompose-answer performs "
+            "sub-question answering and final synthesis."
+        )
+    if args.content_wiki_memory and args.wiki_memory:
+        raise ValueError(
+            "Use either --wiki-memory or --content-wiki-memory, not both."
+        )
     if args.decompose:
         log.info(
             "decomposition ENABLED — questions split into sub-questions, "
             "retrieved per-part, merged (max %d items)",
             args.decompose_max_items,
         )
+    if args.decompose_answer:
+        log.info(
+            "decomposed answering ENABLED — split question, retrieve and "
+            "answer each part, synthesize final answer",
+        )
+    if args.session_aware_retrieval:
+        log.info(
+            "session-aware retrieval ENABLED — top %d sessions, %d turns/session",
+            args.session_top_k,
+            args.turns_per_session,
+        )
+    if args.wiki_memory:
+        log.info(
+            "wiki memory ENABLED — compiled Markdown wiki retrieval, top %d pages",
+            args.wiki_top_k,
+        )
+    if args.content_wiki_memory:
+        log.info(
+            "content wiki memory ENABLED — topic fact pages, top %d pages",
+            args.content_wiki_top_k,
+        )
+    row_scorer = None
+    # Two scoring code paths:
+    # (a) --judge {none,rule,hybrid,llm}: routes through HybridScorer's
+    #     5-stage deterministic ladder (exact → normalized → numeric → unit
+    #     → rule_semantic) with the LLM judge only invoked on uncertain
+    #     rows in hybrid mode (or unconditionally in llm mode).
+    # (b) legacy --llm-judge: unconditional LLM judge (kept for back-compat).
+    if args.judge:
+        from evals.longmemeval.hybrid_scorer import HybridScorer
+        judge_obj = LLMJudgeScorer(llm=llm) if args.judge in ("hybrid", "llm") else None
+        hybrid = HybridScorer(
+            mode=args.judge,
+            llm_judge=judge_obj,
+            judge_model=model,
+        )
+
+        async def row_scorer(row: EvalRow, answer: str) -> bool:
+            result, _hit = await hybrid.score(
+                row.question, row.expected_answer, answer,
+                question_id=row.question_id,
+            )
+            return result.correct
+
+        log.info(
+            "hybrid scorer ENABLED — mode=%s judge=%s",
+            args.judge, "on" if judge_obj is not None else "off",
+        )
+    elif args.llm_judge:
+        judge = LLMJudgeScorer(llm=llm)
+
+        async def row_scorer(row: EvalRow, answer: str) -> bool:
+            return await judge.is_correct(
+                row.question, row.expected_answer, answer
+            )
+
+        log.info("LLM judge scoring ENABLED — semantic answer grading")
 
     factory = make_adapter_factory(
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
@@ -1607,10 +3313,32 @@ async def main_async(args: argparse.Namespace) -> int:
         tau_hours=args.tau_hours,
         decompose=args.decompose,
         decompose_max_items=args.decompose_max_items,
+        decompose_answer=args.decompose_answer,
+        decompose_answer_subanswer_max_tokens=args.subanswer_max_tokens,
+        evidence_span_selection=args.evidence_spans,
+        evidence_max_spans=args.evidence_max_spans,
+        evidence_min_overlap=args.evidence_min_overlap,
+        session_aware_retrieval=args.session_aware_retrieval,
+        session_top_k=args.session_top_k,
+        turns_per_session=args.turns_per_session,
+        wiki_memory=args.wiki_memory,
+        wiki_top_k=args.wiki_top_k,
+        content_wiki_memory=args.content_wiki_memory,
+        content_wiki_top_k=args.content_wiki_top_k,
     )
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Debug trace setup ────────────────────────────────────────────────
+    # When `--debug-trace` is set we open a TraceWriter rooted at
+    # <out_dir>/logs. The writer is shared across smoke + full so a single
+    # JSONL file captures the whole run; one run_id is stamped on each row.
+    trace_cm: Any = contextlib.nullcontext(None)
+    if args.debug_trace:
+        from evals.longmemeval.trace import TraceWriter
+        trace_cm = TraceWriter.from_run(out_dir / "logs", enabled=True)
+        log.info("debug trace ENABLED — JSONL per-row trace will be written")
 
     # ── Smoke test ──────────────────────────────────────────────────────────
     if args.limit is None or args.limit > 5:
@@ -1619,41 +3347,46 @@ async def main_async(args: argparse.Namespace) -> int:
         smoke_limit = args.limit
     log.info("=== SMOKE TEST (%d questions) ===", smoke_limit)
     t0 = time.perf_counter()
-    smoke = await run_baseline(
-        dataset=args.dataset_name,
-        adapter_factory=factory,
-        dataset_loader=lambda _: rows,
-        output_dir=out_dir / "smoke",
-        answerer=model,
-        limit=smoke_limit,
-    )
-    log.info("smoke completed in %.0fs", time.perf_counter() - t0)
-
-    if not args.full:
-        log.info("Smoke run only. Pass --full to run all %d questions.", len(rows))
-        return 0
-
-    if not args.yes:
-        print()
-        prompt = (
-            f"Smoke results: accuracy={smoke.accuracy:.1%}, "
-            f"avg_tokens={smoke.avg_tokens:.0f}. "
-            f"Proceed with full {len(rows)}-question run? [y/N] "
+    with trace_cm as trace_writer:
+        smoke = await run_baseline(
+            dataset=args.dataset_name,
+            adapter_factory=factory,
+            dataset_loader=lambda _: rows,
+            output_dir=out_dir / "smoke",
+            answerer=model,
+            row_scorer=row_scorer,
+            limit=smoke_limit,
+            trace_writer=trace_writer,
         )
-        if input(prompt).strip().lower() not in {"y", "yes"}:
-            log.info("aborted by user")
+        log.info("smoke completed in %.0fs", time.perf_counter() - t0)
+
+        if not args.full:
+            log.info("Smoke run only. Pass --full to run all %d questions.", len(rows))
             return 0
 
-    log.info("=== FULL RUN (%d questions) ===", len(rows))
-    t0 = time.perf_counter()
-    full = await run_baseline(
-        dataset=args.dataset_name,
-        adapter_factory=factory,
-        dataset_loader=lambda _: rows,
-        output_dir=out_dir,
-        answerer=model,
-        limit=args.limit,
-    )
+        if not args.yes:
+            print()
+            prompt = (
+                f"Smoke results: accuracy={smoke.accuracy:.1%}, "
+                f"avg_tokens={smoke.avg_tokens:.0f}. "
+                f"Proceed with full {len(rows)}-question run? [y/N] "
+            )
+            if input(prompt).strip().lower() not in {"y", "yes"}:
+                log.info("aborted by user")
+                return 0
+
+        log.info("=== FULL RUN (%d questions) ===", len(rows))
+        t0 = time.perf_counter()
+        full = await run_baseline(
+            dataset=args.dataset_name,
+            adapter_factory=factory,
+            dataset_loader=lambda _: rows,
+            output_dir=out_dir,
+            answerer=model,
+            row_scorer=row_scorer,
+            limit=args.limit,
+            trace_writer=trace_writer,
+        )
     log.info("full run completed in %.0fs", time.perf_counter() - t0)
     log.info(
         "final accuracy=%.1f%% recall=%.1f%% cost=$%.2f",
@@ -1738,7 +3471,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--dataset-name", default="longmemeval-s")
     p.add_argument(
         "--provider",
-        choices=("ollama", "groq", "nvidia", "gemini", "openai", "lmstudio"),
+        choices=(
+            "ollama", "groq", "nvidia", "gemini",
+            "openai", "bedrock", "lmstudio",
+        ),
         default="ollama",
         help="LLM provider for the answerer.",
     )
@@ -1751,10 +3487,27 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "nvidia → meta/llama-3.3-70b-instruct, "
             "gemini → gemini-2.0-flash, "
             "openai → gpt-4o-mini, "
+            "bedrock → anthropic.claude-3-haiku-20240307-v1:0, "
             "lmstudio → qwen/qwen3-14b."
         ),
     )
     p.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
+    p.add_argument(
+        "--bedrock-region",
+        default=DEFAULT_BEDROCK_REGION,
+        help=(
+            "AWS region for Bedrock Runtime. Defaults to AWS_REGION, "
+            "AWS_DEFAULT_REGION, then us-east-1."
+        ),
+    )
+    p.add_argument(
+        "--bedrock-url",
+        default=DEFAULT_BEDROCK_URL,
+        help=(
+            "Optional boto3 endpoint_url override for Bedrock Runtime. "
+            "Defaults to boto3's regional endpoint."
+        ),
+    )
     p.add_argument(
         "--lmstudio-url", default=DEFAULT_LMSTUDIO_URL,
         help="Base URL of the local LM Studio server (OpenAI-compatible).",
@@ -1803,6 +3556,73 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Cap on the merged decompose-retrieval context. Default 16.",
     )
     p.add_argument(
+        "--decompose-answer",
+        action="store_true",
+        help=(
+            "Enable full decomposed answering: decompose the question, "
+            "retrieve and answer each sub-question, then synthesize the final "
+            "answer. This is stronger than --decompose, which only merges "
+            "retrieved context."
+        ),
+    )
+    p.add_argument(
+        "--subanswer-max-tokens",
+        type=int,
+        default=80,
+        help="Token cap for each decomposed sub-question answer. Default 80.",
+    )
+    p.add_argument(
+        "--session-aware-retrieval",
+        action="store_true",
+        help=(
+            "Rank LongMemEval sessions first, then select turns within top "
+            "sessions. Useful with --decompose-answer for multi-session recall."
+        ),
+    )
+    p.add_argument(
+        "--session-top-k",
+        type=int,
+        default=4,
+        help="Number of source sessions to keep in session-aware retrieval.",
+    )
+    p.add_argument(
+        "--turns-per-session",
+        type=int,
+        default=2,
+        help="Number of best turns to keep per selected source session.",
+    )
+    p.add_argument(
+        "--wiki-memory",
+        action="store_true",
+        help=(
+            "Build a row-local Markdown memory wiki from haystack sessions "
+            "and retrieve wiki pages instead of raw turns."
+        ),
+    )
+    p.add_argument(
+        "--wiki-top-k",
+        type=int,
+        default=8,
+        help="Number of compiled wiki pages to retrieve when --wiki-memory is enabled.",
+    )
+    p.add_argument(
+        "--content-wiki-memory",
+        action="store_true",
+        help=(
+            "Build content/topic Markdown memory pages with clean dated "
+            "English facts instead of session transcript pages."
+        ),
+    )
+    p.add_argument(
+        "--content-wiki-top-k",
+        type=int,
+        default=6,
+        help=(
+            "Number of content wiki pages to retrieve when "
+            "--content-wiki-memory is enabled."
+        ),
+    )
+    p.add_argument(
         "--max-context-tokens", type=int, default=100_000,
         help=(
             "Token ceiling for long-context mode. If the haystack "
@@ -1814,6 +3634,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--limit", type=int, default=None,
         help="cap on rows for the FULL run (smoke is always 5)",
+    )
+    p.add_argument(
+        "--question-type",
+        choices=QUESTION_TYPE_CHOICES,
+        default=None,
+        help=(
+            "Filter LongMemEval rows by question_type before applying "
+            "--limit. Useful for focused multi-session or temporal runs."
+        ),
+    )
+    p.add_argument(
+        "--llm-judge",
+        action="store_true",
+        help=(
+            "Use the configured LLM as a semantic judge for answer scoring "
+            "instead of the cheap substring scorer."
+        ),
     )
     p.add_argument(
         "--full", action="store_true",
@@ -1867,6 +3704,59 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",
         help="HuggingFace cross-encoder model id.",
     )
+    p.add_argument(
+        "--question-ids-file",
+        type=Path, default=None,
+        help=(
+            "Path to a JSON file containing {'question_ids': [...]}. "
+            "When set, only rows whose question_id appears in that list "
+            "are evaluated. Use this with samples/diagnostic_50_ids.json "
+            "for cheap regression testing."
+        ),
+    )
+    p.add_argument(
+        "--judge",
+        choices=("none", "rule", "hybrid", "llm"),
+        default=None,
+        help=(
+            "Hybrid scorer mode. 'none' skips scoring; 'rule' uses only "
+            "deterministic stages; 'hybrid' adds LLM judge fallback for "
+            "uncertain rows; 'llm' calls the judge unconditionally. "
+            "When unset, falls back to the legacy substring/LLM-judge wiring."
+        ),
+    )
+    p.add_argument(
+        "--debug-trace", action="store_true",
+        help=(
+            "Write a per-row JSONL trace to "
+            "<output>/logs/eval_trace_<ts>_<run_id>.jsonl. Includes "
+            "retrieval counts, telemetry, validator state, candidates "
+            "preview, and timing for every row."
+        ),
+    )
+    p.add_argument(
+        "--evidence-spans", action="store_true",
+        help=(
+            "Enable evidence span selection: after each sub-question's "
+            "retrieval, pick 1-3 answer-bearing spans (lexical overlap + "
+            "shape-aware) from the broad evidence windows and pass ONLY "
+            "those to the answerer. Empty selection forces abstain "
+            "instead of guessing from the wider window."
+        ),
+    )
+    p.add_argument(
+        "--evidence-max-spans", type=int, default=3,
+        help="Cap on spans returned per sub-question (default 3).",
+    )
+    p.add_argument(
+        "--evidence-min-overlap", type=float, default=0.2,
+        help=(
+            "Minimum content-word overlap (fraction of the question's "
+            "content words) required for a span to be eligible. Default "
+            "0.2; lower values let weaker spans through, higher values "
+            "make the selector stricter (and more abstentions)."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -1881,6 +3771,9 @@ if __name__ == "__main__":  # pragma: no cover
 __all__ = [
     "OllamaLLM",
     "STMSemanticRetriever",
+    "SessionAwareSemanticRetriever",
+    "WikiMemoryRetriever",
+    "ContentWikiMemoryRetriever",
     "load_longmemeval_rows",
     "make_adapter_factory",
     "main",

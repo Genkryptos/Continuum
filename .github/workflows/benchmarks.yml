@@ -1,0 +1,115 @@
+# =============================================================================
+# .github/workflows/benchmarks.yml — Continuum memory-operation benchmarks
+# =============================================================================
+#
+# Runs the four Phase-3B benchmarks (ingest, retrieval, supersession,
+# bi-temporal) and gates the results against the contract thresholds
+# in scripts/check_bench_regressions.py. Catches any regression that
+# breaks the README's headline numbers — most importantly the 100 %
+# supersession and 20/20 bi-temporal claims.
+#
+# Triggers
+# --------
+#   • Weekly cron — every Monday at 06:00 UTC. Sentry over time.
+#   • Every push to main — catches regressions at merge time.
+#   • Manual workflow_dispatch — for ad-hoc verification.
+#
+# Outputs
+# -------
+#   • Artifact: bench/results/*.json from this run, retained 90 days.
+#   • Job status: green iff every threshold in
+#     scripts/check_bench_regressions.py holds.
+#
+# Cost / runtime
+# --------------
+#   No infrastructure, no API keys, no external network. Sentence-
+#   transformers downloads the embedder on first run; cached afterward
+#   via actions/cache. Total runtime target < 5 min on ubuntu-latest.
+# =============================================================================
+
+name: benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      # Only re-run on PRs that touch code that could move the numbers.
+      - "continuum/**"
+      - "bench/**"
+      - "scripts/check_bench_regressions.py"
+      - ".github/workflows/benchmarks.yml"
+  schedule:
+    - cron: "0 6 * * 1"   # Monday 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: bench-all + regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache sentence-transformers model
+        # Avoids the ~90 MB MiniLM download on every run.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-MiniLM-L6-v2-v1
+
+      - name: Install Continuum + benchmark deps
+        run: |
+          python -m pip install --upgrade pip
+          # Editable install picks up the local package + its core deps
+          # (pydantic, pydantic-settings, pyyaml, tenacity).
+          pip install -e .
+          # Extra deps the bench scripts use directly:
+          pip install "sentence-transformers>=3.1" "numpy>=1.26" \
+                      "tiktoken>=0.7"
+
+      - name: Run all benchmarks
+        # The Makefile target chains the four bench scripts. Each
+        # writes its own JSON into bench/results/.
+        run: |
+          BENCH_PYTHON=python make bench-all
+
+      - name: Regression gate
+        # Fails if any threshold in scripts/check_bench_regressions.py
+        # is violated. This is the load-bearing check for PRs.
+        run: |
+          python scripts/check_bench_regressions.py
+
+      - name: Upload benchmark JSONs
+        if: always()    # upload even on failure, for diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-${{ github.sha }}
+          path: bench/results/*.json
+          retention-days: 90
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Continuum memory-operation benchmarks"
+            echo ""
+            echo "Commit: \`${{ github.sha }}\` · Run: ${{ github.run_id }}"
+            echo ""
+            echo '```'
+            python scripts/check_bench_regressions.py || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

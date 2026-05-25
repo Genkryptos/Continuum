@@ -1,0 +1,17 @@
+# Pinned dependencies needed to reproduce the LongMemEval-S headline
+# numbers in findings/longmemeval_2026-05.md.
+#
+# Only the eval path is covered here — Continuum's core deps live in
+# pyproject.toml. Install with:
+#
+#   /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+#       -m pip install -r findings/longmemeval/repro/requirements-eval.txt
+#
+# Versions are pinned to what produced the report's numbers (May 2026).
+# Newer minors should still land within the ±2pp tolerance, but the
+# pins are the only versions we have *direct* evidence for.
+
+httpx==0.28.1                  # OpenAI / LMStudio / NVIDIA HTTP client
+numpy==2.2.3                   # WikiStore matmul + scorer math
+sentence-transformers>=2.7.0   # all-MiniLM-L6-v2 embedder (model auto-downloads)
+tiktoken>=0.7.0                # answer-token counting in the metric

@@ -1,0 +1,764 @@
+{
+  "dataset": "longmemeval-s",
+  "answerer": "gpt-4o-mini",
+  "started_at": "2026-05-24T14:37:58.959595+00:00",
+  "finished_at": "2026-05-24T14:39:10.894513+00:00",
+  "metrics": {
+    "n_questions": 5,
+    "accuracy": 0.4,
+    "avg_tokens": 2.4,
+    "recall": 1.0,
+    "latency_p50_ms": 9447.320292005315,
+    "latency_p95_ms": 16227.579250000417,
+    "total_cost_usd": 0.013913,
+    "failure_breakdown": {
+      "llm_error": 0,
+      "missing_fact": 0,
+      "wrong_retrieval": 3,
+      "other": 0
+    },
+    "avg_context_tokens_pre_opt": 0.0,
+    "avg_context_tokens_post_opt": 0.0,
+    "context_token_reduction_pct": 0.0,
+    "avg_optimizer_ms": 0.0,
+    "strategy_savings_total": {},
+    "by_question_type": {
+      "single-session-user": {
+        "n_questions": 5,
+        "accuracy": 0.4,
+        "recall": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "question_id": "6ade9755",
+      "correct": true,
+      "latency_ms": 16227.579250000417,
+      "answer_tokens": 4,
+      "cost_usd": 0.001267,
+      "retrieved_session_ids": [
+        "answer_9398da02",
+        "ultrachat_270925",
+        "de5634fc_2",
+        "a200b713_4",
+        "ultrachat_62167"
+      ],
+      "expected_session_ids": [
+        "answer_9398da02"
+      ],
+      "answer": "Serenity Yoga",
+      "expected_answer": "Serenity Yoga",
+      "failure_category": null,
+      "expected_session_count": 1,
+      "retrieved_expected_session_count": 1,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What are the locations of yoga classes?"
+        ],
+        "sub_answers": [
+          "I don't know."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "aggregation": {},
+        "question_type": "LOCATION",
+        "n_candidates_total": 97,
+        "n_candidates_relevant": 18,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "Whole Foods",
+            "normalized_value": "Whole Foods",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_9398da02",
+            "source_text": "# Evidence Window for answer_9398da02\n\n## Matched Turn\n- (user): I'll try searching online for healthy brunch spots near my place. By the way, do you know any good yoga apps that can help me with my h",
+            "confidence": 0.9,
+            "extras": {}
+          },
+          {
+            "value": "Serenity Yoga",
+            "normalized_value": "Serenity Yoga",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_9398da02",
+            "source_text": "# Evidence Window for answer_9398da02\n\n## Matched Turn\n- (user): I'll try searching online for healthy brunch spots near my place. By the way, do you know any good yoga apps that can help me with my h",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Sumela Monastery",
+            "normalized_value": "Sumela Monastery",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "ultrachat_270925",
+            "source_text": "# Evidence Window for ultrachat_270925\n\n## Matched Turn\n- (user): Thanks for all the helpful tips on getting to Sumela Monastery! Do you have any suggestions for places to stay in the area?\n\n## Nearby",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Sumela Monastery from nearby cities",
+            "normalized_value": "Sumela Monastery from nearby cities",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "ultrachat_270925",
+            "source_text": "# Evidence Window for ultrachat_270925\n\n## Matched Turn\n- (user): Thanks for all the helpful tips on getting to Sumela Monastery! Do you have any suggestions for places to stay in the area?\n\n## Nearby",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Turkey",
+            "normalized_value": "Turkey",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "ultrachat_270925",
+            "source_text": "# Evidence Window for ultrachat_270925\n\n## Matched Turn\n- (user): Thanks for all the helpful tips on getting to Sumela Monastery! Do you have any suggestions for places to stay in the area?\n\n## Nearby",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Sumela Monastery is by car",
+            "normalized_value": "Sumela Monastery is by car",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "ultrachat_270925",
+            "source_text": "# Evidence Window for ultrachat_270925\n\n## Matched Turn\n- (user): Thanks for all the helpful tips on getting to Sumela Monastery! Do you have any suggestions for places to stay in the area?\n\n## Nearby",
+            "confidence": 0.55,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 8371,
+        "completion_tokens_total": 19,
+        "cost_usd": 0.001267,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "abstain_reason": "",
+        "question_type": "LOCATION",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "c960da58",
+      "correct": true,
+      "latency_ms": 9447.320292005315,
+      "answer_tokens": 2,
+      "cost_usd": 0.002071,
+      "retrieved_session_ids": [
+        "answer_e05e4612",
+        "sharegpt_CdnyHep_0",
+        "89d3053f",
+        "sharegpt_uulGKeK_0",
+        "ultrachat_198948"
+      ],
+      "expected_session_ids": [
+        "answer_e05e4612"
+      ],
+      "answer": "20 playlists",
+      "expected_answer": "20",
+      "failure_category": null,
+      "expected_session_count": 1,
+      "retrieved_expected_session_count": 1,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "How many playlists do I have on Spotify?"
+        ],
+        "sub_answers": [
+          "Matching facts: \n- \"I have 20 playlists on Spotify already\"\n\nSub-answer: 20 playlists."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [
+            {
+              "item": "20 playlists",
+              "source_sub_q": 1,
+              "duplicate_of": null
+            }
+          ],
+          "unique_count_declared": 1,
+          "unique_count_computed": 1,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 249,
+        "n_candidates_relevant": 41,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "count_override_reason": "count_override:20 (unit=playlists)",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "20 playlists",
+            "normalized_value": "20",
+            "candidate_type": "count",
+            "unit": "playlists",
+            "source_session_id": "answer_e05e4612",
+            "source_text": "# Evidence Window for answer_e05e4612\n\n## Matched Turn\n- (user): I've been listening to a mix of Lo-Fi hip hop beats and Tameca Jones' album on repeat lately, and I realized I want to create a new pla",
+            "confidence": 0.8,
+            "extras": {}
+          },
+          {
+            "value": "2023 first",
+            "normalized_value": "2023",
+            "candidate_type": "count",
+            "unit": "first",
+            "source_session_id": "sharegpt_CdnyHep_0",
+            "source_text": "# Evidence Window for sharegpt_CdnyHep_0\n\n## Matched Turn\n- (user): Create a conversational article and Rephrase this into 100% no plagiarism and unique Apple today announced financial results for its",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "117.2 billion",
+            "normalized_value": "117.2",
+            "candidate_type": "count",
+            "unit": "billion",
+            "source_session_id": "sharegpt_CdnyHep_0",
+            "source_text": "# Evidence Window for sharegpt_CdnyHep_0\n\n## Matched Turn\n- (user): Create a conversational article and Rephrase this into 100% no plagiarism and unique Apple today announced financial results for its",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "5 percent",
+            "normalized_value": "5",
+            "candidate_type": "count",
+            "unit": "percent",
+            "source_session_id": "sharegpt_CdnyHep_0",
+            "source_text": "# Evidence Window for sharegpt_CdnyHep_0\n\n## Matched Turn\n- (user): Create a conversational article and Rephrase this into 100% no plagiarism and unique Apple today announced financial results for its",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "2 billion",
+            "normalized_value": "2",
+            "candidate_type": "count",
+            "unit": "billion",
+            "source_session_id": "sharegpt_CdnyHep_0",
+            "source_text": "# Evidence Window for sharegpt_CdnyHep_0\n\n## Matched Turn\n- (user): Create a conversational article and Rephrase this into 100% no plagiarism and unique Apple today announced financial results for its",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "20.8 billion",
+            "normalized_value": "20.8",
+            "candidate_type": "count",
+            "unit": "billion",
+            "source_session_id": "sharegpt_CdnyHep_0",
+            "source_text": "# Evidence Window for sharegpt_CdnyHep_0\n\n## Matched Turn\n- (user): Create a conversational article and Rephrase this into 100% no plagiarism and unique Apple today announced financial results for its",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 3,
+        "prompt_tokens_total": 13460,
+        "completion_tokens_total": 86,
+        "cost_usd": 0.002071,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": false,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": "count_override:20 (unit=playlists)"
+      }
+    },
+    {
+      "question_id": "94f70d80",
+      "correct": false,
+      "latency_ms": 8063.022084003023,
+      "answer_tokens": 2,
+      "cost_usd": 0.00249,
+      "retrieved_session_ids": [
+        "answer_c63c0458",
+        "sharegpt_FvO2l0O_0",
+        "ec628e8d_2",
+        "2ae4f277_1",
+        "ultrachat_172828"
+      ],
+      "expected_session_ids": [
+        "answer_c63c0458"
+      ],
+      "answer": "2 hours",
+      "expected_answer": "4 hours",
+      "failure_category": "wrong_retrieval",
+      "expected_session_count": 1,
+      "retrieved_expected_session_count": 1,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "How long did it take to assemble the IKEA bookshelf?"
+        ],
+        "sub_answers": [
+          "I don't know."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "aggregation": {},
+        "question_type": "DURATION",
+        "n_candidates_total": 98,
+        "n_candidates_relevant": 12,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "2 hours",
+            "normalized_value": "2",
+            "candidate_type": "duration",
+            "unit": "hour",
+            "source_session_id": "answer_c63c0458",
+            "source_text": "# Evidence Window for answer_c63c0458\n\n## Matched Turn\n- (assistant): **IKEA Coffee Tables with Storage**\n\nIKEA is a great option to consider for coffee tables with storage, especially since you've ha",
+            "confidence": 0.7,
+            "extras": {}
+          },
+          {
+            "value": "4 hours",
+            "normalized_value": "4",
+            "candidate_type": "duration",
+            "unit": "hour",
+            "source_session_id": "answer_c63c0458",
+            "source_text": "# Evidence Window for answer_c63c0458\n\n## Matched Turn\n- (assistant): **IKEA Coffee Tables with Storage**\n\nIKEA is a great option to consider for coffee tables with storage, especially since you've ha",
+            "confidence": 0.7,
+            "extras": {}
+          },
+          {
+            "value": "35 minutes",
+            "normalized_value": "35",
+            "candidate_type": "duration",
+            "unit": "minute",
+            "source_session_id": "ec628e8d_2",
+            "source_text": "# Evidence Window for ec628e8d_2\n\n## Matched Turn\n- (user): I actually completed a 5K charity run recently, and I was able to finish in 35 minutes. It was a great experience, and I'm excited to do ano",
+            "confidence": 0.7,
+            "extras": {}
+          },
+          {
+            "value": "15 minutes",
+            "normalized_value": "15",
+            "candidate_type": "duration",
+            "unit": "minute",
+            "source_session_id": "ec628e8d_2",
+            "source_text": "# Evidence Window for ec628e8d_2\n\n## Matched Turn\n- (user): I actually completed a 5K charity run recently, and I was able to finish in 35 minutes. It was a great experience, and I'm excited to do ano",
+            "confidence": 0.7,
+            "extras": {}
+          },
+          {
+            "value": "5 minutes",
+            "normalized_value": "5",
+            "candidate_type": "duration",
+            "unit": "minute",
+            "source_session_id": "ec628e8d_2",
+            "source_text": "# Evidence Window for ec628e8d_2\n\n## Matched Turn\n- (user): I actually completed a 5K charity run recently, and I was able to finish in 35 minutes. It was a great experience, and I'm excited to do ano",
+            "confidence": 0.7,
+            "extras": {}
+          },
+          {
+            "value": "2 minutes",
+            "normalized_value": "2",
+            "candidate_type": "duration",
+            "unit": "minute",
+            "source_session_id": "ec628e8d_2",
+            "source_text": "# Evidence Window for ec628e8d_2\n\n## Matched Turn\n- (user): I actually completed a 5K charity run recently, and I was able to finish in 35 minutes. It was a great experience, and I'm excited to do ano",
+            "confidence": 0.7,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 16517,
+        "completion_tokens_total": 21,
+        "cost_usd": 0.00249,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "abstain_reason": "",
+        "question_type": "DURATION",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "b86304ba",
+      "correct": false,
+      "latency_ms": 11699.017250000907,
+      "answer_tokens": 2,
+      "cost_usd": 0.007042,
+      "retrieved_session_ids": [
+        "answer_645b0329",
+        "sharegpt_xGoJZ6Z_0",
+        "8e9425ef_1",
+        "e831a29f_1",
+        "ae00973d_4",
+        "ultrachat_328696"
+      ],
+      "expected_session_ids": [
+        "answer_645b0329"
+      ],
+      "answer": "1 made",
+      "expected_answer": "The painting is worth triple what I paid for it.",
+      "failure_category": "wrong_retrieval",
+      "expected_session_count": 1,
+      "retrieved_expected_session_count": 1,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "decompose_answer_aggregate",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "What is the amount I paid for the painting of a sunset?"
+        ],
+        "sub_answers": [
+          "I don't know."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "aggregation": {
+          "parse_status": "ok",
+          "candidates": [],
+          "unique_count_declared": 0,
+          "unique_count_computed": 0,
+          "unique_count_consistent": true
+        },
+        "question_type": "COUNT",
+        "n_candidates_total": 553,
+        "n_candidates_relevant": 466,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "1 made",
+            "normalized_value": "1",
+            "candidate_type": "count",
+            "unit": "made",
+            "source_session_id": "answer_645b0329",
+            "source_text": "# Evidence Window for answer_645b0329\n\n## Matched Turn\n- (user): That's really helpful. I was thinking about my flea market find, and I realized that it's actually worth triple what I paid for it, whi",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "02 share",
+            "normalized_value": "02",
+            "candidate_type": "count",
+            "unit": "share",
+            "source_session_id": "sharegpt_xGoJZ6Z_0",
+            "source_text": "# Evidence Window for sharegpt_xGoJZ6Z_0\n\n## Matched Turn\n- (user): This is a transcript of a youtube video, Please give me a summary: quasi here in today's video I'm going to\n0:02\nshare with you one ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "04 principles",
+            "normalized_value": "04",
+            "candidate_type": "count",
+            "unit": "principles",
+            "source_session_id": "sharegpt_xGoJZ6Z_0",
+            "source_text": "# Evidence Window for sharegpt_xGoJZ6Z_0\n\n## Matched Turn\n- (user): This is a transcript of a youtube video, Please give me a summary: quasi here in today's video I'm going to\n0:02\nshare with you one ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "08 completely",
+            "normalized_value": "08",
+            "candidate_type": "count",
+            "unit": "completely",
+            "source_session_id": "sharegpt_xGoJZ6Z_0",
+            "source_text": "# Evidence Window for sharegpt_xGoJZ6Z_0\n\n## Matched Turn\n- (user): This is a transcript of a youtube video, Please give me a summary: quasi here in today's video I'm going to\n0:02\nshare with you one ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "10 every",
+            "normalized_value": "10",
+            "candidate_type": "count",
+            "unit": "every",
+            "source_session_id": "sharegpt_xGoJZ6Z_0",
+            "source_text": "# Evidence Window for sharegpt_xGoJZ6Z_0\n\n## Matched Turn\n- (user): This is a transcript of a youtube video, Please give me a summary: quasi here in today's video I'm going to\n0:02\nshare with you one ",
+            "confidence": 0.5,
+            "extras": {}
+          },
+          {
+            "value": "12 worked",
+            "normalized_value": "12",
+            "candidate_type": "count",
+            "unit": "worked",
+            "source_session_id": "sharegpt_xGoJZ6Z_0",
+            "source_text": "# Evidence Window for sharegpt_xGoJZ6Z_0\n\n## Matched Turn\n- (user): This is a transcript of a youtube video, Please give me a summary: quasi here in today's video I'm going to\n0:02\nshare with you one ",
+            "confidence": 0.5,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 4,
+        "prompt_tokens_total": 46769,
+        "completion_tokens_total": 45,
+        "cost_usd": 0.007042,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "abstain_reason": "",
+        "question_type": "COUNT",
+        "count_override_reason": ""
+      }
+    },
+    {
+      "question_id": "25e5aa4f",
+      "correct": false,
+      "latency_ms": 7235.1635829982115,
+      "answer_tokens": 2,
+      "cost_usd": 0.001043,
+      "retrieved_session_ids": [
+        "answer_986de8c3",
+        "18807892_4",
+        "478e02c2",
+        "sharegpt_SwdaeDm_15",
+        "sharegpt_rqvR1Ep_0",
+        "sharegpt_Db9cdoK_0"
+      ],
+      "expected_session_ids": [
+        "answer_986de8c3"
+      ],
+      "answer": "Stanford",
+      "expected_answer": "University of California, Los Angeles (UCLA)",
+      "failure_category": "wrong_retrieval",
+      "expected_session_count": 1,
+      "retrieved_expected_session_count": 1,
+      "partial_recall": 1.0,
+      "missing_expected_session_ids": [],
+      "error": null,
+      "question_type": "single-session-user",
+      "pre_opt_total_tokens": 0,
+      "post_opt_total_tokens": 0,
+      "pre_opt_stm_tokens": 0,
+      "pre_opt_mtm_tokens": 0,
+      "pre_opt_ltm_tokens": 0,
+      "post_opt_stm_tokens": 0,
+      "post_opt_mtm_tokens": 0,
+      "post_opt_ltm_tokens": 0,
+      "retrieved_count": 6,
+      "retrieval_ms": 0.0,
+      "optimizer_ms": 0.0,
+      "strategy_savings": {},
+      "decomposition_stats": {
+        "mode": "atomic_extractive",
+        "n_sub_questions": 1,
+        "sub_questions": [
+          "Where did I complete my Bachelor's degree in Computer Science?"
+        ],
+        "sub_answers": [
+          "I don't know."
+        ],
+        "subquestion_hits": [
+          6
+        ],
+        "question_type": "LOCATION",
+        "n_candidates_total": 126,
+        "n_candidates_relevant": 10,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "count_override_reason": "",
+        "abstain_reason": "",
+        "candidates_preview": [
+          {
+            "value": "Data Science",
+            "normalized_value": "Data Science",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_986de8c3",
+            "source_text": "# Evidence Window for answer_986de8c3\n\n## Matched Turn\n- (user): I'm considering pursuing a Master's degree in Data Science and I've narrowed down my options to Stanford, Berkeley, and Carnegie Mellon",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Stanford",
+            "normalized_value": "Stanford",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_986de8c3",
+            "source_text": "# Evidence Window for answer_986de8c3\n\n## Matched Turn\n- (user): I'm considering pursuing a Master's degree in Data Science and I've narrowed down my options to Stanford, Berkeley, and Carnegie Mellon",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Computer Science",
+            "normalized_value": "Computer Science",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_986de8c3",
+            "source_text": "# Evidence Window for answer_986de8c3\n\n## Matched Turn\n- (user): I'm considering pursuing a Master's degree in Data Science and I've narrowed down my options to Stanford, Berkeley, and Carnegie Mellon",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "AI",
+            "normalized_value": "AI",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_986de8c3",
+            "source_text": "# Evidence Window for answer_986de8c3\n\n## Matched Turn\n- (user): I'm considering pursuing a Master's degree in Data Science and I've narrowed down my options to Stanford, Berkeley, and Carnegie Mellon",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "San Francisco",
+            "normalized_value": "San Francisco",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "answer_986de8c3",
+            "source_text": "# Evidence Window for answer_986de8c3\n\n## Matched Turn\n- (user): I'm considering pursuing a Master's degree in Data Science and I've narrowed down my options to Stanford, Berkeley, and Carnegie Mellon",
+            "confidence": 0.55,
+            "extras": {}
+          },
+          {
+            "value": "Data Science",
+            "normalized_value": "Data Science",
+            "candidate_type": "location",
+            "unit": "",
+            "source_session_id": "18807892_4",
+            "source_text": "# Evidence Window for 18807892_4\n\n## Matched Turn\n- (user): I'm interested in the Coursera - Data Science Specialization course. Can you tell me more about the course and what kind of skills I can exp",
+            "confidence": 0.55,
+            "extras": {}
+          }
+        ]
+      },
+      "telemetry": {
+        "n_llm_calls": 3,
+        "prompt_tokens_total": 6785,
+        "completion_tokens_total": 42,
+        "cost_usd": 0.001043,
+        "answer_prompt_tokens": 0,
+        "answer_completion_tokens": 0,
+        "wiki_hits_count": 0,
+        "raw_hits_count": 0,
+        "session_hits_count": 0,
+        "selected_evidence_count": 6,
+        "pre_compression_context_tokens": 0,
+        "post_compression_context_tokens": 0,
+        "validator_passed": true,
+        "validator_reason": "",
+        "regeneration_attempted": true,
+        "abstain_reason": "",
+        "question_type": "LOCATION",
+        "count_override_reason": ""
+      }
+    }
+  ]
+}

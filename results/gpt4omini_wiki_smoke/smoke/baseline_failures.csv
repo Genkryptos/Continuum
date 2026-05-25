@@ -1,0 +1,3 @@
+question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
+e47becba,missing_fact,Business Administration,I don't know.,answer_280352e9,sharegpt_QZMeA7V_17;sharegpt_QZMeA7V_17;41abc171_4;sharegpt_QZMeA7V_17;ultrachat_530213;41abc171_4;ultrachat_458322;41abc171_4;41abc171_4;47f00a5f;d414cac5_4;4fd76316,,7670.9
+51a45a95,wrong_retrieval,Target,I don't know.,answer_d61669c7,answer_d61669c7;55e0c6db_2;answer_d61669c7;f32d1ccf_1;answer_d61669c7;answer_d61669c7;f32d1ccf_1;sharegpt_MKMWjX0_25;answer_d61669c7;answer_d61669c7;07d1915d_1;sharegpt_MKMWjX0_25,,60208.8
