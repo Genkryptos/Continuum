@@ -33,6 +33,11 @@ import re
 
 from evals.longmemeval.candidates import Candidate
 from evals.longmemeval.question_type import QuestionType
+from evals.longmemeval.scaffold_filter import (
+    is_label_metadata_line,
+    is_scaffold_text,
+    is_user_request_sentence,
+)
 
 # ─── Final-answer cleanup ──────────────────────────────────────────────────
 
@@ -174,6 +179,25 @@ def is_idk(text: str) -> bool:
     return any(lower.startswith(p) or p in lower for p in _IDK_PHRASES)
 
 
+_ANALYSIS_PROSE_RE = re.compile(
+    r"^\s*(?:based on|looking at|after reviewing|considering|reviewing|"
+    r"the (?:answer|evidence) (?:is|suggests|indicates)|"
+    r"according to|it (?:seems|appears|looks)|i (?:would|think|believe|am))\b",
+    re.IGNORECASE,
+)
+
+
+def _is_analysis_prose(answer: str) -> bool:
+    """True when the answer reads like analysis instead of a direct value."""
+    if not answer:
+        return False
+    if _ANALYSIS_PROSE_RE.match(answer):
+        return True
+    # Many words, no concrete noun-ish anchor → likely prose.
+    words = answer.split()
+    return len(words) > 25
+
+
 def validate_answer_shape(
     answer: str, question_type: QuestionType,
 ) -> tuple[bool, str]:
@@ -181,10 +205,18 @@ def validate_answer_shape(
     Check the cleaned ``answer`` matches the shape ``question_type`` demands.
 
     Returns ``(ok, reason)``. ``ok=False`` triggers a one-shot
-    regeneration via :func:`build_repair_prompt`.
+    regeneration via :func:`build_repair_prompt`, OR a direct fallback
+    to the top verified candidate when the LLM stage isn't available.
     """
     if not answer:
         return False, "empty_answer"
+    # Scaffold rejection — catches "Sub-answer", "Candidates:", bare
+    # role labels, prompt-echo, anything from
+    # :mod:`evals.longmemeval.scaffold_filter`.
+    if is_scaffold_text(answer):
+        return False, "answer_is_scaffold"
+    if _is_analysis_prose(answer):
+        return False, "answer_is_analysis_prose"
     if is_idk(answer):
         return False, "answer_is_idk"
 
@@ -298,10 +330,151 @@ def build_repair_prompt(
     )
 
 
+#: Numeric-timestamp transcript junk. Matches answer strings like
+#: "110 for", "02 share", "04 principles" — small-number+stopword
+#: patterns observed in ShareGPT/UltraChat transcript scrapes that
+#: leaked into the candidate pool. Used as a hard reject in
+#: :func:`validate_against_claims`.
+_TIMESTAMP_JUNK_ANSWER_RE = re.compile(
+    r"\b\d{1,3}\s+(?:for|share|principles|every|worked|applied|"
+    r"completely|as|of|is|in|on|to|with|from|by|the|and|or|but)\b",
+    re.IGNORECASE,
+)
+
+#: Stopwords stripped before counting "supporting" content-word
+#: overlap between answer and claim. Sharing only stopwords ("for",
+#: "the", "is") does NOT make a claim support an answer.
+_OVERLAP_STOPWORDS = frozenset({
+    "a", "an", "the", "and", "or", "but", "of", "for", "to", "in", "on",
+    "at", "by", "with", "from", "as", "is", "are", "was", "were", "be",
+    "been", "i", "me", "my", "you", "your", "we", "us", "our", "they",
+    "them", "this", "that", "it", "its", "if", "then",
+    "what", "which", "who", "whom", "whose", "where", "when", "why",
+    "how", "do", "does", "did", "have", "has", "had", "can", "could",
+    "should", "would", "will", "shall",
+    "many", "much", "few", "several", "long", "lot", "more", "less",
+})
+
+
+def validate_against_claims(
+    answer: str,
+    claim_texts: list[str],
+    *,
+    require_support: bool = True,
+) -> tuple[bool, str]:
+    """
+    Return ``(ok, reason)`` for ``answer`` against the source claims.
+
+    Used by the claim-first pipeline as a stricter check than
+    :func:`validate_answer_shape` — the answer must be either a
+    substring or a high-token-overlap match against at least one
+    source claim. Fails ``"unsupported_by_claim"`` when not.
+
+    ``require_support=False`` skips the support check and only
+    runs the scaffold / IDK / prose checks.
+    """
+    if not answer:
+        return False, "empty_answer"
+    # IDK is checked before the generic scaffold filter — "I don't know"
+    # is technically scaffold, but the reason string should be the more
+    # specific ``answer_is_idk_with_claims`` when claims exist.
+    if is_idk(answer):
+        return False, "answer_is_idk_with_claims" if claim_texts else "answer_is_idk"
+    if is_scaffold_text(answer):
+        return False, "answer_is_scaffold"
+    # Markdown headings / label-metadata answers (e.g. "**Sister's
+    # Birthday**", "Occasion: ..."). These slip past the basic scaffold
+    # check because they have body content, but they don't ANSWER any
+    # question — they label the topic.
+    answer_stripped = answer.strip()
+    if (
+        (answer_stripped.startswith("**") and answer_stripped.endswith("**"))
+        or (answer_stripped.startswith("__") and answer_stripped.endswith("__"))
+        or is_label_metadata_line(answer_stripped)
+    ):
+        return False, "answer_is_heading"
+    # User-request / question sentences are never the answer to a
+    # remembered-fact question. ``"Can you help me organize my sales
+    # data from previous markets?"`` shares "previous" with "What was
+    # my previous occupation?" but is clearly not the occupation.
+    if is_user_request_sentence(answer_stripped):
+        return False, "answer_is_user_request"
+    # Numeric-timestamp transcript junk ("110 for", "02 share") is
+    # never a valid answer regardless of overlap. The hard reject fires
+    # before the substring/overlap check so a transcript scrape can't
+    # accidentally pass via stopword coincidence.
+    if _TIMESTAMP_JUNK_ANSWER_RE.search(answer):
+        return False, "answer_is_timestamp_junk"
+    if _is_analysis_prose(answer):
+        return False, "answer_is_analysis_prose"
+    if not require_support:
+        return True, ""
+    if not claim_texts:
+        return False, "no_supporting_claims"
+    a_norm = " ".join(answer.lower().split())
+    # Content tokens only — stopwords don't count toward "support".
+    # "110 for" sharing the word "for" with the claim is NOT support.
+    a_tokens = {
+        t for t in re.findall(r"[A-Za-z0-9'\-]+", a_norm)
+        if t not in _OVERLAP_STOPWORDS and len(t) > 1
+    }
+    for claim in claim_texts:
+        c_norm = " ".join(claim.lower().split())
+        if a_norm in c_norm:
+            return True, ""
+        c_tokens = {
+            t for t in re.findall(r"[A-Za-z0-9'\-]+", c_norm)
+            if t not in _OVERLAP_STOPWORDS and len(t) > 1
+        }
+        # Need at least one CONTENT-word overlap, and at least half
+        # of the answer's content tokens must be in the claim.
+        if (
+            a_tokens
+            and (a_tokens & c_tokens)
+            and len(a_tokens & c_tokens) >= max(1, len(a_tokens) // 2)
+        ):
+            return True, ""
+    return False, "unsupported_by_claim"
+
+
+def best_candidate_fallback_answer(
+    candidates: list[Candidate],
+) -> str:
+    """
+    When validation fails AND we have verified candidates, return the
+    best-source-backed value directly — skip the LLM repair entirely.
+
+    This is the fix for the "empty final answer when candidates
+    exist" failure mode (rows 58ef2f1c / 5d3d2817 — Gemma 4B
+    returned an empty string from the repair LLM call when the
+    candidates were already known).
+
+    Ranking is deterministic: highest confidence first, falling back
+    to the first candidate's ``object_`` (or ``value`` if object
+    isn't set). Returns empty string when there are no candidates —
+    the caller should treat that as a real abstain.
+    """
+    if not candidates:
+        return ""
+    # Drop any candidate whose value is itself scaffold (defensive).
+    clean = [
+        c for c in candidates
+        if not is_scaffold_text(c.value)
+        and not is_scaffold_text(c.object_)
+    ]
+    if not clean:
+        return ""
+    clean.sort(key=lambda c: -c.confidence)
+    top = clean[0]
+    return top.object_.strip() or top.value.strip()
+
+
 __all__ = [
+    "best_candidate_fallback_answer",
     "build_repair_prompt",
     "clean_final_answer",
     "is_idk",
     "should_block_idk",
+    "validate_against_claims",
     "validate_answer_shape",
 ]

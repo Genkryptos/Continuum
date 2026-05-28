@@ -205,12 +205,15 @@ async def test_run_baseline_happy_path(tmp_path: Path) -> None:
     assert payload["metrics"]["accuracy"] == 0.5
     assert payload["dataset"] == "longmemeval-s"
 
-    # Failure CSV: one wrong row (q2), classified as wrong_retrieval.
+    # Failure CSV: one wrong row (q2). With the Tier 1C bucket
+    # refinement, the right-session-wrong-answer case is classified
+    # as ``wrong_span`` (was previously the catch-all
+    # ``wrong_retrieval``).
     with csv_path.open() as fh:
         reader = list(csv.DictReader(fh))
     assert len(reader) == 1
     assert reader[0]["question_id"] == "q2"
-    assert reader[0]["failure_category"] == "wrong_retrieval"
+    assert reader[0]["failure_category"] == "wrong_span"
 
 
 # ---------------------------------------------------------------------------

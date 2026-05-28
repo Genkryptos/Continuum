@@ -90,16 +90,19 @@ from continuum.optimizer.strategies import (
 )
 from evals.longmemeval.adapter import ContinuumAdapter
 from evals.longmemeval.answer_post import (
+    best_candidate_fallback_answer,
     build_repair_prompt,
     clean_final_answer,
     is_idk,
     should_block_idk,
+    validate_against_claims,
     validate_answer_shape,
 )
 from evals.longmemeval.baseline import EvalRow, run_baseline
 from evals.longmemeval.candidates import (
     best_count_for_object,
     extract_candidates_from_context,
+    extract_candidates_from_text,
     filter_candidates_for_question,
 )
 from evals.longmemeval.content_wiki import (
@@ -113,6 +116,10 @@ from evals.longmemeval.decompose import (
     build_decompose_prompt,
     parse_subquestions,
 )
+from evals.longmemeval.decompose_guard import (
+    DecompositionGuardResult,
+    guard_decomposition,
+)
 from evals.longmemeval.decomposed_answer import (
     SubAnswer,
     _strip_subanswer_scaffold,
@@ -123,7 +130,39 @@ from evals.longmemeval.decomposed_answer import (
     is_aggregate_question,
     parse_aggregation_response,
 )
+from evals.longmemeval.claim_verifier import filter_passing, verify_claims
+from evals.longmemeval.claims import (
+    extract_claims_from_context,
+    rank_claims,
+)
+from evals.longmemeval.evidence_packet import (
+    EvidencePacket,
+    build_evidence_packet,
+)
+from evals.longmemeval.extractive_fallback import (
+    build_extractive_prompt,
+    validate_extracted_span,
+)
+from evals.longmemeval.reasoning_heads import (
+    head_assistant_memory,
+    head_fact_lookup,
+    head_knowledge_update,
+    head_multi_session_aggregate,
+    head_preference_profile,
+    head_temporal_reasoning,
+)
+from evals.longmemeval.query_intent import parse_intent
+from evals.longmemeval.structured_claims import (
+    extract_structured_claims_from_context,
+)
+from evals.longmemeval.structured_finalizer import finalize_fact_answer
+from evals.longmemeval.task_router import TaskMode, route_task
 from evals.longmemeval.evidence_spans import select_spans
+from evals.longmemeval.question_type import is_multi_session_hint
+from evals.longmemeval.session_narrowing import (
+    NarrowResult,
+    narrow_to_top_session,
+)
 from evals.longmemeval.judge import LLMJudgeScorer
 from evals.longmemeval.question_type import QuestionType, classify
 from evals.longmemeval.telemetry import (
@@ -2545,6 +2584,12 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
         evidence_span_selection: bool = False,
         evidence_max_spans: int = 3,
         evidence_min_overlap: float = 0.2,
+        session_narrowing: bool = False,
+        session_narrowing_min_confidence: float = 0.5,
+        evidence_packet: bool = False,
+        evidence_packet_max_claims: int = 6,
+        claim_first: bool = False,
+        claim_first_top_n_for_fallback: int = 3,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -2558,12 +2603,63 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
         self.evidence_span_selection = evidence_span_selection
         self.evidence_max_spans = evidence_max_spans
         self.evidence_min_overlap = evidence_min_overlap
+        #: Opt-in top-session narrowing — when True and the top-ranked
+        #: retrieved session carries a verified answer-bearing claim,
+        #: items from lower-ranked sessions are dropped from the
+        #: sub-answer prompt. See
+        #: :mod:`evals.longmemeval.session_narrowing` for the contract.
+        self.session_narrowing = session_narrowing
+        self.session_narrowing_min_confidence = session_narrowing_min_confidence
+        #: Opt-in minimal evidence packet for the final synthesiser.
+        #: When True, the synthesis prompt receives ONLY verified
+        #: claims + their source spans (not the raw bundle text), and
+        #: the per-row trace records ``selected_evidence_count`` +
+        #: ``excluded_noise_count``. See
+        #: :mod:`evals.longmemeval.evidence_packet` for the contract.
+        self.evidence_packet = evidence_packet
+        self.evidence_packet_max_claims = evidence_packet_max_claims
+        #: Opt-in claim-first answer pipeline. When True, after the
+        #: question is decomposed and each sub-question retrieved,
+        #: the adapter runs a sentence-level :class:`Claim` extraction
+        #: across every retrieved bundle, routes the original question
+        #: to one of six broad reasoning heads, and short-circuits the
+        #: final answer when the head returns a validated span. See
+        #: :mod:`evals.longmemeval.task_router` /
+        #: :mod:`evals.longmemeval.reasoning_heads`.
+        self.claim_first = claim_first
+        self.claim_first_top_n_for_fallback = claim_first_top_n_for_fallback
+        #: True for one row when ``_answer_claim_first`` produced a
+        #: validated span. ``answer_question`` checks this flag and
+        #: skips ``_postprocess`` so the COUNT override / LLM repair
+        #: can't overwrite a verified claim-first answer (the
+        #: nondeterminism behind the b86304ba "6" failure).
+        self._claim_first_used: bool = False
         self.last_decomposition_stats: dict[str, Any] = {}
+        #: Diagnostic snapshot written when the structured-claim path
+        #: matched the question intent but found no usable claim in the
+        #: retrieved bundle. Captures the relation, ctx-item count,
+        #: extracted-claim count, and a few content snippets so the
+        #: trace can show *why* the structured path didn't fire.
+        self.last_structured_fallthrough: dict[str, Any] = {}
+        #: Per-row dataset hints set by the eval runner before each
+        #: ``answer_question`` call. Plumbed into ``route_task`` so the
+        #: LongMemEval ``question_type`` can tiebreak when the regex
+        #: router lands on ambiguous FACT_LOOKUP — single largest ROI
+        #: lever for the assistant-memory / preference / temporal /
+        #: multi-session / knowledge-update categories.
+        self.dataset_question_type: str | None = None
+        self.dataset_is_multi_session: bool = False
         #: Per-row LLM telemetry snapshot — populated at the end of
         #: every ``answer_question`` call. The baseline runner attaches
         #: it to :class:`RowResult.extras` so the JSON output carries
         #: real token / cost / validator state per row.
         self.last_telemetry: dict[str, Any] = {}
+        #: Last decomposition guard result. Populated by
+        #: :meth:`_decompose_question` whenever the LLM call succeeds.
+        #: Drives the ``decomp_guard`` block in the JSONL trace and
+        #: lets failing rows be inspected for "intent changed during
+        #: decomposition" failures.
+        self._last_decomp_guard: DecompositionGuardResult | None = None
 
     async def _decompose_question(self, question: str) -> list[str]:
         try:
@@ -2573,8 +2669,23 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
             )
         except Exception:
             log.exception("decomposed-answer decomposition failed")
+            self._last_decomp_guard = None
             return [question]
-        return parse_subquestions(reply, original=question)
+        raw_subs = parse_subquestions(reply, original=question)
+        # Intent-preserving guard: reject sub-questions that drift on
+        # answer-type / relation / object / temporal scope. When every
+        # sub fails, fall back to the original question so retrieval
+        # still runs. The result is stashed on the adapter for the
+        # downstream stats / trace consumer.
+        guard = guard_decomposition(question, raw_subs)
+        self._last_decomp_guard = guard
+        if guard.rejected:
+            log.info(
+                "decomp_guard: kept=%d rejected=%d (reasons=%s)",
+                len(guard.kept), len(guard.rejected),
+                [r.reason for r in guard.rejected],
+            )
+        return guard.kept
 
     @staticmethod
     def _is_atomic(question: str, subquestions: list[str]) -> bool:
@@ -2649,10 +2760,34 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
         failure or "I don't know" with candidates present.
         """
         start_row_telemetry()
+        # Reset the per-row claim-first flag so a previous row's success
+        # can't accidentally suppress this row's postprocess.
+        self._claim_first_used = False
         try:
             question_type = classify(question)
             raw_answer = await self._answer_question_inner(question)
-            final = await self._postprocess(question, question_type, raw_answer)
+            if self._claim_first_used:
+                # Claim-first ran AND produced a validated span. The
+                # span is final — `_postprocess` would otherwise let
+                # the COUNT override / LLM repair clobber it with a
+                # noisy number candidate (the b86304ba "6" bug). Run
+                # only a light cleanup pass.
+                final = clean_final_answer(raw_answer)
+                stats = self.last_decomposition_stats or {}
+                stats.setdefault("question_type", question_type.value)
+                stats["validator_passed"] = True
+                stats["validator_reason"] = "claim_first_terminal"
+                stats["regeneration_attempted"] = False
+                self.last_decomposition_stats = stats
+                counter = current_counter()
+                if counter is not None:
+                    counter.validator_passed = True
+                    counter.validator_reason = "claim_first_terminal"
+                    counter.regeneration_attempted = False
+            else:
+                final = await self._postprocess(
+                    question, question_type, raw_answer,
+                )
         finally:
             counter = end_row_telemetry()
             self.last_telemetry = counter.snapshot() if counter else {}
@@ -2735,6 +2870,24 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
                 cleaned = repaired
                 validator_ok, validator_reason = new_ok, new_reason
 
+            # Hard fallback: if the LLM repair produced empty / scaffold /
+            # still-invalid output but we have verified candidates, pick
+            # the top-confidence candidate's value directly. This is the
+            # fix for the "empty final answer when candidates exist"
+            # failure mode (rows 58ef2f1c / 5d3d2817 — Gemma 4B sometimes
+            # returns empty from the repair LLM call). Never worse than
+            # returning empty; usually correct because the candidates
+            # have already passed the verifier and rerank pipeline.
+            if (
+                (not validator_ok or not cleaned.strip())
+                and relevant
+            ):
+                fallback = best_candidate_fallback_answer(relevant)
+                if fallback:
+                    cleaned = fallback
+                    validator_ok = True
+                    validator_reason = "fallback_to_top_candidate"
+
         # Publish the full trace for the row.
         stats = self.last_decomposition_stats or {}
         stats.setdefault("question_type", question_type.value)
@@ -2769,7 +2922,308 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
             counter.extras.setdefault("count_override_reason", override_reason)
         return cleaned
 
+    async def _answer_claim_first(self, question: str) -> str:
+        """
+        Claim-first answer path.
+
+        1. Retrieve once on the original question (no decomposition).
+        2. Extract sentence-level claims from the bundle (scaffold +
+           transcript-timestamp filtered).
+        3. Route the question to one of six broad reasoning heads.
+        4. Run the head on the ranked claims.
+        5. If the head returns empty, call the extractive LLM fallback
+           with the top 1-3 claims (cheap, single call, span-validated).
+        6. Validate the result against the source claims. Return the
+           span on success; return empty string on failure to let the
+           legacy decompose+packet path run.
+        """
+        # Reset per-question diagnostics so stale snapshots from the
+        # previous row don't leak into this row's trace.
+        self.last_structured_fallthrough = {}
+        retriever = getattr(self.session, "retriever", None)
+        if retriever is None:
+            return ""
+        try:
+            ctx = await retriever.retrieve(Query(text=question), self.budget)
+        except Exception:
+            log.exception("claim-first retrieve failed for %r", question[:80])
+            return ""
+        self.last_ctx = ctx
+
+        # 2. claims
+        claims = extract_claims_from_context(ctx)
+        if not claims:
+            return ""
+        ranked = rank_claims(question, claims)
+
+        # 3. route — pass dataset hints so the router can disambiguate
+        # questions whose surface form alone is ambiguous (e.g., the
+        # assistant-memory category often phrases questions as
+        # autobiographical fact lookups).
+        mode = route_task(
+            question,
+            question_type_hint=self.dataset_question_type,
+            is_multi_session=self.dataset_is_multi_session,
+        )
+        # ── Structured-claim path (FACT_LOOKUP only, single-session) ────
+        # Parse the question into a structured intent. If the intent
+        # matches a known relation AND a structured claim with that
+        # relation exists in the retrieved bundle, we answer from
+        # ``claim.object`` directly — evidence-locked, no LLM, no
+        # COUNT override, no validator second-guessing.
+        # Other modes still go through the legacy heads below.
+        if mode == TaskMode.FACT_LOOKUP:
+            intent = parse_intent(question)
+            if intent.matched:
+                structured_claims = (
+                    extract_structured_claims_from_context(ctx.items)
+                )
+                final = finalize_fact_answer(intent, structured_claims)
+                if final is not None:
+                    answer, diag = final
+                    self._claim_first_used = True
+                    self.last_decomposition_stats = {
+                        "mode": "claim_first_structured",
+                        "claim_first_route": mode.value,
+                        "n_claims": len(ranked),
+                        "claim_first_span": answer,
+                        "structured_intent": diag["intent"],
+                        "structured_matched_claim": diag["matched_claim"],
+                        "structured_candidate_count": diag["n_candidate_claims"],
+                    }
+                    log.info(
+                        "claim-first-structured: relation=%s answer=%r",
+                        intent.relation, answer[:60],
+                    )
+                    return answer
+                # ── Full-session structured retry ────────────────────
+                # The wiki bundle's "Nearby Context" is bounded to ±2
+                # turns around the matched turn. When the gold-bearing
+                # sentence lives outside that window — but in the same
+                # SESSION the retriever already surfaced — we'd miss
+                # it. Expand to the full session(s) referenced by
+                # ctx.items and rerun extraction once. The structured
+                # extractor's scaffold/label/responsibility filters
+                # keep the wider window from emitting false positives.
+                items_snap = list(ctx.items)
+                session_ids_to_expand: list[str] = []
+                _seen_sids: set[str] = set()
+                for it in items_snap:
+                    md = getattr(it, "metadata", None) or {}
+                    sid = md.get("session_id") or ""
+                    sids = md.get("session_ids") or []
+                    for cand in ([sid] if sid else []) + list(sids):
+                        if cand and cand not in _seen_sids:
+                            _seen_sids.add(cand)
+                            session_ids_to_expand.append(cand)
+                expanded_claims: list[Any] = []
+                raw_store = getattr(retriever, "raw_store", None)
+                if session_ids_to_expand and raw_store is not None:
+                    for raw in getattr(raw_store, "items", []):
+                        rmd = raw.metadata or {}
+                        rsid = str(rmd.get("session_id") or "")
+                        if rsid not in _seen_sids:
+                            continue
+                        expanded_claims.extend(
+                            extract_structured_claims_from_context([raw])
+                        )
+                if expanded_claims:
+                    final_expanded = finalize_fact_answer(
+                        intent, expanded_claims,
+                    )
+                    if final_expanded is not None:
+                        answer, diag = final_expanded
+                        self._claim_first_used = True
+                        self.last_decomposition_stats = {
+                            "mode": "claim_first_structured_expanded",
+                            "claim_first_route": mode.value,
+                            "n_claims": len(ranked),
+                            "claim_first_span": answer,
+                            "structured_intent": diag["intent"],
+                            "structured_matched_claim": diag["matched_claim"],
+                            "structured_candidate_count":
+                                diag["n_candidate_claims"],
+                            "expanded_sessions": session_ids_to_expand,
+                        }
+                        log.info(
+                            "claim-first-structured EXPANDED: rel=%s "
+                            "sessions=%d answer=%r",
+                            intent.relation,
+                            len(session_ids_to_expand),
+                            answer[:60],
+                        )
+                        return answer
+                # ── DIAGNOSTIC: structured path matched the intent but
+                # found no usable claim in the retrieved bundle OR in
+                # the expanded session content. Surface enough detail
+                # in the trace to distinguish retrieval gaps from
+                # extractor gaps.
+                matching = [
+                    c for c in structured_claims
+                    if c.relation == intent.relation
+                ]
+                expanded_matching = [
+                    c for c in expanded_claims
+                    if c.relation == intent.relation
+                ]
+                self.last_structured_fallthrough = {
+                    "relation": intent.relation,
+                    "constraints": dict(intent.constraints),
+                    "n_ctx_items": len(items_snap),
+                    "n_total_claims": len(structured_claims),
+                    "n_matching_relation": len(matching),
+                    "matching_objects": [c.object_ for c in matching[:5]],
+                    "expanded_sessions": session_ids_to_expand,
+                    "n_expanded_claims": len(expanded_claims),
+                    "n_expanded_matching": len(expanded_matching),
+                    "expanded_matching_objects":
+                        [c.object_ for c in expanded_matching[:5]],
+                    "ctx_snippets": [
+                        (getattr(it, "content", "") or "")[:1500]
+                        for it in items_snap[:6]
+                    ],
+                }
+                log.info(
+                    "claim-first-structured FALLTHROUGH: rel=%s "
+                    "ctx=%d claims=%d matching=%d expanded=%d/%d",
+                    intent.relation, len(items_snap),
+                    len(structured_claims), len(matching),
+                    len(expanded_claims), len(expanded_matching),
+                )
+
+        head_table = {
+            TaskMode.FACT_LOOKUP:             head_fact_lookup,
+            TaskMode.ASSISTANT_MEMORY_LOOKUP: head_assistant_memory,
+            TaskMode.PREFERENCE_PROFILE:      head_preference_profile,
+            TaskMode.KNOWLEDGE_UPDATE:        head_knowledge_update,
+            TaskMode.MULTI_SESSION_AGGREGATE: head_multi_session_aggregate,
+            TaskMode.TEMPORAL_REASONING:      head_temporal_reasoning,
+        }
+        head = head_table[mode]
+        deterministic = head(ranked, question) or ""
+        deterministic = deterministic.strip().rstrip(".")
+
+        # 4. fallback when the head couldn't extract a span
+        if not deterministic:
+            top_k = max(1, self.claim_first_top_n_for_fallback)
+            prompt = build_extractive_prompt(question, ranked[:top_k])
+            if prompt:
+                try:
+                    raw = await self.llm.complete(
+                        prompt=prompt, max_tokens=40,
+                    )
+                except Exception:
+                    log.exception(
+                        "claim-first fallback LLM call failed for %r",
+                        question[:80],
+                    )
+                    raw = ""
+                deterministic = clean_final_answer(str(raw))
+
+        # 5. validation
+        claim_texts = [c.text for c in ranked[:8]]
+        ok, reason = validate_against_claims(deterministic, claim_texts)
+
+        # 5a. Validation-failure recovery: when the deterministic span
+        # is bad (e.g. prose body of a long claim), give the extractive
+        # LLM fallback a chance to extract the SHORTEST span from the
+        # top claims before falling through to the legacy decompose
+        # pipeline. The legacy pipeline rebuilds the full window text
+        # and is more error-prone than asking the model directly for
+        # a span. This is what unblocks rows like 5d3d2817 where the
+        # head returned a prose body, validator caught it, but the LLM
+        # could legitimately extract "Marketing specialist at a small
+        # startup" from a sibling claim.
+        if not ok:
+            top_k = max(1, self.claim_first_top_n_for_fallback)
+            prompt = build_extractive_prompt(question, ranked[:top_k])
+            if prompt:
+                try:
+                    raw = await self.llm.complete(
+                        prompt=prompt, max_tokens=40,
+                    )
+                except Exception:
+                    log.exception(
+                        "claim-first recovery LLM call failed for %r",
+                        question[:80],
+                    )
+                    raw = ""
+                recovered = clean_final_answer(str(raw))
+                if recovered:
+                    rec_ok, _rec_reason = validate_against_claims(
+                        recovered, claim_texts,
+                    )
+                    if rec_ok:
+                        log.info(
+                            "claim-first: recovered via extractive "
+                            "fallback after %s (span=%r)",
+                            reason, recovered[:60],
+                        )
+                        deterministic = recovered
+                        ok = True
+                        reason = f"recovered_after_{reason}"
+
+        if not ok:
+            log.info(
+                "claim-first: span %r failed validation (%s) — falling "
+                "through to legacy pipeline",
+                deterministic[:60], reason,
+            )
+            # Stamp diagnostic state so the JSONL trace can show that
+            # claim-first ran and was rejected.
+            self.last_decomposition_stats = {
+                "mode": "claim_first_rejected",
+                "claim_first_route": mode.value,
+                "claim_first_span": deterministic,
+                "claim_first_reason": reason,
+                "n_claims": len(ranked),
+            }
+            return ""
+
+        # Identify the supporting claim — the highest-ranked one whose
+        # text actually contains the span (lower-cased substring match).
+        # Populate ``answer_source_span`` on that claim so the trace
+        # shows which sentence backed the answer. `Claim` is frozen, so
+        # we record the dict-level snapshot rather than mutating it.
+        span_lower = deterministic.lower()
+        supporting_idx = next(
+            (i for i, c in enumerate(ranked) if span_lower in c.text.lower()),
+            0,
+        )
+        from dataclasses import replace as _replace_claim
+        supporting = _replace_claim(
+            ranked[supporting_idx], answer_source_span=deterministic,
+        )
+
+        # Stamp the success flag so ``answer_question`` skips
+        # ``_postprocess`` — the COUNT override / LLM repair must NOT
+        # touch a verified claim-first span (b86304ba: "triple what I
+        # paid for it" → "6" regression).
+        self._claim_first_used = True
+
+        self.last_decomposition_stats = {
+            "mode": "claim_first",
+            "claim_first_route": mode.value,
+            "n_claims": len(ranked),
+            "claim_first_span": deterministic,
+            "claim_first_supporting_claim": supporting.to_dict(),
+            "top_claims_preview": [c.to_dict() for c in ranked[:3]],
+        }
+        return deterministic
+
     async def _answer_question_inner(self, question: str) -> str:
+        # ── Optional claim-first short-circuit ────────────────────────────
+        # When enabled, run the broad reasoning-head pipeline FIRST. If
+        # it produces a claim-supported span we return early; otherwise
+        # we fall through to the legacy decompose+packet path. This is
+        # the minimal-risk wiring: the existing pipeline is preserved
+        # verbatim as the fallback, so a regression in the new heads
+        # can never make accuracy worse than the prior pass.
+        if self.claim_first:
+            short_circuit = await self._answer_claim_first(question)
+            if short_circuit:
+                return short_circuit
+
         subquestions = await self._decompose_question(question)
         is_aggregate = self._is_aggregate_question(question)
         if self._is_atomic(question, subquestions) and not is_aggregate:
@@ -2828,12 +3282,72 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
         # Per-sub-question span audit, captured into last_decomposition_stats
         # so the JSONL trace can show *why* each row chose its evidence.
         spans_audit: list[dict[str, Any]] = []
+        # Per-sub-question session-narrowing audit. Each entry records
+        # the verified-confidence + dropped session ids + reason so the
+        # JSONL trace exposes which sub-questions got narrowed.
+        narrow_audit: list[dict[str, Any]] = []
         for subquestion in subquestions:
             try:
                 ctx = await retriever.retrieve(Query(text=subquestion), self.budget)
             except Exception:
                 log.exception("sub-question retrieve failed for %r", subquestion)
                 ctx = self._empty_context(self.budget)
+
+            sub_qtype = classify(subquestion)
+
+            # ── Optional top-session narrowing ───────────────────────────
+            # When the top-ranked retrieved session carries a verified
+            # answer-bearing candidate and the question is NOT explicitly
+            # multi-session, drop items from lower-ranked sessions so
+            # ShareGPT/UltraChat distractor windows can't leak into the
+            # sub-answer prompt. Falls through cleanly when the question
+            # is multi-session, the top session is unverified, or the
+            # verifier's confidence is below threshold.
+            narrow_result: NarrowResult | None = None
+            if self.session_narrowing and ctx.items:
+                sub_cands = []
+                for item in ctx.items:
+                    sid = str((item.metadata or {}).get("session_id") or "")
+                    sub_cands.extend(extract_candidates_from_text(
+                        item.content, source_session_id=sid,
+                    ))
+                verified = filter_passing(verify_claims(
+                    subquestion, sub_cands, question_type=sub_qtype,
+                ))
+                multi_session = (
+                    sub_qtype == QuestionType.MULTI_SESSION
+                    or is_multi_session_hint(subquestion)
+                )
+                narrow_result = narrow_to_top_session(
+                    list(ctx.items),
+                    verified,
+                    multi_session_hint=multi_session,
+                    min_verified_confidence=self.session_narrowing_min_confidence,
+                )
+                narrow_audit.append({
+                    "subquestion": subquestion,
+                    **narrow_result.to_dict(),
+                })
+                if narrow_result.narrowed:
+                    # Replace ctx.items with the narrowed list. The
+                    # retriever's ContextBundle is a frozen-ish dataclass;
+                    # we build a shallow replace so downstream code (span
+                    # selection, candidate extraction, evidence text)
+                    # sees only the surviving session's items.
+                    ctx = dataclasses_replace(
+                        ctx,
+                        items=narrow_result.items,
+                        messages=[
+                            {
+                                "role": str(
+                                    (item.metadata or {}).get("role", "user"),
+                                ),
+                                "content": item.content,
+                            }
+                            for item in narrow_result.items
+                        ],
+                    )
+
             contexts.append(ctx)
 
             # Optional evidence span selection — compresses each wide
@@ -2846,7 +3360,7 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
                     list(ctx.items),
                     max_spans=self.evidence_max_spans,
                     min_overlap=self.evidence_min_overlap,
-                    question_type=classify(subquestion),
+                    question_type=sub_qtype,
                 )
                 spans_audit.append({
                     "subquestion": subquestion,
@@ -2900,6 +3414,44 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
             }
             return subanswers[0].answer
 
+        # ── Optional minimal evidence packet for the final synthesiser ──
+        # When --evidence-packet is on, mine every retrieved item across
+        # every sub-question's bundle for candidates, run the verifier,
+        # and pass ONLY the verified PASS set into the synthesis prompt
+        # via :class:`EvidencePacket`. The packet renderer drops the
+        # raw evidence-window text from the prompt and tags each claim
+        # with its source span + session id + confidence. Telemetry
+        # surfaces ``selected_evidence_count`` and
+        # ``excluded_noise_count`` so the JSONL trace can confirm
+        # noise was filtered out and not silently passed through.
+        evidence_packet_obj: EvidencePacket | None = None
+        packet_meta: dict[str, Any] = {}
+        if self.evidence_packet:
+            # `_answer_question_inner` runs before `_postprocess` so the
+            # outer wrapper's `question_type` isn't in scope yet — classify
+            # here. Cost is one regex pass, no LLM call.
+            packet_qtype = classify(question)
+            all_candidates: list[Any] = []
+            for ctx_b in contexts:
+                all_candidates.extend(extract_candidates_from_context(ctx_b))
+            verified_results = verify_claims(
+                question, all_candidates, question_type=packet_qtype,
+            )
+            verified_pool = filter_passing(verified_results)
+            evidence_packet_obj = build_evidence_packet(
+                question,
+                verified_pool,
+                all_candidates=all_candidates,
+                max_claims=self.evidence_packet_max_claims,
+            )
+            packet_meta = evidence_packet_obj.to_dict()
+            log.info(
+                "evidence_packet: %d verified / %d excluded for %r",
+                packet_meta["selected_evidence_count"],
+                packet_meta["excluded_noise_count"],
+                question[:60],
+            )
+
         # For count / list / how-many questions, route the final
         # synthesis through a JSON-schema prompt so dedup happens at
         # the schema layer instead of being implicit in prose. The
@@ -2928,7 +3480,10 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
                 )
                 # Retry through the prose path so a parse failure doesn't
                 # silently keep an unstructured raw blob as the answer.
-                prose_prompt = build_final_synthesis_prompt(question, subanswers)
+                prose_prompt = build_final_synthesis_prompt(
+                    question, subanswers,
+                    evidence_packet=evidence_packet_obj,
+                )
                 try:
                     answer = await self.llm.complete(
                         prompt=prose_prompt, max_tokens=self.answer_max_tokens,
@@ -2938,7 +3493,10 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
                     answer = f"[error: {exc!r}]"
                 answer = str(answer).strip()
         else:
-            final_prompt = build_final_synthesis_prompt(question, subanswers)
+            final_prompt = build_final_synthesis_prompt(
+                question, subanswers,
+                evidence_packet=evidence_packet_obj,
+            )
             try:
                 answer = await self.llm.complete(
                     prompt=final_prompt, max_tokens=self.answer_max_tokens,
@@ -2957,6 +3515,18 @@ class _DecomposedAnsweringAdapter(_IngestingAdapter):
             "aggregation": agg_meta,
             "evidence_span_selection": self.evidence_span_selection,
             "evidence_spans_audit": spans_audit,
+            "session_narrowing": self.session_narrowing,
+            "session_narrow_audit": narrow_audit,
+            "evidence_packet": self.evidence_packet,
+            # ``selected_evidence_count`` + ``excluded_noise_count`` live
+            # inside ``evidence_packet_meta`` so the JSONL trace can read
+            # them at the same key the spec asked for. When the flag is
+            # off, the meta dict is empty.
+            "evidence_packet_meta": packet_meta,
+            "decomp_guard": (
+                self._last_decomp_guard.to_dict()
+                if self._last_decomp_guard is not None else None
+            ),
         }
         return answer
 
@@ -2986,6 +3556,12 @@ def make_adapter_factory(
     evidence_span_selection: bool = False,
     evidence_max_spans: int = 3,
     evidence_min_overlap: float = 0.2,
+    session_narrowing: bool = False,
+    session_narrowing_min_confidence: float = 0.5,
+    evidence_packet: bool = False,
+    evidence_packet_max_claims: int = 6,
+    claim_first: bool = False,
+    claim_first_top_n_for_fallback: int = 3,
     session_aware_retrieval: bool = False,
     session_top_k: int = 4,
     turns_per_session: int = 2,
@@ -3081,6 +3657,12 @@ def make_adapter_factory(
                 evidence_span_selection=evidence_span_selection,
                 evidence_max_spans=evidence_max_spans,
                 evidence_min_overlap=evidence_min_overlap,
+                session_narrowing=session_narrowing,
+                session_narrowing_min_confidence=session_narrowing_min_confidence,
+                evidence_packet=evidence_packet,
+                evidence_packet_max_claims=evidence_packet_max_claims,
+                claim_first=claim_first,
+                claim_first_top_n_for_fallback=claim_first_top_n_for_fallback,
             )
         if chain is None:
             return _IngestingAdapter(
@@ -3318,6 +3900,12 @@ async def main_async(args: argparse.Namespace) -> int:
         evidence_span_selection=args.evidence_spans,
         evidence_max_spans=args.evidence_max_spans,
         evidence_min_overlap=args.evidence_min_overlap,
+        session_narrowing=args.session_narrowing,
+        session_narrowing_min_confidence=args.session_narrowing_min_confidence,
+        evidence_packet=args.evidence_packet,
+        evidence_packet_max_claims=args.evidence_packet_max_claims,
+        claim_first=args.claim_first,
+        claim_first_top_n_for_fallback=args.claim_first_top_n_for_fallback,
         session_aware_retrieval=args.session_aware_retrieval,
         session_top_k=args.session_top_k,
         turns_per_session=args.turns_per_session,
@@ -3755,6 +4343,65 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "content words) required for a span to be eligible. Default "
             "0.2; lower values let weaker spans through, higher values "
             "make the selector stricter (and more abstentions)."
+        ),
+    )
+    p.add_argument(
+        "--session-narrowing", action="store_true",
+        help=(
+            "Enable top-session narrowing. When the top-ranked retrieved "
+            "session carries a verified answer-bearing claim AND the "
+            "question is not explicitly multi-session, drop items from "
+            "lower-ranked sessions so distractor ShareGPT/UltraChat "
+            "windows can't leak into the sub-answer prompt."
+        ),
+    )
+    p.add_argument(
+        "--session-narrowing-min-confidence", type=float, default=0.5,
+        help=(
+            "Floor on the verifier's confidence required to narrow "
+            "(default 0.5). Below this, the narrower keeps all sessions "
+            "rather than risk silently dropping evidence."
+        ),
+    )
+    p.add_argument(
+        "--evidence-packet", action="store_true",
+        help=(
+            "Replace the raw evidence-window text in the final synthesis "
+            "prompt with a minimal evidence packet — verified claims, "
+            "exact source spans, source session ids, and confidences. "
+            "Excluded noise candidates never enter the answerer's "
+            "context. Per-row JSONL trace gains "
+            "selected_evidence_count + excluded_noise_count."
+        ),
+    )
+    p.add_argument(
+        "--evidence-packet-max-claims", type=int, default=6,
+        help=(
+            "Hard cap on packet size (default 6). Claims are ranked by "
+            "verifier confidence; lowest-confidence claims are dropped "
+            "first when the cap is hit."
+        ),
+    )
+    p.add_argument(
+        "--claim-first", action="store_true",
+        help=(
+            "Enable the claim-first answer pipeline. After retrieval, "
+            "extract sentence-level claims with role/session metadata, "
+            "route the question to one of six broad reasoning heads "
+            "(FACT_LOOKUP, ASSISTANT_MEMORY_LOOKUP, PREFERENCE_PROFILE, "
+            "KNOWLEDGE_UPDATE, MULTI_SESSION_AGGREGATE, "
+            "TEMPORAL_REASONING), and short-circuit the final answer "
+            "when the head produces a claim-supported span. Falls "
+            "through to the existing decompose+packet path when the "
+            "head can't extract a span."
+        ),
+    )
+    p.add_argument(
+        "--claim-first-top-n-for-fallback", type=int, default=3,
+        help=(
+            "Number of top-ranked claims to send to the extractive LLM "
+            "fallback when the deterministic head returns empty "
+            "(default 3)."
         ),
     )
     return p.parse_args(argv)

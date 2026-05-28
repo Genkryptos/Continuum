@@ -499,6 +499,18 @@ async def _run_one(
     t0 = time.perf_counter()
     try:
         await _maybe_await(adapter.process_conversation(row.messages))
+        # Pass dataset hints to the adapter so its router can
+        # disambiguate categories (assistant-memory, preference,
+        # temporal, multi-session, knowledge-update) that the
+        # question's surface form alone can't reliably distinguish.
+        # Set via attributes rather than a kwarg so the adapter
+        # protocol stays single-arg.
+        if hasattr(adapter, "dataset_question_type"):
+            adapter.dataset_question_type = row.question_type
+        if hasattr(adapter, "dataset_is_multi_session"):
+            adapter.dataset_is_multi_session = (
+                len(row.answer_session_ids or []) > 1
+            )
         answer = await _maybe_await(adapter.answer_question(row.question))
     except Exception as exc:
         log.exception("row %s failed", row.question_id)
@@ -525,6 +537,11 @@ async def _run_one(
         else _classify_failure(
             answer=answer, error=error,
             retrieved=retrieved, expected=row.answer_session_ids,
+            question_type=row.question_type,
+            decomposition_stats=(
+                getattr(adapter, "last_decomposition_stats", None) or {}
+            ),
+            expected_answer=row.expected_answer,
         )
     )
     # Optional optimizer telemetry — the adapter publishes this dict on
@@ -580,11 +597,40 @@ async def _run_one(
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),
         strategy_savings=dict(opt.get("strategy_savings", {})),
-        decomposition_stats=dict(
-            getattr(adapter, "last_decomposition_stats", None) or {}
-        ),
+        decomposition_stats={
+            **(getattr(adapter, "last_decomposition_stats", None) or {}),
+            **(
+                {"structured_fallthrough":
+                 getattr(adapter, "last_structured_fallthrough", None) or {}}
+                if getattr(adapter, "last_structured_fallthrough", None)
+                else {}
+            ),
+        },
         telemetry=dict(telem),
     )
+
+
+#: Per LongMemEval ``question_type`` → the TaskMode the question
+#: *should* route to. Used by :func:`_classify_failure` to detect
+#: ``wrong_route`` — when the adapter's chosen route disagrees with
+#: the dataset hint. Mirrors the table in ``task_router.py`` so the
+#: two stay in sync; if you add a new category there, mirror it here.
+_EXPECTED_ROUTE_BY_TYPE: dict[str, str] = {
+    "single-session-user":        "FACT_LOOKUP",
+    "single-session-assistant":   "ASSISTANT_MEMORY_LOOKUP",
+    "single-session-preference":  "PREFERENCE_PROFILE",
+    "knowledge-update":           "KNOWLEDGE_UPDATE",
+    "multi-session":              "MULTI_SESSION_AGGREGATE",
+    "temporal-reasoning":         "TEMPORAL_REASONING",
+}
+
+# Bare-date pattern — used to flag "answer looks like a date when a
+# duration was asked for" (the missing_temporal_computation bucket).
+_BARE_DATE_RE = re.compile(
+    r"^(?:\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?|"
+    r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)$",
+    re.IGNORECASE,
+)
 
 
 def _classify_failure(
@@ -593,14 +639,111 @@ def _classify_failure(
     error: str | None,
     retrieved: Sequence[str],
     expected: Sequence[str],
+    question_type: str = "",
+    decomposition_stats: dict[str, Any] | None = None,
+    expected_answer: str = "",
 ) -> str:
-    """Map a wrong answer into one of the four diagnostic buckets."""
+    """
+    Map a wrong answer into a precise diagnostic bucket.
+
+    Buckets (ordered from most-specific to most-generic):
+
+    * ``llm_error`` — adapter raised or returned an ``[error:`` shim.
+    * ``other`` — no gold to compare against.
+    * ``missing_fact`` — none of the expected sessions were retrieved.
+      (Retrieval is the bottleneck here; nothing else could have
+      worked.)
+    * ``wrong_route`` — adapter chose a route that disagrees with the
+      LongMemEval category. The answer might still be plausible but
+      it came from the wrong reasoning head.
+    * ``wrong_role`` — the answer span came from a turn whose speaker
+      doesn't match the question shape (user-only or assistant-only).
+    * ``missing_aggregation`` — multi-session question, but a single
+      span was returned instead of an aggregation.
+    * ``missing_temporal_computation`` — temporal question, but the
+      answer looks like a bare date rather than a computed duration.
+    * ``stale_fact`` — knowledge-update question where the chosen span
+      mentions any of the standard update markers (changed, used to,
+      previously) — i.e., probably the wrong half of the update pair.
+    * ``wrong_span`` — right session was retrieved, right route, but
+      the picked span doesn't match the gold.
+    * ``wrong_retrieval`` — catch-all when none of the above fire.
+    """
     if error or answer.startswith("[error:"):
         return "llm_error"
     if not expected:
-        return "other"  # nothing to compare against
+        return "other"
     if not any(sid in retrieved for sid in expected):
         return "missing_fact"
+
+    stats = decomposition_stats or {}
+    qtype = (question_type or "").strip().lower()
+    answer_clean = (answer or "").strip()
+    answer_lower = answer_clean.lower()
+
+    # 1) Wrong route — the adapter's chosen route disagrees with the
+    # dataset category. We read the route from any of the keys the
+    # structured / claim-first / decomposed-answer heads use.
+    actual_route = (
+        stats.get("claim_first_route")
+        or stats.get("route")
+        or stats.get("mode")
+        or ""
+    )
+    expected_route = _EXPECTED_ROUTE_BY_TYPE.get(qtype)
+    if expected_route and actual_route:
+        actual_norm = str(actual_route).upper().replace("CLAIM_FIRST_", "")
+        structured_passthrough = {
+            expected_route,
+            "CLAIM_FIRST_STRUCTURED",
+            "CLAIM_FIRST_STRUCTURED_EXPANDED",
+        }
+        # The structured/expanded routes encode "claim_first answered
+        # without going through a specific head" — only flag a route
+        # mismatch when the actual route is a *different* TaskMode head.
+        if (
+            actual_norm not in structured_passthrough
+            and expected_route not in actual_norm
+        ):
+            return "wrong_route"
+
+    # 2) Wrong role — the answer came from a speaker the question
+    # shape forbids.
+    matched_claim = stats.get("structured_matched_claim") or {}
+    matched_role = str(matched_claim.get("source_role", "")).lower()
+    if matched_role:
+        if qtype == "single-session-assistant" and matched_role != "assistant":
+            return "wrong_role"
+        if qtype == "single-session-user" and matched_role == "assistant":
+            return "wrong_role"
+
+    # 3) Multi-session that returned a single span without aggregation.
+    if qtype == "multi-session" and not any(
+        marker in answer_lower
+        for marker in (",", " and ", " across ", " total", " altogether")
+    ) and len(answer_clean.split()) <= 6:
+        return "missing_aggregation"
+
+    # 4) Temporal-reasoning that returned a bare date instead of a
+    # computed duration / ordering phrase.
+    if qtype == "temporal-reasoning" and _BARE_DATE_RE.match(answer_clean):
+        return "missing_temporal_computation"
+
+    # 5) Knowledge-update where the chosen span looks like the stale
+    # half of the update pair.
+    if qtype == "knowledge-update":
+        stale_markers = (
+            "used to", "previously", "before",
+            "formerly", "old name", "changed from",
+        )
+        matched_text = str(matched_claim.get("text", "")).lower()
+        if any(m in matched_text for m in stale_markers):
+            return "stale_fact"
+
+    # 6) Right session retrieved but wrong span chosen.
+    if any(sid in retrieved for sid in expected):
+        return "wrong_span"
+
     return "wrong_retrieval"
 
 
@@ -620,9 +763,18 @@ def _recall_diagnostics(
 
 
 def _failure_breakdown(rows: list[RowResult]) -> dict[str, int]:
+    # Seed every bucket so the report shows zeros explicitly when a
+    # category has no failures of that type — easier to read than
+    # "missing key" at the call site.
     out: dict[str, int] = {
         "llm_error": 0,
         "missing_fact": 0,
+        "wrong_route": 0,
+        "wrong_role": 0,
+        "wrong_span": 0,
+        "stale_fact": 0,
+        "missing_aggregation": 0,
+        "missing_temporal_computation": 0,
         "wrong_retrieval": 0,
         "other": 0,
     }

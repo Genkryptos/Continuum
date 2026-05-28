@@ -10,3 +10,13 @@
 # Secrets
 *.key
 *.pem
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+
+# Claude worktrees
+.claude/worktrees/
