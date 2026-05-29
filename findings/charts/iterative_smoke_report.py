@@ -225,7 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         ))
 
     if not args.no_write:
-        out_path = args.input.with_name(args.input.stem + ".iterative_summary.json")
+        # Prefix so the output doesn't collide with the input under a
+        # ``baseline_*.json`` glob.
+        out_path = args.input.with_name("summary_" + args.input.stem + ".json")
         out_path.write_text(json.dumps(summary, indent=2, default=str))
         print(f"\nstructured summary → {out_path}")
     return 0

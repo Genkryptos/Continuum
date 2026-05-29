@@ -197,7 +197,10 @@ def main(argv: list[str] | None = None) -> int:
     print(_render_table(summary["overall"], summary["per_question_type"]))
 
     if not args.no_write:
-        out_path = args.input.with_name(args.input.stem + ".v1_summary.json")
+        # Use a "summary_" prefix so the output doesn't collide with the
+        # input under ``baseline_*.json`` globs (the prior naming
+        # ``<stem>.v1_summary.json`` did, breaking re-runs).
+        out_path = args.input.with_name("summary_" + args.input.stem + ".json")
         out_path.write_text(json.dumps(summary, indent=2, default=str))
         print(f"\nstructured summary → {out_path}")
     return 0
