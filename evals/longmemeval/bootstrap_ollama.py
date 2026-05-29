@@ -4039,6 +4039,13 @@ async def main_async(args: argparse.Namespace) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    if args.abstain_threshold is not None:
+        log.warning(
+            "--abstain-threshold=%s is a NO-OP: the abstain head was gated "
+            "out (judge scores abstentions as 0.0). Ignoring it.",
+            args.abstain_threshold,
+        )
+
     # Pick the model default if the user didn't override it explicitly.
     model = args.model
     if not model:
@@ -4634,6 +4641,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Per-sub-question refine rounds (iterative reasoner only). "
             "Counts heuristic + SmallLLM rewrites; the initial retrieval "
             "always runs. max_rounds=2 means up to 3 total attempts."
+        ),
+    )
+    p.add_argument(
+        "--abstain-threshold", type=float, default=None,
+        help=(
+            "ACCEPTED BUT NO-OP. The abstain head (Prompt 8 Task A) was "
+            "gated out: judge.py scores an abstention as wrong (0.0), so "
+            "returning 'I don't have enough information' would lose every "
+            "uncertain row under judged accuracy. The flag is kept so the "
+            "plan's literal Task B command runs without an argparse error; "
+            "it has no effect on behaviour. A warning is logged if set."
         ),
     )
     p.add_argument(
