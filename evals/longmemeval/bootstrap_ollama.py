@@ -3798,6 +3798,7 @@ def make_adapter_factory(
     use_iterative_reasoner: bool = False,
     iterative_max_llm_calls: int = 6,
     iterative_max_rounds: int = 2,
+    small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
     tau_hours: float = 168.0,
@@ -3925,6 +3926,7 @@ def make_adapter_factory(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
                 max_llm_calls=iterative_max_llm_calls,
                 max_rounds=iterative_max_rounds,
+                small_llm=small_llm,
             )
         if decompose_answer:
             return _DecomposedAnsweringAdapter(
@@ -3970,6 +3972,51 @@ async def _verify_ollama(model: str, base_url: str) -> None:
             f"Ollama doesn't have {model!r}. Available: {sorted(names)}. "
             f"Pull it with: ollama pull {model}"
         )
+
+
+def _build_small_llm(args: argparse.Namespace, model: str) -> Any:
+    """
+    Construct the SmallLLM used for span-fallback / intent / query
+    rewrite, honouring ``--small-llm``:
+
+    * ``ollama`` (default) — Ollama at ``--ollama-url`` with the tiny
+      ``qwen2.5:1.5b-instruct`` default (or ``CONTINUUM_SMALL_LLM_*``
+      overrides). Degrades to regex-only if Ollama isn't running.
+    * ``same`` — reuse the same provider endpoint + model + key as the
+      answerer. Lets span-fallback work without a separate Ollama
+      daemon, at the cost of extra calls against the provider's rate
+      limit (notable on Groq's free tier — batch accordingly).
+
+    Returns a ``SmallLLM`` instance. For ``same`` on a provider we
+    can't map to an OpenAI-compatible endpoint, logs a warning and
+    falls back to the Ollama default.
+    """
+    from continuum.extraction.small_llm import SmallLLM
+
+    if args.small_llm != "same":
+        return SmallLLM()  # ollama defaults / env overrides
+
+    provider = args.provider
+    if provider == "groq":
+        url, key = DEFAULT_GROQ_URL, os.environ.get("GROQ_API_KEY", "")
+    elif provider == "openai":
+        url, key = DEFAULT_OPENAI_URL, os.environ.get("OPENAI_API_KEY", "")
+    elif provider == "lmstudio":
+        url, key = args.lmstudio_url, "lm-studio"  # LM Studio accepts any key
+    elif provider == "ollama":
+        # "same" against ollama means use the big ollama model via the
+        # native /api/generate shape — no /v1, backend stays ollama.
+        return SmallLLM(model=model, url=args.ollama_url)
+    else:
+        log.warning(
+            "--small-llm same unsupported for provider=%s; using Ollama default",
+            provider,
+        )
+        return SmallLLM()
+
+    # URL ends in /v1 → SmallLLM auto-detects the openai-chat backend.
+    log.info("small-llm following provider=%s model=%s url=%s", provider, model, url)
+    return SmallLLM(model=model, url=url, api_key=key)
 
 
 def _build_ltm_store_factory(
@@ -4097,20 +4144,25 @@ async def main_async(args: argparse.Namespace) -> int:
         await _verify_ollama(model, args.ollama_url)
         llm = OllamaLLM(model=model, base_url=args.ollama_url)
 
+    # ── SmallLLM construction (shared by span-fallback + reasoner) ─────────
+    # Build one SmallLLM here so the span-fallback picker AND the
+    # IterativeReasoner's intent/rewrite calls use the same endpoint
+    # (--small-llm). Cheap to construct; the cache is on disk.
+    small_llm: Any = _build_small_llm(args, model)
+
     # ── --span-fallback wiring ─────────────────────────────────────────────
-    # Parks a process-wide SmallLLM the assistant-claim picker reaches for
-    # when its regex tier is unreliable. Cheap to construct; the cache is
-    # on disk. Failure here is non-fatal: the picker degrades to regex-only.
+    # Parks the SmallLLM as the process-wide default the assistant-claim
+    # picker reaches for when its regex tier is unreliable. Failure here is
+    # non-fatal: the picker degrades to regex-only.
     if args.span_fallback:
         try:
-            from continuum.extraction.small_llm import SmallLLM
             from evals.longmemeval.answer_post import (
                 reset_span_fallback_stats,
                 set_default_span_fallback_llm,
             )
             reset_span_fallback_stats()
-            set_default_span_fallback_llm(SmallLLM())
-            log.info("span fallback ENABLED (SmallLLM default)")
+            set_default_span_fallback_llm(small_llm)
+            log.info("span fallback ENABLED (small-llm=%s)", args.small_llm)
         except ImportError as exc:
             log.warning("span fallback unavailable: %s", exc)
 
@@ -4157,6 +4209,19 @@ async def main_async(args: argparse.Namespace) -> int:
         if not rows:
             raise ValueError(
                 f"no dataset rows matched ids in {args.question_ids_file}",
+            )
+
+    # --offset slices off the first N rows (after all filtering) so the
+    # remaining --limit window starts there. This is the batching lever:
+    # `--offset 50 --limit 50` evaluates rows 50-99. Output dirs should
+    # differ per batch; merge with v1_summary.py (accepts multiple files).
+    if args.offset:
+        before = len(rows)
+        rows = rows[args.offset:]
+        log.info("--offset %d: %d/%d rows remain", args.offset, len(rows), before)
+        if not rows:
+            raise ValueError(
+                f"--offset {args.offset} skipped past all {before} rows",
             )
 
     embedder = _Embedder()
@@ -4293,6 +4358,7 @@ async def main_async(args: argparse.Namespace) -> int:
         use_iterative_reasoner=(args.reasoner == "iterative"),
         iterative_max_llm_calls=args.max_llm_calls,
         iterative_max_rounds=args.max_rounds,
+        small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
         score_weights=score_weights,
@@ -4333,39 +4399,46 @@ async def main_async(args: argparse.Namespace) -> int:
         log.info("debug trace ENABLED — JSONL per-row trace will be written")
 
     # ── Smoke test ──────────────────────────────────────────────────────────
-    if args.limit is None or args.limit > 5:
-        smoke_limit = 5
-    else:
-        smoke_limit = args.limit
-    log.info("=== SMOKE TEST (%d questions) ===", smoke_limit)
-    t0 = time.perf_counter()
+    # --no-smoke skips the 5-row pre-run entirely. For batched sweeps the
+    # smoke would re-evaluate (and re-bill) the first 5 rows of every batch,
+    # so batches should pass --no-smoke --full --yes.
     with trace_cm as trace_writer:
-        smoke = await run_baseline(
-            dataset=args.dataset_name,
-            adapter_factory=factory,
-            dataset_loader=lambda _: rows,
-            output_dir=out_dir / "smoke",
-            answerer=model,
-            row_scorer=row_scorer,
-            limit=smoke_limit,
-            trace_writer=trace_writer,
-        )
-        log.info("smoke completed in %.0fs", time.perf_counter() - t0)
-
-        if not args.full:
-            log.info("Smoke run only. Pass --full to run all %d questions.", len(rows))
-            return 0
-
-        if not args.yes:
-            print()
-            prompt = (
-                f"Smoke results: accuracy={smoke.accuracy:.1%}, "
-                f"avg_tokens={smoke.avg_tokens:.0f}. "
-                f"Proceed with full {len(rows)}-question run? [y/N] "
+        if not args.no_smoke:
+            if args.limit is None or args.limit > 5:
+                smoke_limit = 5
+            else:
+                smoke_limit = args.limit
+            log.info("=== SMOKE TEST (%d questions) ===", smoke_limit)
+            t0 = time.perf_counter()
+            smoke = await run_baseline(
+                dataset=args.dataset_name,
+                adapter_factory=factory,
+                dataset_loader=lambda _: rows,
+                output_dir=out_dir / "smoke",
+                answerer=model,
+                row_scorer=row_scorer,
+                limit=smoke_limit,
+                trace_writer=trace_writer,
             )
-            if input(prompt).strip().lower() not in {"y", "yes"}:
-                log.info("aborted by user")
+            log.info("smoke completed in %.0fs", time.perf_counter() - t0)
+
+            if not args.full:
+                log.info("Smoke run only. Pass --full to run all %d questions.", len(rows))
                 return 0
+
+            if not args.yes:
+                print()
+                prompt = (
+                    f"Smoke results: accuracy={smoke.accuracy:.1%}, "
+                    f"avg_tokens={smoke.avg_tokens:.0f}. "
+                    f"Proceed with full {len(rows)}-question run? [y/N] "
+                )
+                if input(prompt).strip().lower() not in {"y", "yes"}:
+                    log.info("aborted by user")
+                    return 0
+        elif not args.full:
+            log.info("--no-smoke with no --full: nothing to run. Pass --full.")
+            return 0
 
         log.info("=== FULL RUN (%d questions) ===", len(rows))
         t0 = time.perf_counter()
@@ -4616,6 +4689,37 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--no-span-fallback", dest="span_fallback", action="store_false",
         help="Disable the SmallLLM span-selector fallback (default).",
+    )
+    p.add_argument(
+        "--small-llm",
+        choices=("ollama", "same"),
+        default="ollama",
+        help=(
+            "Where the SmallLLM (span-fallback / intent / query-rewrite) "
+            "runs. 'ollama' (default): local Ollama at --ollama-url with "
+            "qwen2.5:1.5b-instruct. 'same': reuse the answerer's provider, "
+            "model, endpoint and key (works for groq/openai/lmstudio) — "
+            "needed when no Ollama daemon is running, but adds calls "
+            "against the provider's rate limit."
+        ),
+    )
+    # ── Batching (Groq free-tier friendly) ─────────────────────────────────
+    p.add_argument(
+        "--offset", type=int, default=0,
+        help=(
+            "Skip the first N rows after filtering, so the --limit window "
+            "starts at row N. Lets you run the sweep in batches "
+            "(--offset 0/50/100… --limit 50) into separate output dirs and "
+            "merge with v1_summary.py."
+        ),
+    )
+    p.add_argument(
+        "--no-smoke", action="store_true", default=False,
+        help=(
+            "Skip the 5-row smoke pre-run. Use with --full --yes for "
+            "batched sweeps so each batch doesn't re-evaluate (and re-bill) "
+            "its first 5 rows."
+        ),
     )
     # ── IterativeReasoner ──────────────────────────────────────────────────
     p.add_argument(

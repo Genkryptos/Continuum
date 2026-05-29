@@ -171,36 +171,72 @@ def _summarise(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _load_and_merge(paths: list[Path]) -> dict[str, Any] | None:
+    """
+    Load one or more baseline JSONs and concatenate their ``rows`` into
+    a single payload. Used to aggregate batched sweeps
+    (``--offset``/``--limit`` runs) back into one v1 view. Dedups rows
+    by ``question_id`` (last write wins) so an overlapping re-run of a
+    batch doesn't double-count. Run-level ``metrics`` are dropped on
+    merge — they'd be per-batch — so the merged numbers are recomputed
+    from the union of rows.
+    """
+    merged_rows: dict[str, dict[str, Any]] = {}
+    dataset = answerer = None
+    multi = len(paths) > 1
+    for p in paths:
+        if not p.exists():
+            print(f"input file not found: {p}", file=sys.stderr)
+            return None
+        try:
+            payload = json.loads(p.read_text())
+        except json.JSONDecodeError as exc:
+            print(f"failed to parse {p}: {exc}", file=sys.stderr)
+            return None
+        dataset = dataset or payload.get("dataset")
+        answerer = answerer or payload.get("answerer")
+        for i, r in enumerate(payload.get("rows") or []):
+            qid = r.get("question_id") or f"{p.stem}#{i}"
+            merged_rows[qid] = r
+    out: dict[str, Any] = {
+        "dataset": dataset, "answerer": answerer,
+        "rows": list(merged_rows.values()),
+    }
+    # Only carry run-level metrics through when there's a single file —
+    # for a merge they're per-batch and would mislead.
+    if not multi:
+        out["metrics"] = json.loads(paths[0].read_text()).get("metrics", {})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Render v1-final headline numbers from a baseline JSON.",
+        description="Render v1-final headline numbers from one or more baseline JSONs.",
     )
-    p.add_argument("input", type=Path,
-                   help="Path to a baseline_*.json from bootstrap_ollama.")
+    p.add_argument("input", type=Path, nargs="+",
+                   help="Path(s) to baseline_*.json from bootstrap_ollama. "
+                        "Multiple files are merged (batched sweeps).")
     p.add_argument("--no-write", action="store_true",
                    help="Don't write the structured summary JSON next to the input.")
     args = p.parse_args(argv)
 
-    if not args.input.exists():
-        print(f"input file not found: {args.input}", file=sys.stderr)
-        return 2
-    try:
-        payload = json.loads(args.input.read_text())
-    except json.JSONDecodeError as exc:
-        print(f"failed to parse {args.input}: {exc}", file=sys.stderr)
+    payload = _load_and_merge(list(args.input))
+    if payload is None:
         return 2
 
     summary = _summarise(payload)
 
     if summary.get("dataset") or summary.get("answerer"):
         print(f"dataset: {summary.get('dataset')}  answerer: {summary.get('answerer')}")
+    if len(args.input) > 1:
+        print(f"merged {len(args.input)} files → {summary['n_rows']} unique rows")
     print(_render_table(summary["overall"], summary["per_question_type"]))
 
     if not args.no_write:
-        # Use a "summary_" prefix so the output doesn't collide with the
-        # input under ``baseline_*.json`` globs (the prior naming
-        # ``<stem>.v1_summary.json`` did, breaking re-runs).
-        out_path = args.input.with_name("summary_" + args.input.stem + ".json")
+        # Anchor the output name on the first input; "summary_" prefix so
+        # it doesn't collide with the input under baseline_*.json globs.
+        first = args.input[0]
+        out_path = first.with_name("summary_" + first.stem + ".json")
         out_path.write_text(json.dumps(summary, indent=2, default=str))
         print(f"\nstructured summary → {out_path}")
     return 0
