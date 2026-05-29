@@ -2343,7 +2343,11 @@ class _MiniSession:
     ) -> None:
         self.stm = store  # adapter still calls session.stm.append
         self.retriever = retriever
-        self.session_id = retriever.session_id
+        # Composite retrievers (``ReciprocalRankFusion``,
+        # ``DecompositionRetriever``) don't carry a ``session_id`` — the
+        # underlying children do. The field is informational here; default
+        # to "default" so ``--retriever hybrid`` doesn't trip up _MiniSession.
+        self.session_id = getattr(retriever, "session_id", "default")
 
 
 class _IngestingAdapter(ContinuumAdapter):
