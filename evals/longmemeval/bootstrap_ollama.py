@@ -4001,6 +4001,23 @@ async def main_async(args: argparse.Namespace) -> int:
         await _verify_ollama(model, args.ollama_url)
         llm = OllamaLLM(model=model, base_url=args.ollama_url)
 
+    # ── --span-fallback wiring ─────────────────────────────────────────────
+    # Parks a process-wide SmallLLM the assistant-claim picker reaches for
+    # when its regex tier is unreliable. Cheap to construct; the cache is
+    # on disk. Failure here is non-fatal: the picker degrades to regex-only.
+    if args.span_fallback:
+        try:
+            from continuum.extraction.small_llm import SmallLLM
+            from evals.longmemeval.answer_post import (
+                reset_span_fallback_stats,
+                set_default_span_fallback_llm,
+            )
+            reset_span_fallback_stats()
+            set_default_span_fallback_llm(SmallLLM())
+            log.info("span fallback ENABLED (SmallLLM default)")
+        except ImportError as exc:
+            log.warning("span fallback unavailable: %s", exc)
+
     log.info("loading dataset from %s …", args.dataset)
     rows = load_longmemeval_rows(args.dataset)
     log.info("loaded %d rows", len(rows))
@@ -4474,6 +4491,26 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'multi-session,temporal-reasoning'). When unset, all rows "
             "are evaluated. Useful for the n=78 knowledge-update sweep."
         ),
+    )
+    # ── Span-selector fallback (answer_post picker) ───────────────────────
+    # Parks a process-wide SmallLLM that the assistant-claim picker calls
+    # when its regex output is a nationality adjective, fails a count-shape
+    # check, or sits inside a structurally-richer claim than itself. Mirrors
+    # the same flag in evals.longmemeval.baseline so the production CLI
+    # (this file) and the library CLI (baseline.py) share semantics.
+    p.add_argument(
+        "--span-fallback", dest="span_fallback",
+        action="store_true", default=False,
+        help=(
+            "Enable the SmallLLM span-selector fallback inside the "
+            "assistant-claim picker (answer_post._pick_answer_from_assistant_claim). "
+            "Requires a SmallLLM endpoint (default: Ollama at "
+            "http://localhost:11434 with qwen2.5:1.5b-instruct)."
+        ),
+    )
+    p.add_argument(
+        "--no-span-fallback", dest="span_fallback", action="store_false",
+        help="Disable the SmallLLM span-selector fallback (default).",
     )
     # ── IterativeReasoner ──────────────────────────────────────────────────
     p.add_argument(
