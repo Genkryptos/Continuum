@@ -54,28 +54,63 @@ def _category_map() -> dict[str, str]:
     }
 
 
-def headline_table() -> None:
-    print("=" * 96)
-    print("§2 — HEADLINE RESULTS (n=500 each)")
-    print("=" * 96)
-    print(
-        f"{'run':<26}{'acc%':>7}{'rec%':>7}{'p50ms':>9}{'p95ms':>9}"
-        f"{'avg_tok':>9}{'fail/total':>14}"
+def _primary_accuracy(m: dict[str, Any]) -> tuple[float, str]:
+    """
+    Pick the primary accuracy figure from a metrics block.
+
+    ``judged_accuracy`` is the promoted metric whenever the run wired in
+    the LLM judge; older result files only carry ``accuracy`` and the
+    legacy substring number — fall back to those.
+    """
+    judged = m.get("judged_accuracy")
+    if judged is not None:
+        return float(judged), "judge"
+    # Pre-judge runs: ``accuracy`` was the substring scorer; keep it as the
+    # primary so historical tables still render, but tag the lens.
+    return float(m.get("accuracy", 0.0)), "substring"
+
+
+def _substring_accuracy(m: dict[str, Any]) -> float:
+    """Substring lens — kept as a reference-only column."""
+    return float(
+        m.get("substring_accuracy", m.get("accuracy", 0.0))
     )
-    print("-" * 96)
+
+
+def headline_table() -> None:
+    print("=" * 104)
+    print("§2 — HEADLINE RESULTS (n=500 each)")
+    print("    'judged_acc%' is the primary metric (LLM judge, gpt-4o-mini).")
+    print("    'substr%' is the legacy substring scorer — REFERENCE ONLY.")
+    print("=" * 104)
+    print(
+        f"{'run':<26}{'judged_acc%':>13}{'substr% (ref)':>16}{'rec%':>7}"
+        f"{'p50ms':>9}{'p95ms':>9}{'avg_tok':>9}{'fail/total':>14}"
+    )
+    print("-" * 104)
     for name, path, _ in RUNS:
         d = _load(path)
         m = d["metrics"]
+        primary, lens = _primary_accuracy(m)
+        substring = _substring_accuracy(m)
         fail = sum(m["failure_breakdown"].values())
+        # When the run didn't have a judge, mark the primary column so the
+        # reader doesn't mistake substring numbers for judged ones.
+        primary_cell = f"{primary*100:>11.1f}"
+        if lens == "substring":
+            primary_cell = f"{primary*100:>9.1f}*"
         print(
             f"{name:<26}"
-            f"{m['accuracy']*100:>6.1f} "
+            f"{primary_cell:>13} "
+            f"{substring*100:>13.1f}  "
             f"{m['recall']*100:>6.1f} "
             f"{m['latency_p50_ms']:>8.0f} "
             f"{m['latency_p95_ms']:>8.0f} "
             f"{m['avg_tokens']:>8.0f} "
             f"{fail:>6}/{m['n_questions']}"
         )
+    print()
+    print("  * = substring scorer used as primary (judge not run for this row).")
 
 
 def failure_table() -> None:
@@ -97,10 +132,25 @@ def failure_table() -> None:
         )
 
 
+def _row_primary_correct(r: dict[str, Any]) -> bool:
+    """
+    Resolve the primary verdict for a single row.
+
+    Prefers the judge verdict when present, otherwise falls back to the
+    row-level ``correct`` flag (which itself mirrors the judge inside the
+    runner — this fallback is only hit on legacy result files where the
+    judge column was never written).
+    """
+    judge = r.get("judge_correct")
+    if judge is not None:
+        return bool(judge)
+    return bool(r.get("correct", False))
+
+
 def category_table() -> None:
     print()
     print("=" * 96)
-    print("§5 — PER-CATEGORY ACCURACY (substring)")
+    print("§5 — PER-CATEGORY ACCURACY (LLM judge primary; substring = reference only)")
     print("=" * 96)
     cats = _category_map()
     table: dict[str, dict[str, tuple[int, int]]] = {}
@@ -111,7 +161,7 @@ def category_table() -> None:
             c = cats.get(r["question_id"], "?")
             bucket = cat.setdefault(c, [0, 0])
             bucket[0] += 1
-            bucket[1] += 1 if r["correct"] else 0
+            bucket[1] += 1 if _row_primary_correct(r) else 0
         table[name] = {c: (cat.get(c, [0, 0])[0], cat.get(c, [0, 0])[1]) for c in CATEGORIES}
     header = f"{'category':<28}" + "".join(f"{name[:15]:>16}" for name, _, _ in RUNS)
     print(header)

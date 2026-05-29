@@ -136,6 +136,13 @@ class RowResult:
     #: The fix for `retrieved_count = 0` and `retrieval_ms = 0` despite
     #: non-empty `retrieved_session_ids` lives in this field.
     telemetry: dict[str, Any] = dataclasses.field(default_factory=dict)
+    #: Dual-track verdicts so analyses can report both metrics from one run.
+    #: ``substring_correct`` is the legacy cheap matcher; ``judge_correct``
+    #: is the LLM judge's verdict (``None`` when the judge wasn't run or its
+    #: call failed). The "primary" ``correct`` above mirrors the judge when
+    #: it ran, falling back to substring otherwise.
+    substring_correct: bool = False
+    judge_correct: bool | None = None
 
 
 @dataclasses.dataclass
@@ -153,6 +160,25 @@ class BaselineResults:
         if not self.rows:
             return 0.0
         return sum(1 for r in self.rows if r.correct) / len(self.rows)
+
+    @property
+    def substring_accuracy(self) -> float:
+        """Accuracy under the cheap substring scorer (kept for reference)."""
+        if not self.rows:
+            return 0.0
+        return sum(1 for r in self.rows if r.substring_correct) / len(self.rows)
+
+    @property
+    def judged_accuracy(self) -> float | None:
+        """Accuracy under the LLM judge. ``None`` if no row was judged."""
+        judged = [r for r in self.rows if r.judge_correct is not None]
+        if not judged:
+            return None
+        return sum(1 for r in judged if r.judge_correct) / len(judged)
+
+    @property
+    def judged_row_count(self) -> int:
+        return sum(1 for r in self.rows if r.judge_correct is not None)
 
     @property
     def avg_tokens(self) -> float:
@@ -249,6 +275,12 @@ class BaselineResults:
             "metrics": {
                 "n_questions": len(self.rows),
                 "accuracy": self.accuracy,
+                # Dual scorers — substring is kept around as a reference
+                # column; judged_accuracy is the primary metric whenever a
+                # judge was wired in (``None`` if no row was judged).
+                "substring_accuracy": self.substring_accuracy,
+                "judged_accuracy": self.judged_accuracy,
+                "judged_row_count": self.judged_row_count,
                 "avg_tokens": self.avg_tokens,
                 "recall": self.recall,
                 "latency_p50_ms": self.latency_p50,
@@ -386,8 +418,10 @@ async def run_baseline(
     dataset_loader: DatasetLoader,
     answerer: str = "gpt-4o-mini",
     output_dir: Path | str | None = None,
+    output_file: Path | str | None = None,
     scorer: Scorer | None = None,
     row_scorer: RowScorer | None = None,
+    judge: Any | None = None,
     limit: int | None = None,
     price_per_1k_out: dict[str, float] | None = None,
     now: Callable[[], dt.datetime] | None = None,
@@ -416,7 +450,19 @@ async def run_baseline(
         ``./results``.
     scorer:
         Optional answer-vs-expected scorer. Defaults to
-        :func:`default_scorer`.
+        :func:`default_scorer`. This is the *substring reference*
+        scorer; its verdict is always recorded as
+        ``RowResult.substring_correct``.
+    judge:
+        Optional LLM judge (anything exposing ``async is_correct(question,
+        expected, actual) -> bool`` — typically
+        :class:`evals.longmemeval.judge.LLMJudgeScorer`). When provided,
+        the judge runs **inline** after every answer, its verdict is
+        recorded as ``RowResult.judge_correct``, and the row's primary
+        ``correct`` flag mirrors the judge.
+    output_file:
+        Explicit JSON path to write to. Overrides the default
+        ``<output_dir>/baseline_<YYYY-MM-DD>.json`` naming.
     limit:
         Cap the number of rows processed (handy for smoke tests).
     price_per_1k_out:
@@ -443,6 +489,7 @@ async def run_baseline(
             adapter=adapter_factory(),
             scorer=scorer,
             row_scorer=row_scorer,
+            judge=judge,
             answerer=answerer,
             prices=prices,
             count_tokens=counter,
@@ -477,7 +524,7 @@ async def run_baseline(
         finished_at=finished.isoformat(),
     )
 
-    _persist(results, out_root, clock)
+    _persist(results, out_root, clock, output_file=output_file)
     _print_summary(results)
     return results
 
@@ -491,6 +538,7 @@ async def _run_one(
     prices: dict[str, float],
     count_tokens: Callable[[str], int],
     row_scorer: RowScorer | None = None,
+    judge: Any | None = None,
 ) -> RowResult:
     """Run a single question. All exceptions captured into the result."""
     error: str | None = None
@@ -522,12 +570,29 @@ async def _run_one(
     retrieved = _extract_retrieved_session_ids(adapter)
 
     answer_tokens = count_tokens(answer)
+    # ── dual scorers ───────────────────────────────────────────────────────
+    # `substring_correct` is the reference (default_scorer or whatever the
+    # caller injected as ``scorer``/``row_scorer``). The optional ``judge``
+    # is the primary metric when wired up: its verdict becomes ``correct``.
     if row_scorer is not None:
-        correct = bool(answer) and bool(
+        substring_correct = bool(answer) and bool(
             await _maybe_await(row_scorer(row, answer))
         )
     else:
-        correct = bool(answer) and scorer(answer, row.expected_answer)
+        substring_correct = bool(answer) and scorer(answer, row.expected_answer)
+
+    judge_correct: bool | None = None
+    if judge is not None and answer:
+        try:
+            judge_correct = bool(
+                await _maybe_await(
+                    judge.is_correct(row.question, row.expected_answer, answer)
+                )
+            )
+        except Exception:
+            log.exception("judge call failed for %s", row.question_id)
+            judge_correct = None
+    correct = judge_correct if judge_correct is not None else substring_correct
     recall_diag = _recall_diagnostics(
         expected=row.answer_session_ids,
         retrieved=retrieved,
@@ -607,6 +672,8 @@ async def _run_one(
             ),
         },
         telemetry=dict(telem),
+        substring_correct=substring_correct,
+        judge_correct=judge_correct,
     )
 
 
@@ -826,11 +893,18 @@ def _persist(
     results: BaselineResults,
     out_dir: Path,
     now: Callable[[], dt.datetime],
+    *,
+    output_file: Path | str | None = None,
 ) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = now().strftime("%Y-%m-%d")
-    json_path = out_dir / f"baseline_{stamp}.json"
-    csv_path = out_dir / "baseline_failures.csv"
+    if output_file is not None:
+        json_path = Path(output_file)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        csv_path = json_path.with_suffix(".failures.csv")
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = now().strftime("%Y-%m-%d")
+        json_path = out_dir / f"baseline_{stamp}.json"
+        csv_path = out_dir / "baseline_failures.csv"
 
     json_path.write_text(json.dumps(results.to_dict(), indent=2, default=str))
     log.info("metrics written to %s", json_path)
@@ -871,7 +945,12 @@ def _print_summary(results: BaselineResults) -> None:
     print(f"LongMemEval baseline — {results.dataset}")
     print(f"  answerer:        {results.answerer}")
     print(f"  questions:       {len(results.rows)}")
-    print(f"  accuracy:        {results.accuracy:.1%}")
+    judged = results.judged_accuracy
+    if judged is not None:
+        print(f"  judged_accuracy: {judged:.1%}  (primary — LLM judge)")
+        print(f"  substring_acc:   {results.substring_accuracy:.1%}  (reference only)")
+    else:
+        print(f"  substring_acc:   {results.substring_accuracy:.1%}  (primary — no judge wired)")
     print(f"  recall:          {results.recall:.1%}")
     print(f"  avg tokens:      {results.avg_tokens:.0f}")
     print(f"  latency p50/p95: {results.latency_p50:.0f}ms / {results.latency_p95:.0f}ms")
@@ -943,8 +1022,26 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--answerer", default="gpt-4o-mini")
     p.add_argument("--output", type=Path, default=Path("results"))
     p.add_argument(
-        "--limit", type=int, default=None,
+        "--out", type=Path, default=None,
+        help="Explicit JSON output path (overrides --output's dated naming).",
+    )
+    p.add_argument(
+        "--limit", "--n", type=int, default=None, dest="limit",
         help="cap on rows (handy for smoke testing)",
+    )
+    # --judge defaults ON now that it's the primary metric. Pass --no-judge
+    # to fall back to substring-only (e.g. for offline / no-API-key smokes).
+    p.add_argument(
+        "--judge", dest="judge", action="store_true", default=True,
+        help="Run the gpt-4o-mini LLM judge inline. Default: on.",
+    )
+    p.add_argument(
+        "--no-judge", dest="judge", action="store_false",
+        help="Disable the inline LLM judge (substring scorer only).",
+    )
+    p.add_argument(
+        "--judge-model", default="gpt-4o-mini",
+        help="Model used by the inline LLM judge (default: gpt-4o-mini).",
     )
     return p.parse_args(argv)
 
@@ -954,17 +1051,41 @@ def _cli_main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI
     CLI entry — wires the real Continuum session + the upstream
     LongMemEval loader.
 
-    The actual loader / adapter wiring depends on user config (DSNs,
-    LLM keys), so the CLI raises ``NotImplementedError`` and points
-    at :func:`run_baseline` which the user calls from their own
-    bootstrap script. The tests cover ``run_baseline`` directly.
+    Most production runs go through ``evals.longmemeval.bootstrap_ollama``
+    which carries the full adapter / retrieval / decompose wiring. This
+    thin entry covers the **promoted smoke** path:
+
+        python -m evals.longmemeval.baseline --n 25 --judge \\
+            --out results/smoke_judge.json
+
+    Requires ``OPENAI_API_KEY`` when ``--judge`` is on (default).
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    _parse_args(argv)
+    args = _parse_args(argv)
+    judge_obj: Any | None = None
+    if args.judge:
+        try:
+            from evals.longmemeval.bootstrap_ollama import OpenAILLM
+            from evals.longmemeval.judge import LLMJudgeScorer
+        except ImportError as exc:
+            raise SystemExit(
+                f"--judge requires openai + bootstrap_ollama deps: {exc}"
+            ) from exc
+        import os
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise SystemExit(
+                "--judge needs OPENAI_API_KEY in the environment. "
+                "Pass --no-judge to run the substring scorer only."
+            )
+        judge_obj = LLMJudgeScorer(
+            llm=OpenAILLM(model=args.judge_model, rpm=60)
+        )
     raise NotImplementedError(
-        "Wire your Continuum session + LongMemEval dataset loader and "
-        "call evals.longmemeval.baseline.run_baseline(...) directly. "
-        "See the module docstring for the contract."
+        "Wire your Continuum adapter + LongMemEval dataset loader and call "
+        "evals.longmemeval.baseline.run_baseline(..., judge=<judge>) "
+        "directly, or use evals.longmemeval.bootstrap_ollama which already "
+        "carries the full wiring. judge_obj=%r limit=%s out=%s"
+        % (judge_obj, args.limit, args.out)
     )
 
 
