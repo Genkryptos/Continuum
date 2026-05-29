@@ -1296,12 +1296,37 @@ class LMStudioLLM:
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )
-            resp.raise_for_status()
+        except Exception as exc:
+            log.error("LM Studio HTTP call failed: %s", exc)
+            raise RuntimeError(f"lmstudio: {exc!r}") from exc
+
+        if resp.status_code >= 400:
+            # LM Studio's error body carries the actual cause — typically
+            # "model not found", "context length … exceeded", or
+            # "max_tokens > model max". Surface it so the caller doesn't
+            # have to dig through httpx's generic 400 message.
+            try:
+                body = resp.json()
+                err_msg = (
+                    (body.get("error") or {}).get("message")
+                    if isinstance(body.get("error"), dict)
+                    else body.get("error") or body
+                )
+            except Exception:
+                err_msg = resp.text[:500]
+            log.error(
+                "LM Studio %d for model=%r prompt_chars=%d max_tokens=%d → %s",
+                resp.status_code, self.model, len(prompt), max_tokens, err_msg,
+            )
+            raise RuntimeError(
+                f"lmstudio {resp.status_code}: {err_msg}"
+            )
+        try:
             data = resp.json()
             raw = str(data["choices"][0]["message"]["content"])
             return _strip_think(raw)
         except Exception as exc:
-            log.exception("LM Studio call failed")
+            log.exception("LM Studio response parse failed")
             raise RuntimeError(f"lmstudio: {exc!r}") from exc
 
     async def aclose(self) -> None:
