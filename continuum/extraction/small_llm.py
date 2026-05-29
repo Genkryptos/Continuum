@@ -59,6 +59,21 @@ class SmallLLM:
         ).rstrip("/")
         self.cache_path = Path(cache_path) if cache_path else DEFAULT_CACHE_PATH
         self._init_cache()
+        # Flag flipped on first ConnectionError so we don't spam the eval
+        # log with a stack trace on every call when Ollama isn't running.
+        self._connection_warned = False
+
+    def _log_connection_failure(self, exc: BaseException) -> None:
+        if not self._connection_warned:
+            log.warning(
+                "SmallLLM endpoint %s unreachable (%s). "
+                "Subsequent failures suppressed; calls will return None "
+                "until the endpoint comes back up.",
+                self.url, type(exc).__name__,
+            )
+            self._connection_warned = True
+        else:
+            log.debug("SmallLLM endpoint still unreachable")
 
     # ── public API ──────────────────────────────────────────────────────────
 
@@ -141,6 +156,13 @@ class SmallLLM:
                 },
                 timeout=_TIMEOUT_S,
             )
+        except requests.ConnectionError as exc:
+            # The endpoint is down (or doesn't exist). Common — the
+            # caller is allowed to use SmallLLM without running Ollama.
+            # Log once per process at warning level; subsequent failures
+            # are silent debug spam so the eval logs stay readable.
+            self._log_connection_failure(exc)
+            return None
         except requests.RequestException:
             log.exception("SmallLLM request failed")
             return None
