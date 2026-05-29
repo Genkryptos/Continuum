@@ -509,107 +509,30 @@ def _score_user_turn_against_question(
     return len(q_tokens & turn_tokens) / len(q_tokens)
 
 
-#: Soft generic-intro pattern — catches openers that have enough
-#: substantive tail to escape :func:`is_generic_intro` but are still
-#: prefatory phrasing rather than an answer. Used as a soft penalty
-#: in :func:`_pick_answer_from_assistant_claim`, not a hard reject:
-#: a real answer can legitimately follow these phrases on the same
-#: line, but when there's a better alternative we prefer it.
-_SOFT_INTRO_RE = re.compile(
-    r"^\s*(?:sure|yes|absolutely|certainly|of\s+course|"
-    r"here\s+(?:are|is|you\s+go)|here(?:'?s)|"
-    r"happy\s+to\s+help|i'?d\s+be\s+happy|"
-    r"i\s+can\s+help|let\s+me|"
-    r"that'?s\s+a\s+(?:great|good)\s+question)\b",
-    re.IGNORECASE,
+# ``_pick_answer_from_assistant_claim`` (and its companion sets
+# ``_NATIONALITY_ADJECTIVES`` / ``_SOFT_INTRO_RE``) was moved to
+# :mod:`evals.longmemeval.answer_post` so it can share scope with the
+# rest of the answer-shaping helpers — and host the new SmallLLM span
+# fallback. The names are re-exported here so older callers
+# (and the existing call sites a few lines below) keep working
+# unchanged. The picker now requires an explicit ``span_extractor`` so
+# answer_post.py doesn't need to import this module.
+from evals.longmemeval.answer_post import (  # noqa: E402
+    _NATIONALITY_ADJECTIVES,
+    _SOFT_INTRO_RE,
+    _pick_answer_from_assistant_claim as _pick_answer_impl,
 )
-#: Nationality / regional adjectives the noun-phrase span extractor
-#: sometimes returns alone ("Roman" from "great for Roman pasta",
-#: "Italian" from "Italian food"). When the span IS one of these, we
-#: prefer the body — the real answer is the proper noun the
-#: adjective modifies, not the adjective itself. A small closed set
-#: rather than a regex so legitimate proper nouns ending in -an
-#: ("Manhattan", "Toronto") don't get rejected.
-_NATIONALITY_ADJECTIVES: frozenset[str] = frozenset({
-    "roman", "italian", "greek", "french", "german", "russian",
-    "chinese", "japanese", "korean", "english", "british", "spanish",
-    "american", "mexican", "canadian", "african", "asian", "european",
-    "indian", "persian", "arabic", "slavic", "nordic", "hispanic",
-    "latin", "polish", "swedish", "danish", "norwegian", "finnish",
-    "irish", "scottish", "welsh", "dutch", "belgian", "swiss",
-    "austrian", "portuguese", "brazilian", "argentine", "chilean",
-    "colombian", "egyptian", "moroccan", "turkish", "iranian",
-    "iraqi", "thai", "vietnamese", "indonesian", "filipino",
-    "australian", "kiwi", "ethiopian", "kenyan", "south", "north",
-    "east", "west", "western", "eastern", "northern", "southern",
-})
 
 
 def _pick_answer_from_assistant_claim(
     claim_text: str, question: str,
 ) -> str:
-    """
-    Pick the best answer string from a single assistant claim.
-
-    Strategy (regression-aware):
-
-      1. **Short bodies (≤ 12 words) → return body verbatim.** The
-         substring scorer accepts any answer token contained in the
-         body, so "Roscioli is great for Roman pasta" credits
-         "Roscioli", "Andy is a great choice" credits "Andy", and
-         "Use 2-3 eggs, beaten..." credits "2-3 eggs". Span
-         extraction was over-shortening these (returning "Roman" /
-         "3 eggs"), causing the v10 regressions.
-
-      2. **Medium bodies (13–20 words) → span first if it's
-         high-confidence, body otherwise.** A high-confidence span
-         is one that (a) starts the body — subject-position, or
-         (b) is multi-word, or (c) contains a digit. Single-word
-         nationality adjectives sitting mid-body ("Roman" /
-         "Italian") are explicitly rejected.
-
-      3. **Long prose (> 20 words) → span only.** Returning a
-         20-plus-word body verbatim is too noisy and tends to fail
-         the answer-shape validator downstream.
-
-    The split point — 12 words for body-wins — is empirical. Short
-    factual replies almost always fit (assistant lists items
-    individually, gives short recommendations, etc.); 12+ word
-    sentences are increasingly likely to carry intro phrasing or
-    multiple competing facts.
-    """
-    body = claim_text.strip().rstrip(".")
-    if not body:
-        return ""
-    body_tokens = body.split()
-    word_count = len(body_tokens)
-    span = _extract_fact_span(question, claim_text)
-    span_clean = span.strip().rstrip(".,;!?") if span else ""
-
-    # Tier 1: short body — body verbatim wins.
-    if word_count <= 12:
-        return body
-
-    # Tier 2: medium body — span first if high-confidence.
-    if span_clean and word_count <= 20:
-        starts_body = body.lower().startswith(span_clean.lower())
-        is_multi_word = len(span_clean.split()) >= 2
-        has_digit = bool(re.search(r"\d", span_clean))
-        is_adjective_only = (
-            len(span_clean.split()) == 1
-            and span_clean.lower() in _NATIONALITY_ADJECTIVES
-        )
-        if (
-            (starts_body or is_multi_word or has_digit)
-            and not is_adjective_only
-        ):
-            return span_clean
-        return body  # span is unreliable; body verbatim is safer.
-
-    # Tier 3: long prose — span only.
-    if span_clean:
-        return span_clean
-    return ""
+    """Thin wrapper that injects this module's ``_extract_fact_span``."""
+    return _pick_answer_impl(
+        claim_text,
+        question,
+        span_extractor=_extract_fact_span,
+    )
 
 
 def head_assistant_memory(claims: Iterable[Claim], question: str) -> str:

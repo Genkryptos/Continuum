@@ -1043,6 +1043,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--judge-model", default="gpt-4o-mini",
         help="Model used by the inline LLM judge (default: gpt-4o-mini).",
     )
+    # ── Span-selector fallback (answer_post._pick_answer_from_assistant_claim).
+    p.add_argument(
+        "--span-fallback", dest="span_fallback",
+        action="store_true", default=True,
+        help=(
+            "Enable the SmallLLM span-selector fallback inside the "
+            "assistant-claim picker. Fires when the regex output is a "
+            "single nationality adjective, fails a count-shape check, "
+            "or sits inside a structured claim much longer than itself. "
+            "Default: on."
+        ),
+    )
+    p.add_argument(
+        "--no-span-fallback", dest="span_fallback", action="store_false",
+        help="Disable the SmallLLM span-selector fallback.",
+    )
     return p.parse_args(argv)
 
 
@@ -1062,6 +1078,23 @@ def _cli_main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = _parse_args(argv)
+    # ── span-selector fallback wiring ──────────────────────────────────────
+    # Parked as a process-wide default so deeply-nested callers in
+    # reasoning_heads (head_assistant_memory, FACT_LOOKUP body fallback)
+    # pick it up without us having to thread a SmallLLM through every
+    # adapter layer. Cheap to construct; the cache is on disk.
+    if args.span_fallback:
+        try:
+            from continuum.extraction.small_llm import SmallLLM
+            from evals.longmemeval.answer_post import (
+                reset_span_fallback_stats,
+                set_default_span_fallback_llm,
+            )
+            reset_span_fallback_stats()
+            set_default_span_fallback_llm(SmallLLM())
+            log.info("span fallback enabled (SmallLLM default)")
+        except ImportError as exc:
+            log.warning("span fallback unavailable: %s", exc)
     judge_obj: Any | None = None
     if args.judge:
         try:
