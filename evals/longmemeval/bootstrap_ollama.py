@@ -1637,6 +1637,68 @@ class STMSemanticRetriever:
         )
 
 
+class BM25HaystackRetriever:
+    """
+    BM25 sibling of :class:`STMSemanticRetriever`.
+
+    Same store / same haystack / same ``ContextBundle`` shape — only
+    the ranker is swapped out for :class:`continuum.retrieval.bm25.BM25Index`.
+    Designed to compose one-for-one with
+    :class:`continuum.retrieval.rrf.ReciprocalRankFusion` so
+    ``--retriever hybrid`` can fuse cosine and BM25 hits side by side.
+
+    Why split lexical from cosine
+    -----------------------------
+    The cosine retriever wins on paraphrase ("dog" ↔ "canine") but
+    underweights rare proper nouns ("Roscioli", "MIT-PCT-301") whose
+    embeddings cluster with topically-adjacent neighbours. BM25 does
+    the inverse — it lights up on rare-token matches and is blind to
+    paraphrase. RRF then combines the two by rank rather than by
+    incomparable raw scores. See :mod:`continuum.retrieval.rrf`.
+    """
+
+    def __init__(
+        self,
+        *,
+        store: FlatHaystackStore,
+        top_k: int = 8,
+        session_id: str = "default",
+    ) -> None:
+        self.store = store
+        self.top_k = top_k
+        self.session_id = session_id
+
+    async def retrieve(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        from continuum.retrieval.bm25 import BM25Index
+        items = list(self.store.items)
+        if not items:
+            return ContextBundle(
+                items=[], messages=[], tokens_used=0, budget=budget,
+                tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+                debug_info={"retrieval_mode": "bm25", "corpus_size": 0},
+            )
+        index = BM25Index(items)
+        k = query.top_k or self.top_k
+        hits = index.query(query.text, k)
+        picked = [si.item for si in hits]
+        messages = [{"role": "system", "content": it.content} for it in picked]
+        token_count = sum(len(it.content.split()) for it in picked)
+        return ContextBundle(
+            items=picked,
+            messages=messages,
+            tokens_used=token_count,
+            budget=budget,
+            tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
+            debug_info={
+                "retrieval_mode": "bm25",
+                "corpus_size": len(items),
+                "hits": len(picked),
+            },
+        )
+
+
 class SessionAwareSemanticRetriever(STMSemanticRetriever):
     """
     Session-first LongMemEval retriever.
@@ -3546,6 +3608,8 @@ def make_adapter_factory(
     reranker: CrossEncoderReranker | None = None,
     rerank_to: int = 4,
     retrieval_mode: str = "topk",
+    retriever_kind: str = "cosine",
+    rrf_k: int = 60,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
     tau_hours: float = 168.0,
@@ -3636,12 +3700,28 @@ def make_adapter_factory(
                     "turns_per_session": turns_per_session,
                     "max_items": decompose_max_items,
                 })
-            base_retriever = retriever_cls(
+            cosine_retriever: Any = retriever_cls(
                 store=store, embedder=embedder, top_k=top_k,
                 mode=retrieval_mode, max_context_tokens=max_context_tokens,
                 score_weights=score_weights, tau_hours=tau_hours,
                 **retriever_kwargs,
             )
+            # ── --retriever {cosine,bm25,hybrid} ────────────────────────
+            if retriever_kind == "bm25":
+                base_retriever = BM25HaystackRetriever(
+                    store=store, top_k=top_k,
+                )
+            elif retriever_kind == "hybrid":
+                from continuum.retrieval.rrf import HybridRetriever
+                bm25_retriever = BM25HaystackRetriever(
+                    store=store, top_k=top_k,
+                )
+                base_retriever = HybridRetriever(
+                    cosine_retriever, bm25_retriever,
+                    k=rrf_k, top_k=top_k,
+                )
+            else:  # cosine (default)
+                base_retriever = cosine_retriever
         retriever: Any = base_retriever
         if decompose and not decompose_answer:
             retriever = DecompositionRetriever(
@@ -3890,6 +3970,8 @@ async def main_async(args: argparse.Namespace) -> int:
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
         reranker=reranker, rerank_to=args.rerank_to,
         retrieval_mode=args.retrieval_mode,
+        retriever_kind=args.retriever,
+        rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
         score_weights=score_weights,
         tau_hours=args.tau_hours,
@@ -4112,6 +4194,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "--max-context-tokens, else fall back to top-K. "
             "auto — long-context when it fits, top-K otherwise. "
             "long/auto bypass the reranker + optimizer chain."
+        ),
+    )
+    p.add_argument(
+        "--retriever",
+        choices=("cosine", "bm25", "hybrid"),
+        default="cosine",
+        help=(
+            "Which lexical/dense retriever to use. "
+            "'cosine' — embeddings-only (default, legacy). "
+            "'bm25' — lexical-only, rank_bm25 with a regex tokenizer. "
+            "'hybrid' — fuse cosine and bm25 with Reciprocal Rank Fusion "
+            "(see --rrf-k). Strongly recommended for multi-session and "
+            "temporal-reasoning categories where proper-noun anchors carry "
+            "the answer."
+        ),
+    )
+    p.add_argument(
+        "--rrf-k", type=int, default=60,
+        help=(
+            "RRF smoothing constant for --retriever hybrid (default 60, "
+            "Cormack 2009). Smaller k lets top-1 dominate; larger k "
+            "smooths agreements between cosine and bm25."
         ),
     )
     p.add_argument(
