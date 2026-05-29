@@ -2566,6 +2566,82 @@ class _IterativeReasoningAdapter(_IngestingAdapter):
         return result.answer
 
 
+class _DirectAnswerAdapter(_IngestingAdapter):
+    """
+    Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
+    the raw retrieved turns straight to the answerer in ONE LLM call.
+
+    No decompose, no candidate extraction, no claim verification, no
+    evidence packet, no reasoning heads — the entire machinery the
+    iterative reasoner runs is bypassed. Retrieval is identical (same
+    ``session.retriever``, so hybrid + LTM are unchanged), which makes
+    this a clean apples-to-apples test of the hypothesis that the
+    claim/verify/packet stack is *losing* information that 100%-recall
+    retrieval already found, for single-hop fact questions.
+
+    Sets ``last_ctx`` (recall stays measurable) and
+    ``last_telemetry`` with ``llm_call_count=1, answer_mode="direct"``.
+    """
+
+    def __init__(
+        self,
+        *,
+        session: _MiniSession,
+        llm: Any,
+        answer_max_tokens: int = 128,
+        top_k: int = 12,
+    ) -> None:
+        super().__init__(
+            session=session, llm=llm, answer_max_tokens=answer_max_tokens,
+        )
+        self._top_k = top_k
+        self.last_telemetry: dict[str, Any] = {}
+
+    async def answer_question(self, question: str) -> str:
+        retriever = getattr(self.session, "retriever", None)
+        ctx: ContextBundle | None = None
+        if retriever is not None:
+            try:
+                ctx = await retriever.retrieve(Query(text=question), self.budget)
+            except Exception:
+                log.exception("direct retrieve failed for %r", question[:80])
+        self.last_ctx = ctx
+
+        items = list(getattr(ctx, "items", []) or [])[: self._top_k]
+        if not items:
+            self.last_telemetry = {"llm_call_count": 0, "answer_mode": "direct"}
+            return ""
+
+        lines: list[str] = []
+        for it in items:
+            content = (getattr(it, "content", "") or "").strip()
+            if not content:
+                continue
+            role = (getattr(it, "metadata", {}) or {}).get("role", "") or ""
+            lines.append(f"[{role}] {content}" if role else content)
+        context = "\n".join(lines)[:8000]
+        prompt = (
+            "Answer the question using ONLY the retrieved conversation "
+            "below. Reply with just the answer — no explanation. If the "
+            "answer truly isn't present, reply 'I don't know.'\n\n"
+            f"Retrieved conversation:\n{context}\n\n"
+            f"Question: {question}\nAnswer:"
+        )
+        try:
+            answer = await self.llm.complete(
+                prompt=prompt, max_tokens=self.answer_max_tokens,
+            )
+        except Exception:
+            log.exception("direct answer LLM call failed")
+            answer = ""
+        self.last_telemetry = {
+            "llm_call_count": 1,
+            "answer_mode": "direct",
+            "retrieved_items": len(items),
+        }
+        return (answer or "").strip()
+
+
 # ---------------------------------------------------------------------------
 # Optimizer chain wiring
 # ---------------------------------------------------------------------------
@@ -3798,6 +3874,7 @@ def make_adapter_factory(
     use_iterative_reasoner: bool = False,
     iterative_max_llm_calls: int = 6,
     iterative_max_rounds: int = 2,
+    direct_answer: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -3921,6 +3998,11 @@ def make_adapter_factory(
         # The iterative loop replaces the legacy synthesis path entirely.
         # It still uses the same retriever (wrapped) and the same composer
         # LLM (``llm``), so retrieval + ingest behaviour is unchanged.
+        if direct_answer:
+            return _DirectAnswerAdapter(
+                session=session, llm=llm, answer_max_tokens=answer_max_tokens,
+                top_k=top_k,
+            )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -4358,6 +4440,7 @@ async def main_async(args: argparse.Namespace) -> int:
         use_iterative_reasoner=(args.reasoner == "iterative"),
         iterative_max_llm_calls=args.max_llm_calls,
         iterative_max_rounds=args.max_rounds,
+        direct_answer=(args.reasoner == "direct"),
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -4724,7 +4807,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # ── IterativeReasoner ──────────────────────────────────────────────────
     p.add_argument(
         "--reasoner",
-        choices=("legacy", "iterative"),
+        choices=("legacy", "iterative", "direct"),
         default="legacy",
         help=(
             "Which reasoner drives answer composition. 'legacy' (default) "
@@ -4732,7 +4815,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'iterative' wraps the same retriever in "
             "continuum.reasoning.IterativeReasoner: budget-capped loop "
             "(see --max-llm-calls / --max-rounds) with deterministic "
-            "head short-circuit, refine-on-fail, and abstain semantics."
+            "head short-circuit, refine-on-fail, and abstain semantics. "
+            "'direct' is the A/B baseline: retrieve then hand the raw "
+            "retrieved turns to the answerer in ONE call — no decompose, "
+            "no claims, no verify, no packet. Same retriever as the "
+            "others, so it isolates the value of the claim machinery."
         ),
     )
     p.add_argument(
