@@ -616,7 +616,14 @@ async def _run_one(
     # present, it's the source of truth for retrieved_count / latency /
     # tokens — the previous logs had zeros here while retrieved_session_ids
     # was non-empty. Falls back to optimizer stats when telemetry absent.
-    telem = getattr(adapter, "last_telemetry", None) or {}
+    telem = dict(getattr(adapter, "last_telemetry", None) or {})
+    # Merge in per-row store metrics (currently only populated by
+    # ContinuumLTMHaystackStore). Adds ``ltm_backend``, ``supersessions``,
+    # ``ltm_facts_live``, ``promoter_path`` keys to the row's telemetry
+    # block so the result JSON records the LTM lift signal end-to-end.
+    store_metrics = getattr(adapter, "last_store_metrics", None)
+    if store_metrics:
+        telem["store_metrics"] = dict(store_metrics)
     # Cost: prefer the real telemetry figure (it adds across every LLM
     # call, including decompose + sub-answers + synthesis + repair).
     # Fallback to the legacy per-answer-token estimate for back-compat.

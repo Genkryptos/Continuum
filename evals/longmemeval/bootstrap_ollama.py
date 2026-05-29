@@ -62,7 +62,7 @@ import os
 import random
 import re
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import replace as dataclasses_replace
 from pathlib import Path
 from typing import Any
@@ -2380,6 +2380,20 @@ class _IngestingAdapter(ContinuumAdapter):
                 with contextlib.suppress(ValueError):
                     item.created_at = dt.datetime.fromisoformat(date_iso)
             await store.append(item)
+        # Stores that own a deferred promotion / supersession pipeline
+        # (e.g. ContinuumLTMHaystackStore) expose `finalize()` so the
+        # rig can signal "ingest done — run promotion now." FlatHaystackStore
+        # has no such hook and is left untouched.
+        finalize = getattr(store, "finalize", None)
+        if finalize is not None:
+            await finalize()
+        # Surface store-level metrics so the row's result JSON records
+        # which LTM backend produced the numbers and how many
+        # supersessions fired during ingest. Read defensively — the
+        # legacy FlatHaystackStore has no metrics().
+        metrics = getattr(store, "metrics", None)
+        if callable(metrics):
+            self.last_store_metrics = metrics()
 
 
 # ---------------------------------------------------------------------------
@@ -3610,6 +3624,7 @@ def make_adapter_factory(
     retrieval_mode: str = "topk",
     retriever_kind: str = "cosine",
     rrf_k: int = 60,
+    store_factory: Callable[[], Any] | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
     tau_hours: float = 168.0,
@@ -3677,7 +3692,7 @@ def make_adapter_factory(
     """
 
     def factory() -> _IngestingAdapter:
-        store = FlatHaystackStore()
+        store = store_factory() if store_factory is not None else FlatHaystackStore()
         if content_wiki_memory:
             base_retriever = ContentWikiMemoryRetriever(
                 raw_store=store,
@@ -3774,6 +3789,68 @@ async def _verify_ollama(model: str, base_url: str) -> None:
         )
 
 
+def _build_ltm_store_factory(
+    args: argparse.Namespace, embedder: Any,
+) -> tuple[Callable[[], Any], str]:
+    """
+    Build a per-row store factory that yields a fresh
+    :class:`ContinuumLTMHaystackStore` over an in-memory or Postgres LTM.
+
+    The returned factory is closed over a *backend selector* (no shared
+    LTM state across rows — every row gets fresh tables). The label
+    flips to ``"postgres"`` only when the user explicitly opted in OR
+    ``--ltm-backend auto`` saw ``DATABASE_URL`` in env. We deliberately
+    avoid lazy-pickling Postgres state across rows: each row gets its
+    own connection / DB instance so failures don't bleed between
+    questions.
+    """
+    from evals.longmemeval.continuum_ltm_store import ContinuumLTMHaystackStore
+
+    backend = args.ltm_backend
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if backend == "auto":
+        backend = "postgres" if dsn else "in_memory"
+    if backend == "postgres" and not dsn:
+        raise SystemExit(
+            "--ltm-backend postgres requires DATABASE_URL in the environment"
+        )
+
+    # Optional LLM wiring for the promoter + fact extractor. Skipped
+    # when --no-llm-promoter is passed; the store then falls back to
+    # the deterministic supersession heuristic (good enough to
+    # demonstrate the lift on knowledge-update offline).
+    promoter = None
+    fact_extractor = None
+    llm_available = bool(args.llm_promoter)
+    if llm_available:
+        try:
+            from continuum.extraction.fact_extractor import FactExtractor
+            from continuum.promotion.mem0_promoter import Mem0Promoter
+            promoter = Mem0Promoter()  # litellm.acompletion by default
+            fact_extractor = FactExtractor()
+        except Exception as exc:  # pragma: no cover — defensive
+            log.warning("LLM promoter unavailable (%s); using heuristic", exc)
+            llm_available = False
+
+    def factory() -> Any:
+        if backend == "postgres":
+            from continuum.stores.postgres.ltm import PostgresLTM
+            ltm: Any = PostgresLTM(dsn=dsn)
+        else:
+            from continuum.stores.in_memory.ltm import InMemoryLTM
+            ltm = InMemoryLTM()
+        return ContinuumLTMHaystackStore(
+            ltm=ltm,
+            embedder=embedder,
+            promoter=promoter,
+            fact_extractor=fact_extractor,
+            llm_available=llm_available,
+            ltm_backend_label=backend,
+        )
+
+    return factory, backend
+
+
 async def main_async(args: argparse.Namespace) -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
@@ -3834,6 +3911,20 @@ async def main_async(args: argparse.Namespace) -> int:
             args.question_type,
             len(rows),
         )
+    # --question-types accepts a comma-separated allow-list (orthogonal
+    # to the legacy single-value --question-type). Used by the
+    # knowledge-update sweep: --question-types knowledge-update.
+    if args.question_types:
+        wanted_types = {
+            t.strip() for t in args.question_types.split(",") if t.strip()
+        }
+        if wanted_types:
+            before = len(rows)
+            rows = [r for r in rows if r.question_type in wanted_types]
+            log.info(
+                "question_types filter %s retained %d/%d rows",
+                sorted(wanted_types), len(rows), before,
+            )
     # `--question-ids-file` filters to a known subset (e.g. the deterministic
     # diagnostic_50 sample). The subset preserves the dataset's source order
     # so trace logs remain comparable across runs.
@@ -3966,11 +4057,26 @@ async def main_async(args: argparse.Namespace) -> int:
 
         log.info("LLM judge scoring ENABLED — semantic answer grading")
 
+    # ── --use-ltm wiring ────────────────────────────────────────────────────
+    # Construct a `store_factory` closure that yields a fresh store per
+    # row. When --use-ltm is off, this stays None and make_adapter_factory
+    # falls back to the legacy FlatHaystackStore path (zero behavioural
+    # change). When on, each row gets a fresh ContinuumLTMHaystackStore
+    # over an InMemoryLTM (or PostgresLTM when DATABASE_URL is set and
+    # --ltm-backend allows it).
+    store_factory: Callable[[], Any] | None = None
+    ltm_backend_label = "flat"
+    if args.use_ltm:
+        store_factory, ltm_backend_label = _build_ltm_store_factory(args, embedder)
+        log.info("LTM-backed haystack ENABLED — backend=%s, llm_promoter=%s",
+                 ltm_backend_label, args.llm_promoter)
+
     factory = make_adapter_factory(
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
         reranker=reranker, rerank_to=args.rerank_to,
         retrieval_mode=args.retrieval_mode,
         retriever_kind=args.retriever,
+        store_factory=store_factory,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
         score_weights=score_weights,
@@ -4216,6 +4322,54 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "RRF smoothing constant for --retriever hybrid (default 60, "
             "Cormack 2009). Smaller k lets top-1 dominate; larger k "
             "smooths agreements between cosine and bm25."
+        ),
+    )
+    # ── Continuum LTM + supersession ───────────────────────────────────────
+    p.add_argument(
+        "--use-ltm", action="store_true", default=False,
+        help=(
+            "Replace FlatHaystackStore with ContinuumLTMHaystackStore, "
+            "which drives Continuum's STM→facts→LTM promotion pipeline "
+            "per row. Live LTM facts are added to the retrieval corpus "
+            "alongside raw turns, so superseded knowledge-update halves "
+            "stop competing with the current half during retrieval."
+        ),
+    )
+    p.add_argument(
+        "--ltm-backend",
+        choices=("auto", "in_memory", "postgres"),
+        default="auto",
+        help=(
+            "Where the LTM lives when --use-ltm is on. 'auto' picks "
+            "postgres iff DATABASE_URL is set, otherwise in_memory. "
+            "Tagged onto the result JSON's metrics.ltm_backend."
+        ),
+    )
+    p.add_argument(
+        "--ltm-bootstrap-schema", action="store_true", default=False,
+        help=(
+            "Run the LTM migrations (001..004) idempotently before "
+            "the row loop. Only meaningful with --ltm-backend postgres "
+            "against a fresh database."
+        ),
+    )
+    p.add_argument(
+        "--no-llm-promoter", dest="llm_promoter",
+        action="store_false", default=True,
+        help=(
+            "Disable the LLM-driven fact extractor + Mem0 promoter; use "
+            "the deterministic supersession heuristic only. Useful for "
+            "hermetic test runs and when no provider key is in env."
+        ),
+    )
+    p.add_argument(
+        "--question-types",
+        default=None,
+        help=(
+            "Comma-separated list of LongMemEval question_type values to "
+            "include (e.g. 'knowledge-update' or "
+            "'multi-session,temporal-reasoning'). When unset, all rows "
+            "are evaluated. Useful for the n=78 knowledge-update sweep."
         ),
     )
     p.add_argument(
