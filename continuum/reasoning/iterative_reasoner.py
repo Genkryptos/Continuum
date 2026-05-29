@@ -164,6 +164,7 @@ class IterativeReasoner:
         max_llm_calls: int = 6,
         question_type_hint: str | None = None,
         is_multi_session_hint: bool = False,
+        head_max_verified: int = 3,
     ) -> None:
         self._retriever = retriever
         self._small_llm = small_llm
@@ -185,6 +186,12 @@ class IterativeReasoner:
         self._max_llm_calls = max(1, max_llm_calls)
         self._question_type_hint = question_type_hint
         self._is_multi_session_hint = is_multi_session_hint
+        # Above this many verified candidates the field of plausible
+        # answers is too wide for the deterministic head to pick
+        # reliably (observed: 19/21 "verified" → head returns the wrong
+        # salient entity). Past the threshold we defer to the composer,
+        # which sees only the top-N packet claims (focused) instead.
+        self._head_max_verified = max(0, head_max_verified)
 
     # ── public API ──────────────────────────────────────────────────────────
 
@@ -257,9 +264,14 @@ class IterativeReasoner:
             all_candidates=all_candidates, max_claims=6,
         )
 
-        # 6. Heads-first short-circuit (0 LLM).
+        # 6. Heads-first short-circuit (0 LLM) — but only when the
+        # verified pool is small enough to trust the head's pick. A
+        # large undifferentiated pool means the regex head is guessing;
+        # defer to the composer (change #2).
+        n_verified = len(all_verified)
         head = self._heads_by_mode.get(mode)
-        if head:
+        head_trustworthy = 0 < n_verified <= self._head_max_verified
+        if head and head_trustworthy:
             try:
                 head_answer = head(all_claims, question)
             except Exception:
@@ -272,6 +284,8 @@ class IterativeReasoner:
                     answer=head_answer, evidence=packet, trace=trace,
                     abstained=False, llm_call_count=budget.spent,
                 )
+        elif head and n_verified > self._head_max_verified:
+            trace["head_deferred_pool"] = n_verified
 
         # 7. Composer synthesis (1 call).
         if not budget.can_afford(1):
@@ -279,17 +293,28 @@ class IterativeReasoner:
                 sub_results, trace, budget, packet=packet,
                 reason="budget_exhausted",
             )
-        if not all_verified:
-            # No verified evidence at all — synthesising would
-            # hallucinate. Abstain with best-effort claim.
-            return self._best_effort(
-                sub_results, trace, budget, packet=packet,
-                reason="no_verified_claims",
-            )
-        try:
+        # Build the composer prompt. When the verifier passed claims,
+        # use the focused evidence packet. When it passed NOTHING
+        # (verifier rejected everything despite 100%-recall retrieval),
+        # fall back to the raw retrieved turns so the composer can still
+        # extract the answer — recall found the session, don't waste it
+        # on an empty packet (change #1).
+        if all_verified:
             final_prompt = self._build_final_prompt_fn(
                 question, subanswers=[], evidence_packet=packet,
             )
+            trace["composer_input"] = "packet"
+        else:
+            raw_prompt = self._raw_context_prompt(question, sub_results)
+            if not raw_prompt:
+                # Genuinely no retrieved context — nothing to reason over.
+                return self._best_effort(
+                    sub_results, trace, budget, packet=packet,
+                    reason="no_verified_claims",
+                )
+            final_prompt = raw_prompt
+            trace["composer_input"] = "raw_context"
+        try:
             text = await _maybe_await(
                 self._composer_llm.complete(prompt=final_prompt, max_tokens=128)
             )
@@ -411,6 +436,52 @@ class IterativeReasoner:
         return ReasoningResult(
             answer=best, evidence=packet, trace=trace,
             abstained=True, llm_call_count=budget.spent,
+        )
+
+    def _raw_context_prompt(
+        self,
+        question: str,
+        sub_results: list[dict[str, Any]],
+        *,
+        max_chars: int = 6000,
+    ) -> str:
+        """
+        Render the raw retrieved turns into a composer prompt for the
+        empty-packet fallback (change #1). Dedups items by id across
+        sub-questions, preserves role tags, and caps total length so a
+        deep haystack doesn't blow the context window. Returns "" when
+        there's no retrieved content at all (caller abstains).
+
+        Kept free of any ``evals/*`` import — it's plain string
+        assembly over the ContextBundle ``items`` the retriever
+        returned, so the reasoner stays layer-clean.
+        """
+        seen: set[str] = set()
+        lines: list[str] = []
+        for r in sub_results:
+            ctx = r.get("ctx")
+            for it in getattr(ctx, "items", []) or []:
+                key = str(getattr(it, "id", "") or id(it))
+                if key in seen:
+                    continue
+                seen.add(key)
+                content = (getattr(it, "content", "") or "").strip()
+                if not content:
+                    continue
+                md = getattr(it, "metadata", {}) or {}
+                role = md.get("role", "") or ""
+                lines.append(f"[{role}] {content}" if role else content)
+        if not lines:
+            return ""
+        context = "\n".join(lines)
+        if len(context) > max_chars:
+            context = context[:max_chars]
+        return (
+            "Answer the question using ONLY the retrieved conversation "
+            "below. Reply with just the answer — no explanation. If the "
+            "answer truly isn't present, reply 'I don't know.'\n\n"
+            f"Retrieved conversation:\n{context}\n\n"
+            f"Question: {question}\nAnswer:"
         )
 
 

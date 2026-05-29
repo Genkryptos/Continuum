@@ -62,6 +62,7 @@ def _make_reasoner(
     rewrite_fn: Callable = lambda q, _a: q + " bare",
     max_rounds: int = 2,
     max_llm_calls: int = 6,
+    head_max_verified: int = 3,
 ) -> IterativeReasoner:
     return IterativeReasoner(
         retriever=retriever,
@@ -81,6 +82,7 @@ def _make_reasoner(
         rewrite_query_fn=rewrite_fn,
         max_rounds=max_rounds,
         max_llm_calls=max_llm_calls,
+        head_max_verified=head_max_verified,
     )
 
 
@@ -364,3 +366,128 @@ async def test_head_returns_empty_falls_through_to_composer() -> None:
     assert res.trace["head_short_circuit"] is False
     assert res.answer == "synthesised"
     assert res.trace["composer_calls"] == 2
+
+
+# ── 11. large verified pool defers the head to the composer (change #2) ────
+
+
+@pytest.mark.asyncio
+async def test_large_verified_pool_defers_head_to_composer() -> None:
+    """
+    With more verified candidates than head_max_verified, the head's
+    pick can't be trusted — the reasoner must NOT short-circuit on it
+    and must route to the composer instead.
+    """
+    # 5 verified candidates > head_max_verified=3.
+    cands = [FakeCandidate(value=f"c{i}", confidence=0.5) for i in range(5)]
+    ctx = FakeCtx(payload=cands)
+    composer = FakeComposerLLM(replies=["1. Q", "composer-answer"])
+    small = FakeSmallLLM()
+    retriever = FakeRetriever(default_ctx=ctx)
+    # Head would return a (wrong) answer if allowed to fire.
+    heads = {_StubMode: lambda claims, q: "head-wrong-pick"}
+    reasoner = _make_reasoner(
+        retriever=retriever, composer=composer, small=small,
+        decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
+        heads_by_mode=heads,
+        head_max_verified=3,
+    )
+    res = await reasoner.answer("Q?")
+    assert res.trace["head_short_circuit"] is False
+    assert res.trace.get("head_deferred_pool") == 5
+    assert res.answer == "composer-answer"        # composer, not the head
+    assert res.trace["composer_input"] == "packet"
+
+
+@pytest.mark.asyncio
+async def test_small_verified_pool_still_short_circuits_head() -> None:
+    """Below the threshold the head is trusted and still short-circuits."""
+    cands = [FakeCandidate(value="c0", confidence=0.5)]  # 1 ≤ 3
+    ctx = FakeCtx(payload=cands)
+    composer = FakeComposerLLM(replies=["1. Q"])  # only decompose
+    small = FakeSmallLLM()
+    retriever = FakeRetriever(default_ctx=ctx)
+    heads = {_StubMode: lambda claims, q: "head-answer"}
+    reasoner = _make_reasoner(
+        retriever=retriever, composer=composer, small=small,
+        decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
+        heads_by_mode=heads,
+        head_max_verified=3,
+    )
+    res = await reasoner.answer("Q?")
+    assert res.trace["head_short_circuit"] is True
+    assert res.answer == "head-answer"
+
+
+# ── 12. empty packet → raw-context composer fallback (change #1) ───────────
+
+
+class _RichItem:
+    """Memory-item-like with content + metadata for raw-context rendering."""
+    def __init__(self, content: str, role: str = "user") -> None:
+        self.id = content  # unique enough for dedup
+        self.content = content
+        self.metadata = {"role": role}
+
+
+class _RichCtx:
+    """Ctx exposing BOTH .payload (for candidate extraction) and .items."""
+    def __init__(self, payload: Any, items: list[Any]) -> None:
+        self.payload = payload
+        self.items = items
+
+
+@pytest.mark.asyncio
+async def test_empty_packet_falls_back_to_raw_context() -> None:
+    """
+    Verifier rejects everything (verified=0) but retrieval DID return
+    turns. The composer must be handed the raw turns, not abstain.
+    """
+    items = [
+        _RichItem("I take classes at Serenity Yoga downtown.", role="user"),
+        _RichItem("That sounds lovely!", role="assistant"),
+    ]
+    ctx = _RichCtx(payload=[FakeCandidate(value="noise", confidence=0.5)], items=items)
+    composer = FakeComposerLLM(replies=["1. Where do I take yoga?", "Serenity Yoga"])
+    small = FakeSmallLLM()
+    retriever = FakeRetriever(default_ctx=ctx)
+
+    def reject_all(question: str, candidates: list[Any], **kw: Any) -> list[Any]:
+        return [FakeVerifierResult(candidate=c, verdict="FAIL") for c in candidates]
+
+    reasoner = _make_reasoner(
+        retriever=retriever, composer=composer, small=small,
+        decompose_fn=lambda q: ("p", lambda r, original: ["Where do I take yoga?"]),
+        verify_fn=reject_all,
+        heads_by_mode={},
+    )
+    res = await reasoner.answer("Where do I take yoga classes?")
+    assert res.abstained is False
+    assert res.answer == "Serenity Yoga"
+    assert res.trace["composer_input"] == "raw_context"
+    # The composer's prompt actually contained the retrieved turn.
+    raw_call = composer.calls[-1]["prompt"]
+    assert "Serenity Yoga downtown" in raw_call
+
+
+@pytest.mark.asyncio
+async def test_empty_packet_and_no_context_abstains() -> None:
+    """verified=0 AND no retrieved items → genuine abstain, no composer synth."""
+    ctx = FakeCtx(payload=[FakeCandidate(value="x", confidence=0.5)])  # no .items
+
+    def reject_all(question: str, candidates: list[Any], **kw: Any) -> list[Any]:
+        return [FakeVerifierResult(candidate=c, verdict="FAIL") for c in candidates]
+
+    composer = FakeComposerLLM(replies=["1. Q"])  # decompose only
+    reasoner = _make_reasoner(
+        retriever=FakeRetriever(default_ctx=ctx),
+        composer=composer, small=FakeSmallLLM(),
+        decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
+        verify_fn=reject_all,
+        heads_by_mode={},
+    )
+    res = await reasoner.answer("Q?")
+    assert res.abstained is True
+    assert res.trace["abstain_reason"] == "no_verified_claims"
+    # Composer ran ONLY the decompose call, never a synthesis call.
+    assert len(composer.calls) == 1
