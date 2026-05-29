@@ -1,6 +1,6 @@
 """
-tests/reasoning/test_iterative_reasoner.py
-==========================================
+tests/unit/reasoning/test_iterative_reasoner.py
+===============================================
 Unit tests for :class:`continuum.reasoning.IterativeReasoner`.
 
 Every test uses the fakes from ``conftest.py`` — no real LLM, no real
@@ -17,7 +17,7 @@ import pytest
 
 from continuum.reasoning import IterativeReasoner
 
-from tests.reasoning.conftest import (
+from tests.unit.reasoning.conftest import (
     FakeCandidate,
     FakeClaim,
     FakeComposerLLM,

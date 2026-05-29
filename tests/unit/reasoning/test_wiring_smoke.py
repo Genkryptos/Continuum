@@ -1,6 +1,6 @@
 """
-tests/reasoning/test_wiring_smoke.py
-====================================
+tests/unit/reasoning/test_wiring_smoke.py
+=========================================
 End-to-end smoke for the LongMemEval wiring factory.
 
 Boots :func:`evals.longmemeval.iterative_reasoner_wiring.build_iterative_reasoner`
@@ -31,7 +31,7 @@ from evals.longmemeval.iterative_reasoner_wiring import (
 )
 from evals.longmemeval.task_router import TaskMode
 
-from tests.reasoning.conftest import FakeComposerLLM, FakeSmallLLM
+from tests.unit.reasoning.conftest import FakeComposerLLM, FakeSmallLLM
 
 pytestmark = pytest.mark.unit
 
