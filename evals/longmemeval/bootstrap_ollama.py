@@ -4023,8 +4023,14 @@ async def main_async(args: argparse.Namespace) -> int:
             rpm=args.rpm,
         )
     elif args.provider == "lmstudio":
-        log.info("provider=lmstudio model=%s url=%s", model, args.lmstudio_url)
-        llm = LMStudioLLM(model=model, base_url=args.lmstudio_url)
+        log.info(
+            "provider=lmstudio model=%s url=%s temperature=%s",
+            model, args.lmstudio_url, args.lmstudio_temperature,
+        )
+        llm = LMStudioLLM(
+            model=model, base_url=args.lmstudio_url,
+            temperature=args.lmstudio_temperature,
+        )
     else:
         log.info("provider=ollama model=%s", model)
         await _verify_ollama(model, args.ollama_url)
@@ -4436,6 +4442,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--lmstudio-url", default=DEFAULT_LMSTUDIO_URL,
         help="Base URL of the local LM Studio server (OpenAI-compatible).",
+    )
+    p.add_argument(
+        "--lmstudio-temperature", type=float, default=0.0,
+        help=(
+            "Sampling temperature for LM Studio calls (default 0.0). "
+            "Some Qwen3 / DeepSeek runtimes in LM Studio reject "
+            "temperature=0 with a 'Compute error.' response — bump to "
+            "0.7 if the model refuses 0.0."
+        ),
     )
     p.add_argument("--top-k", type=int, default=8)
     p.add_argument(
