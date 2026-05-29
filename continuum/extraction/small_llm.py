@@ -35,6 +35,7 @@ import requests
 log = logging.getLogger(__name__)
 
 Intent = Literal["lookup", "compose", "temporal", "preference"]
+Backend = Literal["ollama", "openai"]
 
 DEFAULT_MODEL = "qwen2.5:1.5b-instruct"
 DEFAULT_URL = "http://localhost:11434"
@@ -43,24 +44,60 @@ _INTENTS: tuple[Intent, ...] = ("lookup", "compose", "temporal", "preference")
 _TIMEOUT_S = 30.0
 
 
+def _auto_detect_backend(url: str) -> Backend:
+    """
+    Pick the protocol shape from the URL. LM Studio (and any other
+    OpenAI-compatible local server) lives under ``/v1``; Ollama lives
+    at the bare host. Either can be forced via
+    ``CONTINUUM_SMALL_LLM_BACKEND={ollama,openai}``.
+    """
+    forced = os.environ.get("CONTINUUM_SMALL_LLM_BACKEND", "").strip().lower()
+    if forced in ("ollama", "openai"):
+        return forced  # type: ignore[return-value]
+    return "openai" if url.rstrip("/").endswith("/v1") else "ollama"
+
+
 class SmallLLM:
-    """Thin wrapper around an Ollama generate endpoint with sqlite caching."""
+    """
+    Thin wrapper around a tiny instruct LLM with sqlite caching.
+
+    Two backends supported:
+
+    * ``ollama`` — Ollama's ``/api/generate``. The default; matches a
+      vanilla ``ollama serve`` running at :11434.
+    * ``openai`` — OpenAI-compatible ``/v1/chat/completions``. Works
+      with **LM Studio** (``http://localhost:1234/v1``), vLLM,
+      LocalAI, OpenAI proper, and any other server exposing the same
+      shape. Auto-detected when the URL ends with ``/v1``; force
+      explicitly via ``CONTINUUM_SMALL_LLM_BACKEND=openai`` (or
+      ``=ollama`` to override the auto-pick).
+    """
 
     def __init__(
         self,
         model: str | None = None,
         url: str | None = None,
         cache_path: Path | str | None = None,
+        backend: Backend | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model or os.environ.get("CONTINUUM_SMALL_LLM_MODEL", DEFAULT_MODEL)
         self.url = (
             url
             or os.environ.get("CONTINUUM_SMALL_LLM_URL", DEFAULT_URL)
         ).rstrip("/")
+        self.backend: Backend = backend or _auto_detect_backend(self.url)
+        # OpenAI proper needs the bearer; LM Studio / vLLM accept any
+        # string (or no key); Ollama ignores the kwarg entirely.
+        self.api_key = (
+            api_key
+            or os.environ.get("CONTINUUM_SMALL_LLM_API_KEY", "")
+            or ("lm-studio" if self.backend == "openai" else "")
+        )
         self.cache_path = Path(cache_path) if cache_path else DEFAULT_CACHE_PATH
         self._init_cache()
         # Flag flipped on first ConnectionError so we don't spam the eval
-        # log with a stack trace on every call when Ollama isn't running.
+        # log with a stack trace on every call when the endpoint isn't up.
         self._connection_warned = False
 
     def _log_connection_failure(self, exc: BaseException) -> None:
@@ -144,7 +181,13 @@ class SmallLLM:
     # ── HTTP ────────────────────────────────────────────────────────────────
 
     def _generate(self, prompt: str) -> str | None:
-        """POST to Ollama; return the ``response`` field, or ``None`` on any failure."""
+        """Dispatch by backend; returns the model reply or ``None`` on any failure."""
+        if self.backend == "openai":
+            return self._generate_openai_chat(prompt)
+        return self._generate_ollama(prompt)
+
+    def _generate_ollama(self, prompt: str) -> str | None:
+        """POST to Ollama's ``/api/generate``; pull ``response``."""
         try:
             resp = requests.post(
                 f"{self.url}/api/generate",
@@ -157,10 +200,6 @@ class SmallLLM:
                 timeout=_TIMEOUT_S,
             )
         except requests.ConnectionError as exc:
-            # The endpoint is down (or doesn't exist). Common — the
-            # caller is allowed to use SmallLLM without running Ollama.
-            # Log once per process at warning level; subsequent failures
-            # are silent debug spam so the eval logs stay readable.
             self._log_connection_failure(exc)
             return None
         except requests.RequestException:
@@ -178,6 +217,60 @@ class SmallLLM:
         if not isinstance(text, str) or not text.strip():
             return None
         return text
+
+    def _generate_openai_chat(self, prompt: str) -> str | None:
+        """
+        POST to ``/v1/chat/completions``. Compatible with LM Studio,
+        vLLM, LocalAI, and OpenAI proper. The request matches the same
+        single-user-turn / temperature-0 shape we use for Ollama.
+        """
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        try:
+            resp = requests.post(
+                f"{self.url}/chat/completions",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "stream": False,
+                },
+                headers=headers,
+                timeout=_TIMEOUT_S,
+            )
+        except requests.ConnectionError as exc:
+            self._log_connection_failure(exc)
+            return None
+        except requests.RequestException:
+            log.exception("SmallLLM request failed")
+            return None
+        if resp.status_code != 200:
+            # LM Studio's body carries the actual cause; surface it.
+            try:
+                err = resp.json()
+                msg = (
+                    (err.get("error") or {}).get("message")
+                    if isinstance(err.get("error"), dict)
+                    else err.get("error") or resp.text[:200]
+                )
+            except Exception:
+                msg = resp.text[:200]
+            log.warning("SmallLLM %d from %s: %s", resp.status_code, self.url, msg)
+            return None
+        try:
+            body = resp.json()
+            text = body["choices"][0]["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            log.warning("SmallLLM (openai-chat) malformed response")
+            return None
+        if not isinstance(text, str) or not text.strip():
+            return None
+        # Strip a leading reasoning block if the model emits one
+        # (Qwen3 in LM Studio sometimes wraps replies in <think>…</think>).
+        if "<think>" in text and "</think>" in text:
+            text = text.split("</think>", 1)[1]
+        return text.strip()
 
     # ── cache ───────────────────────────────────────────────────────────────
 

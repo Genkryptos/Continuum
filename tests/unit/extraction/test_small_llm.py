@@ -236,3 +236,84 @@ def test_different_models_have_separate_caches(cache_path, monkeypatch):
     a.span_select("q", "p")
     b.span_select("q", "p")
     assert post.call_count == 2
+
+
+# ── OpenAI-compatible (LM Studio / vLLM / OpenAI) backend ─────────────────
+
+
+def _openai_resp(content: str, *, status: int = 200) -> MagicMock:
+    """LM Studio / OpenAI-shape response with one assistant message."""
+    return _resp(
+        {"choices": [{"message": {"content": content}}]},
+        status=status,
+    )
+
+
+def test_backend_auto_detected_from_v1_url(cache_path) -> None:
+    """URLs ending in /v1 → openai backend; bare host → ollama."""
+    a = SmallLLM(url="http://localhost:1234/v1", cache_path=cache_path)
+    assert a.backend == "openai"
+    b = SmallLLM(url="http://localhost:11434", cache_path=cache_path)
+    assert b.backend == "ollama"
+
+
+def test_env_override_picks_backend(cache_path, monkeypatch) -> None:
+    monkeypatch.setenv("CONTINUUM_SMALL_LLM_BACKEND", "openai")
+    a = SmallLLM(url="http://localhost:11434", cache_path=cache_path)
+    assert a.backend == "openai"  # forced despite the Ollama-shaped URL
+
+
+def test_openai_chat_returns_assistant_content(cache_path, monkeypatch) -> None:
+    post = MagicMock(return_value=_openai_resp("Boston"))
+    monkeypatch.setattr("continuum.extraction.small_llm.requests.post", post)
+    llm = SmallLLM(
+        model="qwen3-14b", url="http://localhost:1234/v1",
+        cache_path=cache_path,
+    )
+    out = llm.span_select("where?", "I live in Boston.")
+    assert out == "Boston"
+    # The request hit the OpenAI endpoint with the chat-message payload.
+    args, kwargs = post.call_args
+    assert args[0] == "http://localhost:1234/v1/chat/completions"
+    body = kwargs["json"]
+    assert body["model"] == "qwen3-14b"
+    assert body["messages"] == [{"role": "user", "content": ANY_STR}]
+    assert body["temperature"] == 0.0
+    # LM Studio doesn't require a real key, but we send a placeholder so
+    # servers that enforce a bearer header don't 401.
+    assert kwargs["headers"]["Authorization"].startswith("Bearer ")
+
+
+def test_openai_chat_strips_qwen3_think_block(cache_path, monkeypatch) -> None:
+    """Qwen3 in LM Studio emits <think>…</think>; SmallLLM strips it."""
+    reply = "<think>let me think...</think>\nBoston"
+    post = MagicMock(return_value=_openai_resp(reply))
+    monkeypatch.setattr("continuum.extraction.small_llm.requests.post", post)
+    llm = SmallLLM(url="http://localhost:1234/v1", cache_path=cache_path)
+    assert llm.span_select("q", "p") == "Boston"
+
+
+def test_openai_chat_non_200_surfaces_error_body(cache_path, monkeypatch, caplog) -> None:
+    """LM Studio's error body is logged at warning level so the user sees it."""
+    err = MagicMock()
+    err.status_code = 400
+    err.json.return_value = {"error": {"message": "Compute error."}}
+    monkeypatch.setattr(
+        "continuum.extraction.small_llm.requests.post",
+        MagicMock(return_value=err),
+    )
+    llm = SmallLLM(url="http://localhost:1234/v1", cache_path=cache_path)
+    assert llm.span_select("q", "p") == ""
+    assert any(
+        "Compute error." in r.message for r in caplog.records
+    )
+
+
+# Helper for the assertion above — any non-empty str.
+class _AnyStr:
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, str) and bool(other)
+    def __repr__(self) -> str: return "<any str>"
+
+
+ANY_STR = _AnyStr()
