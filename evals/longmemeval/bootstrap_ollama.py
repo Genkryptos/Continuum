@@ -2425,6 +2425,47 @@ class _IngestingAdapter(ContinuumAdapter):
             self.last_store_metrics = metrics()
 
 
+def _merge_retrieved_contexts(
+    contexts: list[ContextBundle], budget: TokenBudget,
+) -> ContextBundle | None:
+    """
+    Build a single ``ContextBundle`` from every sub-question's bundle
+    so the baseline runner can extract ``retrieved_session_ids`` from
+    ``adapter.last_ctx``.
+
+    Dedup by ``MemoryItem.id`` to keep the union honest when a session
+    surfaces under multiple sub-questions (a common pattern for
+    multi-hop questions). Returns ``None`` only when the reasoner
+    never called the retriever at all (e.g. budget exhausted before
+    the first sub-q) — baseline's ``_extract_retrieved_session_ids``
+    treats ``None`` as an empty list.
+    """
+    if not contexts:
+        return None
+    seen: set[str] = set()
+    items: list[MemoryItem] = []
+    for ctx in contexts:
+        for item in ctx.items or []:
+            iid = str(item.id)
+            if iid in seen:
+                continue
+            seen.add(iid)
+            items.append(item)
+    return ContextBundle(
+        items=items,
+        messages=[
+            {"role": "system", "content": it.content} for it in items
+        ],
+        tokens_used=sum(len(it.content.split()) for it in items),
+        budget=budget,
+        debug_info={
+            "retrieval_mode": "iterative_reasoner",
+            "subq_bundles": len(contexts),
+            "merged_items": len(items),
+        },
+    )
+
+
 class _IterativeReasoningAdapter(_IngestingAdapter):
     """
     Adapter that delegates answer composition to
@@ -2472,14 +2513,23 @@ class _IterativeReasoningAdapter(_IngestingAdapter):
         retriever = getattr(self.session, "retriever", None)
 
         # Shim: the reasoner calls .retrieve(query: str); the rig's
-        # retrievers want Query+budget. Wrap once per row.
+        # retrievers want Query+budget. Wrap once per row, and
+        # accumulate every returned bundle so the baseline runner can
+        # measure recall against retrieved_session_ids — without this
+        # ``adapter.last_ctx`` would never be set and recall would
+        # be 0 on every row.
+        contexts: list[ContextBundle] = []
+
         class _RetrieverShim:
             async def retrieve(_self, query: str) -> ContextBundle:  # noqa: N805
                 if retriever is None:
-                    return ContextBundle(
+                    bundle = ContextBundle(
                         items=[], messages=[], tokens_used=0, budget=budget,
                     )
-                return await retriever.retrieve(Query(text=query), budget)
+                else:
+                    bundle = await retriever.retrieve(Query(text=query), budget)
+                contexts.append(bundle)
+                return bundle
 
         # Dataset hints (set by baseline._run_one on the adapter
         # before answer_question fires).
@@ -2496,6 +2546,10 @@ class _IterativeReasoningAdapter(_IngestingAdapter):
             is_multi_session_hint=is_multi,
         )
         result = await reasoner.answer(question)
+        # Stash the union of every sub-question's retrieved context so
+        # _extract_retrieved_session_ids (baseline.py) finds something
+        # to score recall against.
+        self.last_ctx = _merge_retrieved_contexts(contexts, budget)
         # Surface telemetry onto the adapter so baseline._run_one can
         # merge it into row.telemetry via the existing channel.
         self.last_telemetry = {
