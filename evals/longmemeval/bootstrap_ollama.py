@@ -2396,6 +2396,93 @@ class _IngestingAdapter(ContinuumAdapter):
             self.last_store_metrics = metrics()
 
 
+class _IterativeReasoningAdapter(_IngestingAdapter):
+    """
+    Adapter that delegates answer composition to
+    :class:`continuum.reasoning.IterativeReasoner`.
+
+    Ingestion (``process_conversation``) and the store wiring are
+    inherited from :class:`_IngestingAdapter` unchanged. Only
+    ``answer_question`` is overridden — it constructs a reasoner per
+    call (cheap; no I/O at construction) and surfaces budget +
+    abstain telemetry onto ``self.last_telemetry`` so the row's
+    result JSON records the iterative-loop signal.
+
+    The rig's retrievers expect a :class:`continuum.core.types.Query`
+    + :class:`TokenBudget`. The reasoner only passes a plain string,
+    so the adapter wraps the underlying retriever in a thin shim
+    that constructs the Query+budget per call.
+    """
+
+    def __init__(
+        self,
+        *,
+        session: _MiniSession,
+        llm: Any,
+        answer_max_tokens: int = 200,
+        small_llm: Any | None = None,
+        max_llm_calls: int = 6,
+        max_rounds: int = 2,
+    ) -> None:
+        super().__init__(
+            session=session, llm=llm, answer_max_tokens=answer_max_tokens,
+        )
+        self._small_llm = small_llm
+        self._max_llm_calls = max_llm_calls
+        self._max_rounds = max_rounds
+        self.last_telemetry: dict[str, Any] = {}
+
+    async def answer_question(self, question: str) -> str:
+        from continuum.extraction.small_llm import SmallLLM as _SmallLLM
+        from evals.longmemeval.iterative_reasoner_wiring import (
+            build_iterative_reasoner,
+        )
+
+        small_llm = self._small_llm or _SmallLLM()
+        budget = self.budget
+        retriever = getattr(self.session, "retriever", None)
+
+        # Shim: the reasoner calls .retrieve(query: str); the rig's
+        # retrievers want Query+budget. Wrap once per row.
+        class _RetrieverShim:
+            async def retrieve(_self, query: str) -> ContextBundle:  # noqa: N805
+                if retriever is None:
+                    return ContextBundle(
+                        items=[], messages=[], tokens_used=0, budget=budget,
+                    )
+                return await retriever.retrieve(Query(text=query), budget)
+
+        # Dataset hints (set by baseline._run_one on the adapter
+        # before answer_question fires).
+        qt_hint = getattr(self, "dataset_question_type", None)
+        is_multi = bool(getattr(self, "dataset_is_multi_session", False))
+
+        reasoner = build_iterative_reasoner(
+            retriever=_RetrieverShim(),
+            small_llm=small_llm,
+            composer_llm=self.llm,
+            max_llm_calls=self._max_llm_calls,
+            max_rounds=self._max_rounds,
+            question_type_hint=qt_hint,
+            is_multi_session_hint=is_multi,
+        )
+        result = await reasoner.answer(question)
+        # Surface telemetry onto the adapter so baseline._run_one can
+        # merge it into row.telemetry via the existing channel.
+        self.last_telemetry = {
+            "llm_call_count": result.llm_call_count,
+            "abstained": result.abstained,
+            "task_mode": result.trace.get("task_mode"),
+            "head_short_circuit": result.trace.get("head_short_circuit"),
+            "head_fired": result.trace.get("head_fired"),
+            "abstain_reason": result.trace.get("abstain_reason"),
+            "intent": result.trace.get("intent"),
+            "intent_source": result.trace.get("intent_source"),
+            "iterative_trace": result.trace,
+        }
+        return result.answer
+
+
 # ---------------------------------------------------------------------------
 # Optimizer chain wiring
 # ---------------------------------------------------------------------------
@@ -3625,6 +3712,9 @@ def make_adapter_factory(
     retriever_kind: str = "cosine",
     rrf_k: int = 60,
     store_factory: Callable[[], Any] | None = None,
+    use_iterative_reasoner: bool = False,
+    iterative_max_llm_calls: int = 6,
+    iterative_max_rounds: int = 2,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
     tau_hours: float = 168.0,
@@ -3743,6 +3833,16 @@ def make_adapter_factory(
                 base=base_retriever, llm=llm, max_items=decompose_max_items,
             )
         session = _MiniSession(store=store, retriever=retriever)
+        # ── --reasoner iterative ────────────────────────────────────────────
+        # The iterative loop replaces the legacy synthesis path entirely.
+        # It still uses the same retriever (wrapped) and the same composer
+        # LLM (``llm``), so retrieval + ingest behaviour is unchanged.
+        if use_iterative_reasoner:
+            return _IterativeReasoningAdapter(
+                session=session, llm=llm, answer_max_tokens=answer_max_tokens,
+                max_llm_calls=iterative_max_llm_calls,
+                max_rounds=iterative_max_rounds,
+            )
         if decompose_answer:
             return _DecomposedAnsweringAdapter(
                 session=session,
@@ -4077,6 +4177,9 @@ async def main_async(args: argparse.Namespace) -> int:
         retrieval_mode=args.retrieval_mode,
         retriever_kind=args.retriever,
         store_factory=store_factory,
+        use_iterative_reasoner=(args.reasoner == "iterative"),
+        iterative_max_llm_calls=args.max_llm_calls,
+        iterative_max_rounds=args.max_rounds,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
         score_weights=score_weights,
@@ -4370,6 +4473,32 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "include (e.g. 'knowledge-update' or "
             "'multi-session,temporal-reasoning'). When unset, all rows "
             "are evaluated. Useful for the n=78 knowledge-update sweep."
+        ),
+    )
+    # ── IterativeReasoner ──────────────────────────────────────────────────
+    p.add_argument(
+        "--reasoner",
+        choices=("legacy", "iterative"),
+        default="legacy",
+        help=(
+            "Which reasoner drives answer composition. 'legacy' (default) "
+            "uses the existing decompose+optimize+synthesise adapter. "
+            "'iterative' wraps the same retriever in "
+            "continuum.reasoning.IterativeReasoner: budget-capped loop "
+            "(see --max-llm-calls / --max-rounds) with deterministic "
+            "head short-circuit, refine-on-fail, and abstain semantics."
+        ),
+    )
+    p.add_argument(
+        "--max-llm-calls", type=int, default=6,
+        help="Per-question hard cap on LLM calls (iterative reasoner only).",
+    )
+    p.add_argument(
+        "--max-rounds", type=int, default=2,
+        help=(
+            "Per-sub-question refine rounds (iterative reasoner only). "
+            "Counts heuristic + SmallLLM rewrites; the initial retrieval "
+            "always runs. max_rounds=2 means up to 3 total attempts."
         ),
     )
     p.add_argument(
