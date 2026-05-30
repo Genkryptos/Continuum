@@ -4546,6 +4546,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
     factory = make_adapter_factory(
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
+        answer_max_tokens=args.answer_max_tokens,
         reranker=reranker, rerank_to=args.rerank_to,
         retrieval_mode=args.retrieval_mode,
         retriever_kind=args.retriever,
@@ -4898,6 +4899,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "model, endpoint and key (works for groq/openai/lmstudio) — "
             "needed when no Ollama daemon is running, but adds calls "
             "against the provider's rate limit."
+        ),
+    )
+    p.add_argument(
+        "--answer-max-tokens", type=int, default=256,
+        help=(
+            "Max tokens the answerer may produce per answer (default 256). "
+            "REASONING models (gpt-oss-120b, deepseek-r1, o-series) spend "
+            "tokens thinking before answering — at low caps the answer is "
+            "truncated to empty/None. Set 1024-2048 for reasoning models, "
+            "especially on aggregation questions with longer answers."
         ),
     )
     # ── Batching (Groq free-tier friendly) ─────────────────────────────────
