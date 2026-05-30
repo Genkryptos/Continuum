@@ -2679,11 +2679,13 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         llm: Any,
         answer_max_tokens: int = 128,
         top_k: int = 12,
+        max_context_chars: int = 32000,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
+        self._max_context_chars = max_context_chars
         self.last_telemetry: dict[str, Any] = {}
 
     async def answer_question(self, question: str) -> str:
@@ -2708,7 +2710,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 continue
             role = (getattr(it, "metadata", {}) or {}).get("role", "") or ""
             lines.append(f"[{role}] {content}" if role else content)
-        context = "\n".join(lines)[:8000]
+        context = "\n".join(lines)[: self._max_context_chars]
 
         # Aggregation questions (multi-session "how many / which / list
         # all across our chats") need the model to combine items spread
@@ -3988,6 +3990,7 @@ def make_adapter_factory(
     iterative_max_llm_calls: int = 6,
     iterative_max_rounds: int = 2,
     direct_answer: bool = False,
+    direct_max_context_chars: int = 32000,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4114,7 +4117,7 @@ def make_adapter_factory(
         if direct_answer:
             return _DirectAnswerAdapter(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
-                top_k=top_k,
+                top_k=top_k, max_context_chars=direct_max_context_chars,
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4561,6 +4564,7 @@ async def main_async(args: argparse.Namespace) -> int:
         iterative_max_llm_calls=args.max_llm_calls,
         iterative_max_rounds=args.max_rounds,
         direct_answer=(args.reasoner == "direct"),
+        direct_max_context_chars=args.max_context_chars,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -4915,6 +4919,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "tokens thinking before answering — at low caps the answer is "
             "truncated to empty/None. Set 1024-2048 for reasoning models, "
             "especially on aggregation questions with longer answers."
+        ),
+    )
+    p.add_argument(
+        "--max-context-chars", type=int, default=32000,
+        help=(
+            "Direct mode (--reasoner direct): cap on characters of "
+            "retrieved conversation handed to the answerer (default "
+            "32000 ≈ 8k tokens). Multi-session aggregation needs many "
+            "sessions in context — raise to 48000-96000 on large-window "
+            "models. Too low silently drops answer-bearing turns even "
+            "when the session was retrieved (recall stays 1.0 but the "
+            "model says 'I don't have that information')."
         ),
     )
     # ── Batching (Groq free-tier friendly) ─────────────────────────────────
