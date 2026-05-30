@@ -85,6 +85,16 @@ class ContinuumAdapter:
         #: Last :class:`ContextBundle` returned by retrieve(); the
         #: baseline harness reads it to compute retrieval recall.
         self.last_ctx: ContextBundle | None = None
+        #: Per-row dataset hints. The baseline runner sets these (via
+        #: ``hasattr`` guard) BEFORE each ``answer_question`` so adapters
+        #: can disambiguate question categories the wording alone can't.
+        #: Defined here on the base so EVERY adapter exposes them — the
+        #: ``hasattr`` guard in baseline._run_one only fires when the
+        #: attribute already exists, so a subclass that didn't define
+        #: them (e.g. the direct/iterative adapters) silently never
+        #: received the hint.
+        self.dataset_question_type: str | None = None
+        self.dataset_is_multi_session: bool = False
 
     # ── LongMemEval interface ───────────────────────────────────────────────
 
