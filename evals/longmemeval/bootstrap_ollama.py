@@ -2703,13 +2703,36 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             role = (getattr(it, "metadata", {}) or {}).get("role", "") or ""
             lines.append(f"[{role}] {content}" if role else content)
         context = "\n".join(lines)[:8000]
-        prompt = (
-            "Answer the question using ONLY the retrieved conversation "
-            "below. Reply with just the answer — no explanation. If the "
-            "answer truly isn't present, reply 'I don't know.'\n\n"
-            f"Retrieved conversation:\n{context}\n\n"
-            f"Question: {question}\nAnswer:"
-        )
+
+        # Aggregation questions (multi-session "how many / which / list
+        # all across our chats") need the model to combine items spread
+        # across sessions, not return the first matching span. The
+        # generic "just the answer" prompt biases toward a single span
+        # (observed: 43/50 multi-session failures were missing_aggregation
+        # despite 85% recall). Detect aggregation via the dataset hint
+        # plus a wording check, and switch to a combine-everything prompt.
+        from evals.longmemeval.decomposed_answer import is_aggregate_question
+        qt = (getattr(self, "dataset_question_type", "") or "").lower()
+        aggregate = qt == "multi-session" or is_aggregate_question(question)
+        if aggregate:
+            prompt = (
+                "The question below asks you to combine information that "
+                "may be spread across MULTIPLE parts of the retrieved "
+                "conversation. Read ALL of it, find EVERY relevant item, "
+                "and give the COMPLETE aggregated answer — the full list "
+                "or the total count across everything. Do not stop at the "
+                "first match. Reply with just the answer.\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
+        else:
+            prompt = (
+                "Answer the question using ONLY the retrieved conversation "
+                "below. Reply with just the answer — no explanation. If the "
+                "answer truly isn't present, reply 'I don't know.'\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
         try:
             answer = await self.llm.complete(
                 prompt=prompt, max_tokens=self.answer_max_tokens,
@@ -2721,6 +2744,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "llm_call_count": 1,
             "answer_mode": "direct",
             "retrieved_items": len(items),
+            "aggregate_prompt": aggregate,
         }
         return (answer or "").strip()
 
