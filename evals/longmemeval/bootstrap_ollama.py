@@ -194,6 +194,10 @@ DEFAULT_LMSTUDIO_URL = os.environ.get(
 DEFAULT_LMSTUDIO_MODEL = os.environ.get("LMSTUDIO_MODEL", "qwen/qwen3-14b")
 DEFAULT_OPENAI_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1"
+DEFAULT_OPENROUTER_MODEL = os.environ.get(
+    "OPENROUTER_MODEL", "openai/gpt-oss-120b"
+)
 DEFAULT_BEDROCK_MODEL = os.environ.get(
     "BEDROCK_MODEL", "anthropic.claude-3-haiku-20240307-v1:0"
 )
@@ -435,6 +439,85 @@ class GroqLLM:
         }
         return await _adaptive_complete(
             provider="groq",
+            client=self._client,
+            url=f"{self.base_url}/chat/completions",
+            payload=payload,
+            headers=headers,
+            throttle=self._throttle,
+            max_retries=self._max_retries,
+        )
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+class OpenRouterLLM:
+    """
+    OpenRouter chat client — OpenAI-compatible, same surface as
+    :class:`GroqLLM` (``async complete(prompt, max_tokens) -> str``).
+
+    OpenRouter (``https://openrouter.ai/api/v1``) brokers many models
+    behind one OpenAI-shaped endpoint. The model name carries the
+    provider prefix (e.g. ``openai/gpt-oss-120b``, ``anthropic/
+    claude-3.5-sonnet``, ``meta-llama/llama-3.3-70b-instruct``).
+
+    The API key is read from ``OPENROUTER_API_KEY``. Rate limiting is
+    the same client-side ``_AdaptiveThrottle`` + 429-backoff path the
+    other metered providers use; OpenRouter's per-key limits are
+    higher than Groq's free tier, so the full 500-row sweep can run
+    without batching at a sane ``rpm``.
+
+    Optional ``HTTP-Referer`` / ``X-Title`` headers (for OpenRouter's
+    app-ranking board) are sent when ``OPENROUTER_REFERER`` /
+    ``OPENROUTER_TITLE`` are set; they're not required.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str = DEFAULT_OPENROUTER_MODEL,
+        base_url: str = DEFAULT_OPENROUTER_URL,
+        timeout: float = 60.0,
+        temperature: float = 0.0,
+        api_key: str | None = None,
+        rpm: int = 60,
+        max_retries: int = 8,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.temperature = temperature
+        key = api_key or os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "OPENROUTER_API_KEY env var not set. Export it before launching:\n"
+                "  export OPENROUTER_API_KEY='sk-or-...'"
+            )
+        self._api_key = key
+        self._client = httpx.AsyncClient(timeout=timeout)
+        self._throttle = _AdaptiveThrottle(rpm)
+        self._max_retries = max_retries
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": self.temperature,
+        }
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        referer = os.environ.get("OPENROUTER_REFERER")
+        if referer:
+            headers["HTTP-Referer"] = referer
+        title = os.environ.get("OPENROUTER_TITLE")
+        if title:
+            headers["X-Title"] = title
+        return await _adaptive_complete(
+            provider="openrouter",
             client=self._client,
             url=f"{self.base_url}/chat/completions",
             payload=payload,
@@ -4083,6 +4166,8 @@ def _build_small_llm(args: argparse.Namespace, model: str) -> Any:
         url, key = DEFAULT_GROQ_URL, os.environ.get("GROQ_API_KEY", "")
     elif provider == "openai":
         url, key = DEFAULT_OPENAI_URL, os.environ.get("OPENAI_API_KEY", "")
+    elif provider == "openrouter":
+        url, key = DEFAULT_OPENROUTER_URL, os.environ.get("OPENROUTER_API_KEY", "")
     elif provider == "lmstudio":
         url, key = args.lmstudio_url, "lm-studio"  # LM Studio accepts any key
     elif provider == "ollama":
@@ -4179,19 +4264,23 @@ async def main_async(args: argparse.Namespace) -> int:
     model = args.model
     if not model:
         model = {
-            "groq":     DEFAULT_GROQ_MODEL,
-            "nvidia":   DEFAULT_NVIDIA_MODEL,
-            "gemini":   DEFAULT_GEMINI_MODEL,
-            "openai":   DEFAULT_OPENAI_MODEL,
-            "bedrock":  DEFAULT_BEDROCK_MODEL,
-            "lmstudio": DEFAULT_LMSTUDIO_MODEL,
-            "ollama":   DEFAULT_OLLAMA_MODEL,
+            "groq":       DEFAULT_GROQ_MODEL,
+            "nvidia":     DEFAULT_NVIDIA_MODEL,
+            "gemini":     DEFAULT_GEMINI_MODEL,
+            "openai":     DEFAULT_OPENAI_MODEL,
+            "openrouter": DEFAULT_OPENROUTER_MODEL,
+            "bedrock":    DEFAULT_BEDROCK_MODEL,
+            "lmstudio":   DEFAULT_LMSTUDIO_MODEL,
+            "ollama":     DEFAULT_OLLAMA_MODEL,
         }.get(args.provider, DEFAULT_OLLAMA_MODEL)
 
     llm: Any
     if args.provider == "groq":
         log.info("provider=groq model=%s rpm=%d", model, args.rpm)
         llm = GroqLLM(model=model, rpm=args.rpm)
+    elif args.provider == "openrouter":
+        log.info("provider=openrouter model=%s rpm=%d", model, args.rpm)
+        llm = OpenRouterLLM(model=model, rpm=args.rpm)
     elif args.provider == "nvidia":
         log.info("provider=nvidia model=%s rpm=%d", model, args.rpm)
         llm = NvidiaLLM(model=model, rpm=args.rpm)
@@ -4621,7 +4710,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--provider",
         choices=(
             "ollama", "groq", "nvidia", "gemini",
-            "openai", "bedrock", "lmstudio",
+            "openai", "openrouter", "bedrock", "lmstudio",
         ),
         default="ollama",
         help="LLM provider for the answerer.",
@@ -4635,6 +4724,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "nvidia → meta/llama-3.3-70b-instruct, "
             "gemini → gemini-2.0-flash, "
             "openai → gpt-4o-mini, "
+            "openrouter → openai/gpt-oss-120b, "
             "bedrock → anthropic.claude-3-haiku-20240307-v1:0, "
             "lmstudio → qwen/qwen3-14b."
         ),
