@@ -1438,7 +1438,13 @@ class _Embedder:
 
     def encode(self, texts: list[str]) -> np.ndarray:
         m = self._lazy()
-        v = m.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        # show_progress_bar=False suppresses sentence-transformers' per-call
+        # tqdm "Batches: 100%|…" lines, which otherwise flood the eval log
+        # (one bar per retrieval).
+        v = m.encode(
+            texts, convert_to_numpy=True, normalize_embeddings=True,
+            show_progress_bar=False,
+        )
         return np.asarray(v, dtype=np.float32)
 
 
