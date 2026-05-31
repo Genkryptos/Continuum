@@ -18,7 +18,7 @@
         lint typecheck format check \
         install install-dev clean help \
         repro-longmemeval bench-ingest bench-retrieval bench-supersession \
-        bench-bitemporal bench-all bench-gate demo-chat build build-verify
+        bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
 
@@ -121,6 +121,16 @@ bench-supersession: ## Run the supersession-correctness benchmark (Continuum's k
 
 bench-bitemporal: ## Run the bi-temporal "as of date Y" benchmark (Continuum-only feature)
 	@$(BENCH_PYTHON) -m bench.bi_temporal --scenarios 20
+
+bench-locomo: ## Run the LOCOMO benchmark — Continuum vs Mem0 head-to-head (needs OPENROUTER_API_KEY + GROQ_API_KEY; downloads dataset if absent)
+	@test -f evals/locomo/data/locomo10.json || ( \
+		echo "downloading LOCOMO dataset…" && mkdir -p evals/locomo/data && \
+		curl -L -o evals/locomo/data/locomo10.json \
+		  https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json )
+	@$(BENCH_PYTHON) -m evals.locomo.run \
+		--system both --provider openrouter --model openai/gpt-oss-120b \
+		--judge-provider groq --judge-model llama-3.3-70b-versatile \
+		--output results/locomo_v1
 
 bench-all: bench-ingest bench-retrieval bench-supersession bench-bitemporal ## Run every Phase-3B memory-operation benchmark in sequence
 
