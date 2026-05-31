@@ -35,11 +35,14 @@ key. Override the model with ``MEM0_LLM_MODEL`` /
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any
 
 from evals.locomo.loader import LocomoConversation
+
+log = logging.getLogger(__name__)
 
 # OpenRouter endpoint reused for Mem0's internal extraction LLM.
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
@@ -164,11 +167,23 @@ class Mem0LocomoAnswerer:
         messages = [
             {"role": "user", "content": f"{t.speaker}: {t.text}"} for t in self._conversation.turns
         ]
-        # Add in chunks — Mem0's extractor over a 200-turn conversation
-        # in one call can blow context; chunk to keep extraction sane.
-        chunk = 20
+        # Add in small chunks. Mem0's extractor must emit complete JSON
+        # memory-ops per call; larger batches → longer JSON → higher
+        # chance of a truncated/unparseable response ("Invalid JSON" /
+        # "list has no attribute get"). 8 turns/call keeps each
+        # extraction small and the JSON short. Tunable via MEM0_ADD_CHUNK.
+        # A failed chunk is logged and skipped so one bad batch doesn't
+        # abort ingestion (mem0 already swallows the parse error
+        # internally; this guard covers transport errors too).
+        chunk = int(os.environ.get("MEM0_ADD_CHUNK", "8"))
         for i in range(0, len(messages), chunk):
-            memory.add(messages[i : i + chunk], user_id=self._user_id)
+            try:
+                memory.add(messages[i : i + chunk], user_id=self._user_id)
+            except Exception:
+                log.warning(
+                    "mem0 add() failed for chunk %d-%d (skipped)",
+                    i, i + chunk, exc_info=True,
+                )
         self._memory = memory
         return memory
 
