@@ -175,7 +175,13 @@ class Mem0LocomoAnswerer:
         # A failed chunk is logged and skipped so one bad batch doesn't
         # abort ingestion (mem0 already swallows the parse error
         # internally; this guard covers transport errors too).
-        chunk = int(os.environ.get("MEM0_ADD_CHUNK", "8"))
+        # NOTE: smaller chunks reduce JSON-parse failures but give the
+        # extractor less context per call, which empirically *lowered*
+        # mem0's LOCOMO accuracy (8-turn chunks: 10% vs 20-turn: 20%).
+        # Default to the larger window — mem0's fairer shot — and keep
+        # the skip-on-failure guard below for robustness. Tune via
+        # MEM0_ADD_CHUNK.
+        chunk = int(os.environ.get("MEM0_ADD_CHUNK", "20"))
         for i in range(0, len(messages), chunk):
             try:
                 memory.add(messages[i : i + chunk], user_id=self._user_id)
