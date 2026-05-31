@@ -2,7 +2,7 @@
 
 **Authors**: Continuum eval team
 **Date**: 2026-05-23
-**Status**: closed; supersedes `results/optimizer_iteration_*_*.json` analysis files
+**Status**: closed; supersedes `results/optimizer_iteration_*_*.json` analysis files. **Superseded by [`findings/reasoning_loop_2026-06.md`](reasoning_loop_2026-06.md)** — v1 broke this report's 32% ceiling to 60.8% judged, and notably did so *without* the iterative reasoning this report predicted was required. See the June report for what actually moved the number (stronger model + clean retrieval + honest scoring) and the reasoning loop we built and cut.
 **Reproducibility**: all numbers in this report are extracted from JSON files in `results/` (cited inline). Re-run from scratch via `make repro-longmemeval`.
 
 ---

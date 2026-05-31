@@ -5,6 +5,51 @@ format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
 
+## [1.0.0] — 2026-06-XX
+
+v1 — broke the LongMemEval-S 32% ceiling to **60.8% judged**, and learned the
+ceiling was never a reasoning-architecture problem.
+
+### Added
+- **Hybrid retrieval**: `continuum/retrieval/bm25.py` (BM25 over a regex
+  tokenizer) + `continuum/retrieval/rrf.py` (Reciprocal Rank Fusion);
+  `--retriever {cosine,bm25,hybrid}` in the eval harness.
+- **LTM supersession for eval**: `continuum/stores/in_memory/ltm.py` +
+  `evals/longmemeval/continuum_ltm_store.py` drive STM→facts→LTM with
+  bi-temporal invalidation; `--use-ltm`. Knowledge-update recall 98.7%.
+- **`SmallLLM`** (`continuum/extraction/small_llm.py`) — sqlite-cached small
+  LLM with Ollama + OpenAI-compatible (LM Studio / OpenRouter) backends.
+- **`IterativeReasoner`** (`continuum/reasoning/`) — budget-capped
+  decompose→verify→compose loop. **Shipped but not used in v1**: A/Bs showed
+  it net-negative vs direct retrieval (see findings); retained as a tested
+  negative result.
+- **Direct answer mode** (`--reasoner direct`) — the v1 winner: retrieve →
+  hand raw turns to the answerer, one call.
+- **LLM judge as primary metric** + offline re-judge
+  (`rescore_with_judge.py`, `--provider openrouter`, `--judge-max-tokens`).
+- **OpenRouter provider**; `--answer-max-tokens`, `--max-context-chars`,
+  `--session-aware-retrieval`, `--offset`/`--no-smoke` batching,
+  `--small-llm same`.
+- **LOCOMO benchmark + Mem0 head-to-head** scaffold (`evals/locomo/`,
+  `make bench-locomo`) — preliminary; clean run pending.
+- **v1 findings report** `findings/reasoning_loop_2026-06.md` (supersedes the
+  May report); `findings/charts/v1_summary.py`; `make repro-everything`.
+
+### Changed
+- README headline now leads with LongMemEval-S 60.8% judged; the "honest
+  evaluation" section pairs the May ceiling report with the June correction.
+
+### Fixed
+- Recall always-0 under the iterative adapter (`last_ctx` never set).
+- Reasoning models silently breaking structured tasks at low token caps
+  (the yes/no judge and Mem0's JSON extractor) — use non-reasoning models.
+- Direct-mode 8000-char context cap silently dropping answer-bearing turns.
+
+### Known gaps
+- temporal-reasoning 41.4% (genuine model-reasoning limit).
+- OpenRouter cost accounting unwired (result JSON reports `$0.00`).
+- LOCOMO vs Mem0 not yet a fair published number (Mem0 partially handicapped).
+
 ## [0.3.0] — 2026-05-23
 
 Phase 3 — benchmarks, demo, findings, and a publishable repo state.

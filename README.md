@@ -24,14 +24,18 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 ## Why this exists — the headline measurements
 
-| benchmark | Continuum | best naive baseline | delta |
+| benchmark | Continuum | baseline | delta |
 |---|---|---|---|
+| **LongMemEval-S** (500 Q, judged) | **60.8 %** | 34.4 % (May 2026 ceiling) | **+26 pp** |
+| ↳ knowledge-update (supersession) | 51.3 % | — | 98.7 % recall |
 | **Supersession correctness** (50 scripted updates) | **100 %** | 38 % | **+62 pp** |
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % | **+25 pp** |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) | framework overhead |
 
-Source: [`bench/`](bench/), reproducible via `make bench-all` (~60 seconds, no infra, no API key).
+Sources: LongMemEval-S from [`results/v1_final/`](results/v1_final/) (see the [v1 findings report](findings/reasoning_loop_2026-06.md)); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
+
+> **v1.0.0** — Continuum broke the [May 2026 32% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
 
 The supersession + bi-temporal wins aren't tunable parameters — they're consequences of the schema. Append-only stores and vector databases **cannot** reach these numbers without re-implementing this architecture on top.
 
@@ -148,20 +152,22 @@ Four focused docs under [`docs/`](docs/):
 
 If you're new, the recommended path is: this README → `make demo-chat` → `docs/architecture.md` → `docs/quickstart.md`. About 30 minutes if you read everything; 10 if you skim.
 
-## Honest evaluation — the LongMemEval-S report
+## Honest evaluation — the LongMemEval-S reports
 
-[`findings/longmemeval_2026-05.md`](findings/longmemeval_2026-05.md) documents what we learned from running seven full LongMemEval-S sweeps across four model families and six retriever variants.
+Two reports, read in order — the second corrects the first, which is the point:
 
-**Headline finding**: substring accuracy plateaus at **32 %** regardless of model or retriever, *even at 100 % recall* (a Llama-3.3-70B long-context run with the full haystack in context). The ceiling is not retrieval — it's the model's ability to compose multi-hop answers at query time. A single-shot `retrieve → answer` pipeline cannot exceed this on LongMemEval-S without an external reasoning loop.
+**[`findings/longmemeval_2026-05.md`](findings/longmemeval_2026-05.md) (May)** — seven full sweeps across four model families and six retrievers found a hard **32-34% substring ceiling**, *even at 100% recall*, and concluded the bottleneck was multi-hop reasoning: a single-shot `retrieve → answer` pipeline couldn't exceed it "without an external reasoning loop."
 
-We document this honestly rather than chase a leaderboard number with techniques that don't fit Continuum's scope. The report includes:
+**[`findings/reasoning_loop_2026-06.md`](findings/reasoning_loop_2026-06.md) (June, v1)** — we built that reasoning loop (the `IterativeReasoner`), A/B'd it, and it was **net-negative** — so we cut it. v1 broke the ceiling to **60.8% judged** with a *single-shot* pipeline anyway. What actually moved the number:
 
-* full results table across 6 runs × 6 categories,
-* the failure-mode breakdown (90 % wrong_retrieval — facts present, model failed to compose),
-* auto-generated charts at [`findings/charts/`](findings/charts/),
-* a reproducibility artifact at [`findings/longmemeval/repro/`](findings/longmemeval/repro/) — `make repro-longmemeval` reproduces the two headline runs in 30 min for $0.10.
+* a stronger answerer (the dominant lever — we say so plainly),
+* the LLM judge revealing substring under-counted paraphrases by **+12.4 pp**,
+* session-aware retrieval + fixing two silent truncation bugs (multi-session ~16% → 55%),
+* LTM **supersession** making knowledge-update work (98.7% recall).
 
-The report's conclusion is the same one that informed Continuum's positioning: **be the memory layer; let the caller bring the reasoner.**
+The June report is deliberately honest about what we got wrong (the reasoning-loop prediction), which lever bought which points, where we still lose (temporal-reasoning at 41%), and why the LOCOMO/Mem0 head-to-head is still *preliminary* rather than a published win. Reproduce both headline runs with `make repro-everything`.
+
+The throughline that informs Continuum's positioning: **a strong model fed clean, complete context beats elaborate scaffolding** — be the memory layer that surfaces the right context cheaply; don't try to out-reason the reasoner.
 
 ---
 
