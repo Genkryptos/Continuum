@@ -3,7 +3,7 @@
 **Production-grade memory infrastructure for AI agents.** Tiered storage (STM / MTM / LTM), first-class supersession and bi-temporal queries, cost-efficient retrieval. Plugs in under whatever reasoner you're using — LangGraph, AutoGen, custom — and provides the memory layer they all lack.
 
 ```bash
-git clone <repo> && cd Continuum
+git clone https://github.com/Genkryptos/Continuum.git && cd Continuum
 make demo-chat       # 60-second walkthrough, no infrastructure, no API key
 make bench-all       # the four benchmarks Continuum is built to win
 ```
@@ -18,7 +18,7 @@ Most "memory" for LLM agents is one of:
 * an append-only chat history (no organization, gets expensive fast),
 * a manually-curated profile object (works until the user changes their mind).
 
-Continuum is the **operational memory layer**: tiered storage so recent conversation, mid-term summaries, and long-term facts are addressable separately; **`superseded_by` edges** on LTM facts so the system knows which version is current; **`valid_from` / `recorded_at` bi-temporal columns** so the system can answer *"what did the user say about X **as of** date Y?"* — including retroactive corrections.
+Continuum is the **operational memory layer**: tiered storage so recent conversation, mid-term summaries, and long-term facts are addressable separately; **supersession** — superseded LTM facts are stamped `invalidated_at` (never deleted), so every read filters on `invalidated_at IS NULL` and the system always knows which version is current; and **bi-temporal columns** — `valid_from`/`valid_to` (world-time) plus `created_at`/`invalidated_at` (system-time) — so it can answer *"what did the user say about X **as of** date Y?"*, including retroactive corrections.
 
 It is *not* a reasoning engine. The framework's value-prop is **what the layer below the reasoner should have been doing all along**, with benchmark numbers below to back it up.
 
@@ -35,7 +35,7 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
-> **v1.0.0** — Continuum broke the [May 2026 32% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
+> **v1.0.0** — Continuum broke the [May 2026 ~34% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
 
 The supersession + bi-temporal wins aren't tunable parameters — they're consequences of the schema. Append-only stores and vector databases **cannot** reach these numbers without re-implementing this architecture on top.
 
@@ -86,8 +86,8 @@ See [`examples/chat_agent/`](examples/chat_agent/) for source + the interactive 
 │   └────┬───┘                                                       │
 │        ▼                                                           │
 │   ┌────────┐                                                       │
-│   │  LTM   │ ← atomic facts + entities + supersession edges        │
-│   │ pgvector│   + bi-temporal columns (valid_from, recorded_at)    │
+│   │  LTM   │ ← atomic facts + entities + supersession             │
+│   │ pgvector│   + bi-temporal columns (valid_from, invalidated_at)│
 │   └────────┘                                                       │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -99,7 +99,7 @@ Each box is a swappable component. The retriever and optimizer chain are protoco
 ## Quick start (no infra)
 
 ```bash
-git clone <repo> && cd Continuum
+git clone https://github.com/Genkryptos/Continuum.git && cd Continuum
 
 # 1. Install Continuum + its dev tooling
 pip install -e .
@@ -231,7 +231,7 @@ tests/
 * **Not a vector database.** It uses pgvector under the hood but adds tier semantics, supersession, and bi-temporal queries that pgvector alone doesn't provide.
 * **Not a reasoning engine.** No agentic loop, no multi-hop retrieval, no chain-of-thought orchestration. Use LangGraph, AutoGen, or your own loop on top — Continuum is what they should plug into for memory.
 * **Not a managed service.** It's an open-source Python framework. Self-host on your own Postgres.
-* **Not a vibrant-tuned LongMemEval contender.** We measured honestly; see the report.
+* **Not a leaderboard-tuned LongMemEval contender.** We measured honestly; see the report.
 
 ---
 
@@ -253,5 +253,5 @@ If Continuum's supersession or bi-temporal benchmarks are useful in your work:
 
 ```
 Continuum: production-grade memory infrastructure for AI agents.
-https://github.com/<owner>/Continuum, 2026.
+https://github.com/Genkryptos/Continuum, 2026.
 ```
