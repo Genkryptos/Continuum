@@ -94,7 +94,10 @@ jobs:
     # ── PostgreSQL service container ─────────────────────────────────────────
     services:
       postgres:
-        image: ankane/pgvector:latest
+        # ankane/pgvector is deprecated and frozen at pgvector 0.5.1; the
+        # halfvec + HNSW migration needs >= 0.8.0. Use the official,
+        # maintained image (pg16 ships pgvector 0.8.x).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER:     myuser
           POSTGRES_PASSWORD: mypassword
