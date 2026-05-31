@@ -234,6 +234,17 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     p.add_argument("--rpm", type=int, default=28,
                    help="Client-side RPM cap for judge calls.")
     p.add_argument(
+        "--judge-max-tokens", type=int, default=8,
+        help=(
+            "Token cap on the judge's yes/no reply. 8 is plenty for a "
+            "NON-reasoning model. REASONING judges (gpt-oss-120b, "
+            "deepseek-r1, o-series) burn this thinking and emit no "
+            "verdict — the parser then falls back to 'wrong' and marks "
+            "EVERYTHING incorrect. Set 1024-2048 if you must judge with "
+            "a reasoning model; better, judge with a non-reasoning one."
+        ),
+    )
+    p.add_argument(
         "--limit", type=int, default=None,
         help="Re-grade only the first N rows (handy for validation).",
     )
@@ -264,7 +275,7 @@ async def main_async(args: argparse.Namespace) -> int:
         llm = OpenRouterLLM(model=judge_model, rpm=args.rpm)
     else:
         llm = GroqLLM(model=judge_model, rpm=args.rpm)
-    judge = LLMJudgeScorer(llm=llm)
+    judge = LLMJudgeScorer(llm=llm, max_tokens=args.judge_max_tokens)
 
     log.info("re-scoring %s …", args.input)
     results, flipped = await _rescore(
