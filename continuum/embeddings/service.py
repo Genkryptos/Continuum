@@ -266,7 +266,10 @@ class EmbeddingService:
             ) from exc
 
         log.info("loading embedding model %s on %s", self.config.model_name, device)
-        return SentenceTransformer(self.config.model_name, device=device)
+        # SentenceTransformer is untyped (mypy sees Any); pin to Encoder so
+        # the declared return type is honoured under --strict no-any-return.
+        encoder: Encoder = SentenceTransformer(self.config.model_name, device=device)
+        return encoder
 
     async def _get_encoder(self) -> Encoder:
         """Lazily build (once) and return the encoder."""

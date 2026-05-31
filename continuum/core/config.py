@@ -1273,7 +1273,9 @@ class ContinuumConfig(BaseSettings):
         settings used for a run are reproducible.
         """
         data = self.model_dump(mode="json")
-        return yaml.dump(data, default_flow_style=False, sort_keys=True)
+        # yaml.dump is untyped (mypy sees Any); pin to str for no-any-return.
+        out: str = yaml.dump(data, default_flow_style=False, sort_keys=True)
+        return out
 
     @classmethod
     def yaml_schema(cls) -> str:

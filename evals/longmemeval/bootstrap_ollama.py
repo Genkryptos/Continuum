@@ -1424,8 +1424,11 @@ class LMStudioLLM:
 class _Embedder:
     """Thin wrapper around sentence_transformers, loaded lazily once."""
 
-    def __init__(self, model_name: str = DEFAULT_EMBED_MODEL) -> None:
+    def __init__(self, model_name: str = DEFAULT_EMBED_MODEL, device: str | None = None) -> None:
         self.model_name = model_name
+        # device=None lets sentence-transformers auto-pick (CUDA/MPS/CPU);
+        # callers (e.g. bench) pass "cpu" to force CPU when MPS is contended.
+        self._device = device
         self._model: Any | None = None
 
     def _lazy(self) -> Any:
@@ -1433,7 +1436,7 @@ class _Embedder:
             from sentence_transformers import SentenceTransformer
 
             log.info("loading embedder %s …", self.model_name)
-            self._model = SentenceTransformer(self.model_name)
+            self._model = SentenceTransformer(self.model_name, device=self._device)
         return self._model
 
     def encode(self, texts: list[str]) -> np.ndarray:
