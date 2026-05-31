@@ -72,6 +72,12 @@ def _build_memory() -> Any:
     embed_model = os.environ.get(
         "MEM0_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
     )
+    # all-MiniLM-L6-v2 → 384 dims. Mem0 otherwise defaults the vector
+    # store collection to 1536 (OpenAI's size), causing a shape
+    # mismatch (0,1536) vs (384,). Tell BOTH the embedder and the
+    # vector store the real dimension. Override MEM0_EMBED_DIMS if you
+    # swap MEM0_EMBED_MODEL for a model of a different size.
+    dims = int(os.environ.get("MEM0_EMBED_DIMS", "384"))
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     config: dict[str, Any] = {
         "llm": {
@@ -84,7 +90,18 @@ def _build_memory() -> Any:
         },
         "embedder": {
             "provider": "huggingface",
-            "config": {"model": embed_model},
+            "config": {"model": embed_model, "embedding_dims": dims},
+        },
+        # In-memory Qdrant sized to the local embedder. on_disk=False
+        # keeps it fresh per process (no stale 1536-dim collection
+        # persisting between runs).
+        "vector_store": {
+            "provider": "qdrant",
+            "config": {
+                "collection_name": "locomo_mem0",
+                "embedding_model_dims": dims,
+                "on_disk": False,
+            },
         },
     }
     return Memory.from_config(config)
