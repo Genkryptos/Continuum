@@ -33,7 +33,7 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) | framework overhead |
 
-Sources: LongMemEval-S from [`results/v1_final/`](results/v1_final/) (see the [v1 findings report](findings/reasoning_loop_2026-06.md)); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
+Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
 > **v1.0.0** — Continuum broke the [May 2026 32% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
 
@@ -94,8 +94,6 @@ See [`examples/chat_agent/`](examples/chat_agent/) for source + the interactive 
 
 Each box is a swappable component. The retriever and optimizer chain are protocol-based; the stores live behind `STMProtocol` / `MTMProtocol` / `LTMProtocol` so the in-memory variant works for local dev and the Postgres variant scales to production.
 
-[Old ER diagram for the data model →](documentation/lightEr.svg)
-
 ---
 
 ## Quick start (no infra)
@@ -112,10 +110,11 @@ make demo-chat
 # 3. Reproduce the benchmarks
 make bench-all
 
-# 4. (Optional) reproduce the LongMemEval-S evaluation numbers
-#    ~30 min, ~$0.10 of OpenAI usage (gpt-4o-mini × 500 questions)
-export OPENAI_API_KEY=sk-…
-make repro-longmemeval
+# 4. (Optional) reproduce the v1 LongMemEval-S numbers
+#    answerer = gpt-oss-120b via OpenRouter; non-reasoning judge.
+#    The dataset is fetched on demand (not committed to the repo).
+export OPENROUTER_API_KEY=sk-or-…
+make repro-everything
 ```
 
 That's the complete loop. No Postgres needed for the demo or any of the benchmarks. The full production path with Postgres+pgvector is documented under [`continuum/stores/postgres/`](continuum/stores/postgres/) and exercised by the integration tests under `tests/integration/`.
@@ -132,7 +131,9 @@ That's the complete loop. No Postgres needed for the demo or any of the benchmar
 | `make bench-supersession` | the killer feature — 100 % vs 38 % |
 | `make bench-bitemporal` | "as of date Y" lookups — 100 % vs 75 % |
 | `make bench-all` | run all four benchmarks in sequence |
+| `make bench-locomo` | LOCOMO + Mem0 head-to-head (preliminary) |
 | `make repro-longmemeval` | reproduce the LongMemEval-S evaluation |
+| `make repro-everything` | reproduce both headline runs (LongMemEval + benches) |
 | `make test` | full test suite (unit + integration) |
 | `make test-fast` | unit tests only — no infra required |
 | `make check` | format + lint + mypy strict |
@@ -178,37 +179,50 @@ continuum/                  the framework itself
 ├── core/                   session orchestration, types, config
 ├── stores/                 STM / MTM / LTM implementations
 │   ├── stm/                in-memory + thread-safe + Postgres
+│   ├── in_memory/          in-memory LTM with supersession (eval + local dev)
 │   └── postgres/           pgvector-backed MTM + LTM with supersession + bi-temporal
-├── retrieval/              composite-scorer retriever + reranker
-├── extraction/             entity + fact + LLM extractors
+├── retrieval/              composite scorer + BM25 + reciprocal-rank-fusion hybrid
+├── extraction/             entity / fact / LLM extractors + cached SmallLLM helper
 ├── promotion/              Mem0Promoter, triggers, IdleStmFlush
 ├── optimizer/              token-budget compression chain (5 strategies)
 ├── scoring/                composite scorer (relevance / importance / recency / confidence)
-└── policies/               policy engine + 8 default policies (migration 004)
+├── policies/               policy engine + 8 default policies (migration 004)
+├── reasoning/              IterativeReasoner — shipped but cut from v1 (tested negative result)
+├── embeddings/             embedding service (sentence-transformers)
+└── db/                     pgvector upgrade helpers
 
-bench/                      Phase 3B memory-operation benchmarks
-├── ingest_throughput.py
-├── retrieval_quality.py
-├── supersession_correctness.py
-└── bi_temporal.py
+memory/                     legacy STM engine the framework re-exports (ConversationSTM)
 
-examples/
-└── chat_agent/             the 60-second CLI demo
+bench/                      memory-operation benchmarks (make bench-all)
+├── ingest_throughput.py    Continuum vs raw list vs mem0
+├── retrieval_quality.py    recall@k vs naive cosine
+├── supersession_correctness.py   100% vs 38%
+└── bi_temporal.py          "as of date Y" — 100% vs 75%
 
-findings/                   the LongMemEval-S evaluation + reproducibility
-├── longmemeval_2026-05.md  technical report
-├── charts/                 auto-generated PNGs + extraction script
-└── longmemeval/repro/      `make repro-longmemeval` artifact
+evals/                      reproduction harness (datasets fetched on demand)
+├── longmemeval/            LongMemEval-S driver (the v1 60.8% result)
+└── locomo/                 LOCOMO + Mem0 head-to-head (preliminary)
 
-evals/longmemeval/          the eval driver (used by repro)
+findings/                   evaluation reports + reproducibility
+├── longmemeval_2026-05.md  the May "32% ceiling" report
+├── reasoning_loop_2026-06.md   the v1 correction (supersedes it)
+└── charts/                 summary-generation scripts
+
+docs/                       quickstart · architecture · config · operations
+examples/chat_agent/        the 60-second CLI demo (make demo-chat)
+scripts/                    diagnostic-sample + bench-regression + install-verify helpers
+migrations/                 numbered Postgres migrations (pgvector, lexical search, policies)
 
 tests/
 ├── unit/                   per-component unit tests
 ├── integration/            cross-tier flows + Postgres pgvector
 └── acceptance/             phase-completion gates
-
-migrations/                 numbered Postgres migrations (pgvector, lexical search, policies)
 ```
+
+> This `release` branch ships the **essential library + reproduction harness only**.
+> Vendored datasets, raw run outputs (`results/`, `bench/results/*.json`,
+> `.wiki_cache*`), and earlier prototype code are intentionally excluded — they're
+> regenerated on demand and gitignored. Full history lives on `main`.
 
 ---
 

@@ -1,197 +1,0 @@
-2026-05-21 04:54:37,326 INFO provider=groq model=llama-3.3-70b-versatile rpm=25
-2026-05-21 04:54:37,362 INFO loading dataset from /Users/mayanksahu/Continuum/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
-2026-05-21 04:54:38,106 INFO loaded 500 rows
-2026-05-21 04:54:38,106 INFO optimizer chain ENABLED: StmTrim → MtmSummarize → SemanticDedupe → ScoreAwareBudgetPrune
-2026-05-21 04:54:38,106 INFO === SMOKE TEST (5 questions) ===
-2026-05-21 04:54:40,002 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
-2026-05-21 04:54:40,015 INFO Use pytorch device_name: mps
-2026-05-21 04:54:40,015 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
-Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:02,  6.72it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 10.69it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 11.94it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 12.78it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 14.10it/s]Batches:  72%|███████▏  | 13/18 [00:00<00:00, 20.62it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 28.26it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 19.52it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 34.23it/s]
-2026-05-21 04:54:45,369 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:45,373 INFO row 1/5 id=e47becba correct=True latency=7265ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.76it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 12.54it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.09it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.21it/s]Batches:  75%|███████▌  | 12/16 [00:00<00:00, 21.41it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.56it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 63.28it/s]
-2026-05-21 04:54:47,619 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:47,622 INFO row 2/5 id=118b2229 correct=True latency=2249ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.20it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.65it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.58it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.77it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.31it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 22.63it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 19.78it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 51.44it/s]
-2026-05-21 04:54:50,076 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:50,077 INFO row 3/5 id=51a45a95 correct=True latency=2453ms
-Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:01,  9.82it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01, 12.12it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 12.98it/s]Batches:  35%|███▌      | 7/20 [00:00<00:00, 13.49it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 14.40it/s]Batches:  65%|██████▌   | 13/20 [00:00<00:00, 20.45it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 31.90it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 22.10it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 62.96it/s]
-2026-05-21 04:54:52,433 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:52,436 INFO row 4/5 id=58bf7951 correct=True latency=2358ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.70it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.84it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.61it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.97it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.61it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.19it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.05it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 58.71it/s]
-2026-05-21 04:54:54,891 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:54,892 INFO row 5/5 id=1e043500 correct=True latency=2456ms
-2026-05-21 04:54:54,894 INFO metrics written to results/smoke/baseline_2026-05-20.json
-2026-05-21 04:54:54,896 INFO 0 failures written to results/smoke/baseline_failures.csv
-2026-05-21 04:54:54,896 INFO smoke completed in 17s
-2026-05-21 04:54:54,896 INFO === FULL RUN (500 questions) ===
-============================================================
-LongMemEval baseline — longmemeval-s
-  answerer:        llama-3.3-70b-versatile
-  questions:       5
-  accuracy:        100.0%
-  recall:          100.0%
-  avg tokens:      19
-  latency p50/p95: 2453ms / 7265ms
-  total cost:      $0.00
-  failure types:
-============================================================
-Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:  11%|█         | 2/18 [00:00<00:01, 11.26it/s]Batches:  22%|██▏       | 4/18 [00:00<00:01, 12.57it/s]Batches:  33%|███▎      | 6/18 [00:00<00:00, 13.13it/s]Batches:  44%|████▍     | 8/18 [00:00<00:00, 13.79it/s]Batches:  72%|███████▏  | 13/18 [00:00<00:00, 23.53it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 23.98it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 313.19it/s]
-2026-05-21 04:54:57,142 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:57,144 INFO row 1/? id=e47becba correct=True latency=2247ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.21it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 12.34it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 12.86it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.44it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 23.33it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 305.35it/s]
-2026-05-21 04:54:59,704 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:54:59,707 INFO row 2/? id=118b2229 correct=True latency=2562ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.77it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.91it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.79it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.29it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 20.05it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.44it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 294.67it/s]
-2026-05-21 04:55:01,957 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:55:01,959 INFO row 3/? id=51a45a95 correct=True latency=2251ms
-Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:02,  9.32it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01, 11.88it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 12.80it/s]Batches:  35%|███▌      | 7/20 [00:00<00:00, 13.33it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 14.90it/s]Batches:  75%|███████▌  | 15/20 [00:00<00:00, 27.19it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 24.69it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 304.95it/s]
-2026-05-21 04:55:04,084 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:55:04,085 WARNING Groq 429 rate-limited; sleeping 4.0s (attempt 1/5)
-2026-05-21 04:55:08,613 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:55:08,616 INFO row 4/? id=58bf7951 correct=True latency=6656ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.75it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 12.05it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.81it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.50it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.46it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 22.63it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 284.17it/s]
-2026-05-21 04:55:10,583 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:55:10,586 WARNING Groq 429 rate-limited; sleeping 8.0s (attempt 1/5)
-2026-05-21 04:55:19,162 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:55:19,165 INFO row 5/? id=1e043500 correct=True latency=10547ms
-Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.39it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.75it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.49it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.18it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 17.50it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 26.21it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.50it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 236.46it/s]
-2026-05-21 04:55:21,046 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:55:21,047 WARNING Groq 429 rate-limited; sleeping 14.0s (attempt 1/5)
-2026-05-21 04:55:35,647 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:55:35,650 INFO row 6/? id=c5e8278d correct=True latency=16484ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.52it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.89it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.79it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.29it/s]Batches:  53%|█████▎    | 9/17 [00:00<00:00, 14.99it/s]Batches:  88%|████████▊ | 15/17 [00:00<00:00, 26.50it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 21.32it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 310.25it/s]
-2026-05-21 04:55:37,517 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:55:37,519 WARNING Groq 429 rate-limited; sleeping 8.0s (attempt 1/5)
-2026-05-21 04:55:46,094 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:55:46,096 INFO row 7/? id=6ade9755 correct=True latency=10445ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.23it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.80it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.62it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.96it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.86it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.97it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.64it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 263.79it/s]
-2026-05-21 04:55:47,983 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:55:47,984 WARNING Groq 429 rate-limited; sleeping 12.0s (attempt 1/5)
-2026-05-21 04:56:00,634 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:56:00,637 INFO row 8/? id=6f9b354f correct=True latency=14540ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.56it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.82it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.76it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.29it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 17.00it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 23.26it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.79it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 301.38it/s]
-2026-05-21 04:56:02,479 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:56:02,480 WARNING Groq 429 rate-limited; sleeping 10.0s (attempt 1/5)
-2026-05-21 04:56:13,128 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:56:13,130 INFO row 9/? id=58ef2f1c correct=False latency=12492ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.47it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.83it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.69it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.13it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.43it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 29.28it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.93it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 275.63it/s]
-2026-05-21 04:56:14,945 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:56:14,948 WARNING Groq 429 rate-limited; sleeping 11.0s (attempt 1/5)
-2026-05-21 04:56:26,441 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:56:26,444 INFO row 10/? id=f8c5f88b correct=False latency=13313ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.34it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.67it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.55it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.04it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.33it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 20.52it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.09it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 57.63it/s]
-2026-05-21 04:56:28,449 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:56:28,450 WARNING Groq 429 rate-limited; sleeping 7.0s (attempt 1/5)
-2026-05-21 04:56:35,963 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:56:35,966 INFO row 11/? id=5d3d2817 correct=False latency=9521ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.12it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.61it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.56it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.74it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.49it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.89it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 252.40it/s]
-2026-05-21 04:56:37,913 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:56:37,916 WARNING Groq 429 rate-limited; sleeping 9.0s (attempt 1/5)
-2026-05-21 04:56:47,288 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:56:47,290 INFO row 12/? id=7527f7e2 correct=True latency=11324ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.17it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.60it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.61it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.15it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.84it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 25.12it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.42it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 228.93it/s]
-2026-05-21 04:56:49,416 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:56:49,417 WARNING Groq 429 rate-limited; sleeping 13.0s (attempt 1/5)
-2026-05-21 04:57:02,791 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:57:02,794 INFO row 13/? id=c960da58 correct=True latency=15502ms
-Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.31it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.70it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.55it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.12it/s]Batches:  60%|██████    | 9/15 [00:00<00:00, 14.83it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 26.81it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.42it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 273.37it/s]
-2026-05-21 04:57:04,903 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:57:04,904 WARNING Groq 429 rate-limited; sleeping 5.0s (attempt 1/5)
-2026-05-21 04:57:10,385 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:57:10,387 INFO row 14/? id=3b6f954b correct=False latency=7592ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.68it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.32it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.35it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.86it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.24it/s]Batches:  81%|████████▏ | 13/16 [00:00<00:00, 20.82it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.15it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 30.28it/s]
-2026-05-21 04:57:12,392 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:57:12,393 WARNING Groq 429 rate-limited; sleeping 16.0s (attempt 1/5)
-2026-05-21 04:57:29,109 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:57:29,112 INFO row 15/? id=726462e0 correct=False latency=18725ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.90it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.57it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.52it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.13it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.39it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.05it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 313.57it/s]
-2026-05-21 04:57:30,863 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:57:30,865 WARNING Groq 429 rate-limited; sleeping 17.0s (attempt 1/5)
-2026-05-21 04:57:48,770 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:57:48,772 INFO row 16/? id=94f70d80 correct=True latency=19659ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.28it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.87it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.84it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.29it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.72it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 29.90it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.92it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 58.26it/s]
-2026-05-21 04:57:50,330 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:57:50,332 WARNING Groq 429 rate-limited; sleeping 7.0s (attempt 1/5)
-2026-05-21 04:57:57,810 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:57:57,812 INFO row 17/? id=66f24dbb correct=True latency=9039ms
-Batches:   0%|          | 0/15 [00:00<?, ?it/s]Batches:   7%|▋         | 1/15 [00:00<00:01,  9.34it/s]Batches:  20%|██        | 3/15 [00:00<00:01, 11.77it/s]Batches:  33%|███▎      | 5/15 [00:00<00:00, 12.77it/s]Batches:  47%|████▋     | 7/15 [00:00<00:00, 13.27it/s]Batches:  67%|██████▋   | 10/15 [00:00<00:00, 18.02it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 27.19it/s]Batches: 100%|██████████| 15/15 [00:00<00:00, 19.99it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 59.55it/s]
-2026-05-21 04:57:59,808 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:57:59,808 WARNING Groq 429 rate-limited; sleeping 7.0s (attempt 1/5)
-2026-05-21 04:58:07,111 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:58:07,113 INFO row 18/? id=ad7109d1 correct=True latency=9300ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.96it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.59it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.62it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.19it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.92it/s]Batches:  88%|████████▊ | 14/16 [00:00<00:00, 23.52it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.44it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 279.55it/s]
-2026-05-21 04:58:09,273 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:58:09,274 WARNING Groq 429 rate-limited; sleeping 12.0s (attempt 1/5)
-2026-05-21 04:58:22,051 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:58:22,052 INFO row 19/? id=af8d2e46 correct=True latency=14939ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.98it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.79it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.59it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.08it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 19.93it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.95it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.64it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 222.72it/s]
-2026-05-21 04:58:23,758 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:58:23,759 WARNING Groq 429 rate-limited; sleeping 9.0s (attempt 1/5)
-2026-05-21 04:58:33,316 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:58:33,318 INFO row 20/? id=dccbc061 correct=True latency=11265ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.34it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.79it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.71it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.25it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.85it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.92it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 301.29it/s]
-2026-05-21 04:58:35,242 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:58:35,243 WARNING Groq 429 rate-limited; sleeping 12.0s (attempt 1/5)
-2026-05-21 04:58:47,856 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:58:47,858 INFO row 21/? id=c8c3f81d correct=True latency=14539ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  8.95it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.53it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.41it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.23it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 15.15it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 30.47it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.01it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 311.71it/s]
-2026-05-21 04:58:49,719 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:58:49,720 WARNING Groq 429 rate-limited; sleeping 17.0s (attempt 1/5)
-2026-05-21 04:59:07,313 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:59:07,316 INFO row 22/? id=8ebdbe50 correct=True latency=19457ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.40it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.83it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.80it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.84it/s]Batches:  69%|██████▉   | 11/16 [00:00<00:00, 20.06it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.41it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 255.55it/s]
-2026-05-21 04:59:09,176 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:59:09,178 WARNING Groq 429 rate-limited; sleeping 16.0s (attempt 1/5)
-2026-05-21 04:59:25,745 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:59:25,749 INFO row 23/? id=6b168ec8 correct=False latency=18432ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.12it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.66it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.54it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.12it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 13.29it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.48it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 19.68it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 302.14it/s]
-2026-05-21 04:59:27,653 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:59:27,655 WARNING Groq 429 rate-limited; sleeping 11.0s (attempt 1/5)
-2026-05-21 04:59:39,264 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:59:39,266 INFO row 24/? id=75499fd8 correct=True latency=13516ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.17it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.64it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.67it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.19it/s]Batches:  56%|█████▋    | 9/16 [00:00<00:00, 14.51it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.02it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 292.65it/s]
-2026-05-21 04:59:41,158 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:59:41,160 WARNING Groq 429 rate-limited; sleeping 15.0s (attempt 1/5)
-2026-05-21 04:59:56,791 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 04:59:56,793 INFO row 25/? id=21436231 correct=True latency=17526ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.34it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.78it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.64it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.17it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.10it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.52it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 308.47it/s]
-2026-05-21 04:59:58,653 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 04:59:58,654 WARNING Groq 429 rate-limited; sleeping 8.0s (attempt 1/5)
-2026-05-21 05:00:07,218 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-21 05:00:07,220 INFO row 26/? id=95bcc1c8 correct=True latency=10426ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.53it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.88it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.76it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.30it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.57it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 21.95it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 253.28it/s]
-2026-05-21 05:00:09,121 INFO HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-21 05:00:09,122 WARNING Groq 429 rate-limited; sleeping 752.0s (attempt 1/5)

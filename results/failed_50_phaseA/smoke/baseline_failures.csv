@@ -1,4 +1,0 @@
-question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,partial_recall,missing_expected_session_ids,error,latency_ms
-94f70d80,wrong_retrieval,4 hours,2 hours,answer_c63c0458,answer_c63c0458;sharegpt_FvO2l0O_0;ec628e8d_2;2ae4f277_1;ultrachat_172828,1.000,,,8063.0
-b86304ba,wrong_retrieval,The painting is worth triple what I paid for it.,1 made,answer_645b0329,answer_645b0329;sharegpt_xGoJZ6Z_0;8e9425ef_1;e831a29f_1;ae00973d_4;ultrachat_328696,1.000,,,11699.0
-25e5aa4f,wrong_retrieval,"University of California, Los Angeles (UCLA)",Stanford,answer_986de8c3,answer_986de8c3;18807892_4;478e02c2;sharegpt_SwdaeDm_15;sharegpt_rqvR1Ep_0;sharegpt_Db9cdoK_0,1.000,,,7235.2

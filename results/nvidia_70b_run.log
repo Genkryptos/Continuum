@@ -1,73 +1,0 @@
-2026-05-23 01:10:23,649 INFO provider=nvidia model=meta/llama-3.3-70b-instruct rpm=35
-2026-05-23 01:10:23,699 INFO loading dataset from /Users/mayanksahu/Continuum/evals/longmemeval/LongMemEval/data/longmemeval_s_cleaned.json …
-2026-05-23 01:10:24,842 INFO loaded 500 rows
-2026-05-23 01:10:24,843 INFO optimizer chain ENABLED: StmTrim → MtmSummarize → SemanticDedupe → ScoreAwareBudgetPrune
-2026-05-23 01:10:24,843 INFO scorer weights = {'relevance': 0.45, 'importance': 0.25, 'recency': 0.2, 'confidence': 0.1}   tau_hours = 168
-2026-05-23 01:10:24,843 INFO === SMOKE TEST (5 questions) ===
-2026-05-23 01:10:29,009 INFO loading embedder sentence-transformers/all-MiniLM-L6-v2 …
-2026-05-23 01:10:29,023 INFO Use pytorch device_name: mps
-2026-05-23 01:10:29,023 INFO Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
-Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:03,  4.45it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01,  8.79it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 10.61it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 11.81it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 13.03it/s]Batches:  72%|███████▏  | 13/18 [00:00<00:00, 19.32it/s]Batches: 100%|██████████| 18/18 [00:01<00:00, 26.78it/s]Batches: 100%|██████████| 18/18 [00:01<00:00, 17.65it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 26.38it/s]
-2026-05-23 01:10:35,007 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:35,010 INFO row 1/5 id=e47becba correct=True latency=10166ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.49it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.85it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.74it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 13.28it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 17.47it/s]Batches:  94%|█████████▍| 15/16 [00:00<00:00, 26.54it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.36it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 43.80it/s]
-2026-05-23 01:10:39,047 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:39,049 INFO row 2/5 id=118b2229 correct=True latency=4038ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.22it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.77it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.58it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 12.78it/s]Batches:  59%|█████▉    | 10/17 [00:00<00:00, 16.37it/s]Batches:  82%|████████▏ | 14/17 [00:00<00:00, 22.72it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 20.18it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 54.48it/s]
-2026-05-23 01:10:42,008 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:42,010 INFO row 3/5 id=51a45a95 correct=True latency=2961ms
-Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:02,  9.01it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01, 11.70it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 12.75it/s]Batches:  35%|███▌      | 7/20 [00:00<00:00, 13.32it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 14.03it/s]Batches:  65%|██████▌   | 13/20 [00:00<00:00, 19.95it/s]Batches:  95%|█████████▌| 19/20 [00:00<00:00, 30.57it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 21.53it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 56.21it/s]
-2026-05-23 01:10:43,037 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:10:43,037 WARNING nvidia 429 — adaptive pace now 2.57s/call; backoff 1.1s (retry 1/8)
-2026-05-23 01:10:51,470 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:51,472 INFO row 4/5 id=58bf7951 correct=False latency=9461ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:   6%|▋         | 1/16 [00:00<00:01,  9.10it/s]Batches:  19%|█▉        | 3/16 [00:00<00:01, 11.71it/s]Batches:  31%|███▏      | 5/16 [00:00<00:00, 12.57it/s]Batches:  44%|████▍     | 7/16 [00:00<00:00, 12.97it/s]Batches:  62%|██████▎   | 10/16 [00:00<00:00, 16.69it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 27.32it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 20.03it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 50.09it/s]
-2026-05-23 01:10:55,936 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:55,938 INFO row 5/5 id=1e043500 correct=True latency=4465ms
-2026-05-23 01:10:55,940 INFO metrics written to results/smoke/baseline_2026-05-22.json
-2026-05-23 01:10:55,942 INFO 1 failures written to results/smoke/baseline_failures.csv
-2026-05-23 01:10:55,942 INFO smoke completed in 31s
-2026-05-23 01:10:55,942 INFO === FULL RUN (500 questions) ===
-============================================================
-LongMemEval baseline — longmemeval-s
-  answerer:        meta/llama-3.3-70b-instruct
-  questions:       5
-  accuracy:        80.0%
-  recall:          100.0%
-  avg tokens:      20
-  latency p50/p95: 4465ms / 10166ms
-  total cost:      $0.00
-  failure types:
-    wrong_retrieval    1
-============================================================
-Batches:   0%|          | 0/18 [00:00<?, ?it/s]Batches:   6%|▌         | 1/18 [00:00<00:01,  9.28it/s]Batches:  17%|█▋        | 3/18 [00:00<00:01, 11.87it/s]Batches:  28%|██▊       | 5/18 [00:00<00:01, 12.84it/s]Batches:  39%|███▉      | 7/18 [00:00<00:00, 13.32it/s]Batches:  50%|█████     | 9/18 [00:00<00:00, 15.17it/s]Batches:  89%|████████▉ | 16/18 [00:00<00:00, 31.01it/s]Batches: 100%|██████████| 18/18 [00:00<00:00, 23.70it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 245.17it/s]
-2026-05-23 01:10:57,349 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:10:57,351 INFO row 1/? id=e47becba correct=True latency=1407ms
-Batches:   0%|          | 0/16 [00:00<?, ?it/s]Batches:  12%|█▎        | 2/16 [00:00<00:01, 11.84it/s]Batches:  25%|██▌       | 4/16 [00:00<00:00, 12.69it/s]Batches:  38%|███▊      | 6/16 [00:00<00:00, 13.11it/s]Batches:  50%|█████     | 8/16 [00:00<00:00, 14.68it/s]Batches: 100%|██████████| 16/16 [00:00<00:00, 23.72it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 232.45it/s]
-2026-05-23 01:11:05,435 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:11:05,437 INFO row 2/? id=118b2229 correct=True latency=8085ms
-Batches:   0%|          | 0/17 [00:00<?, ?it/s]Batches:   6%|▌         | 1/17 [00:00<00:01,  9.00it/s]Batches:  18%|█▊        | 3/17 [00:00<00:01, 11.69it/s]Batches:  29%|██▉       | 5/17 [00:00<00:00, 12.65it/s]Batches:  41%|████      | 7/17 [00:00<00:00, 13.15it/s]Batches:  65%|██████▍   | 11/17 [00:00<00:00, 19.81it/s]Batches: 100%|██████████| 17/17 [00:00<00:00, 23.16it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 236.81it/s]
-2026-05-23 01:11:06,250 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:11:06,251 WARNING nvidia 429 — adaptive pace now 3.86s/call; backoff 1.0s (retry 1/8)
-2026-05-23 01:11:08,828 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:11:08,829 WARNING nvidia 429 — adaptive pace now 5.79s/call; backoff 2.2s (retry 2/8)
-2026-05-23 01:11:12,685 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:11:12,685 WARNING nvidia 429 — adaptive pace now 8.68s/call; backoff 4.4s (retry 3/8)
-2026-05-23 01:11:18,523 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:11:18,523 WARNING nvidia 429 — adaptive pace now 13.02s/call; backoff 9.4s (retry 4/8)
-2026-05-23 01:11:28,012 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:11:28,014 WARNING nvidia 429 — adaptive pace now 19.53s/call; backoff 15.6s (retry 5/8)
-2026-05-23 01:11:44,167 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK"
-2026-05-23 01:11:44,170 INFO row 3/? id=51a45a95 correct=True latency=38731ms
-Batches:   0%|          | 0/20 [00:00<?, ?it/s]Batches:   5%|▌         | 1/20 [00:00<00:03,  5.49it/s]Batches:  15%|█▌        | 3/20 [00:00<00:01,  9.80it/s]Batches:  25%|██▌       | 5/20 [00:00<00:01, 11.52it/s]Batches:  35%|███▌      | 7/20 [00:00<00:01, 12.58it/s]Batches:  45%|████▌     | 9/20 [00:00<00:00, 14.35it/s]Batches:  75%|███████▌  | 15/20 [00:00<00:00, 26.33it/s]Batches: 100%|██████████| 20/20 [00:00<00:00, 22.73it/s]
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 197.47it/s]
-2026-05-23 01:12:03,224 INFO HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-05-23 01:12:03,225 WARNING nvidia 429 — adaptive pace now 29.29s/call; backoff 1.1s (retry 1/8)
