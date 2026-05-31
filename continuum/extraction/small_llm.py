@@ -19,6 +19,7 @@ Network: ``requests.post`` to ``{url}/api/generate`` with
 ``stream=False``. The endpoint and model are env-configurable via
 ``CONTINUUM_SMALL_LLM_URL`` and ``CONTINUUM_SMALL_LLM_MODEL``.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -82,10 +83,7 @@ class SmallLLM:
         api_key: str | None = None,
     ) -> None:
         self.model = model or os.environ.get("CONTINUUM_SMALL_LLM_MODEL", DEFAULT_MODEL)
-        self.url = (
-            url
-            or os.environ.get("CONTINUUM_SMALL_LLM_URL", DEFAULT_URL)
-        ).rstrip("/")
+        self.url = (url or os.environ.get("CONTINUUM_SMALL_LLM_URL", DEFAULT_URL)).rstrip("/")
         self.backend: Backend = backend or _auto_detect_backend(self.url)
         # OpenAI proper needs the bearer; LM Studio / vLLM accept any
         # string (or no key); Ollama ignores the kwarg entirely.
@@ -106,7 +104,8 @@ class SmallLLM:
                 "SmallLLM endpoint %s unreachable (%s). "
                 "Subsequent failures suppressed; calls will return None "
                 "until the endpoint comes back up.",
-                self.url, type(exc).__name__,
+                self.url,
+                type(exc).__name__,
             )
             self._connection_warned = True
         else:
@@ -114,9 +113,7 @@ class SmallLLM:
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    def span_select(
-        self, question: str, passage: str, cache_key: str | None = None
-    ) -> str:
+    def span_select(self, question: str, passage: str, cache_key: str | None = None) -> str:
         prompt = (
             f"Question: {question}\n"
             f"Passage: {passage}\n"
@@ -140,7 +137,7 @@ class SmallLLM:
         prompt = (
             f"Claim: {claim}\n"
             f"Evidence: {evidence}\n"
-            'Does the evidence support the claim? Reply with JSON only: '
+            "Does the evidence support the claim? Reply with JSON only: "
             '{"supported": true|false, "confidence": 0.0-1.0}.'
         )
         key = self._key("verify_claim", cache_key, claim, evidence)
@@ -158,9 +155,7 @@ class SmallLLM:
         self._cache_put(key, json.dumps({"supported": parsed[0], "confidence": parsed[1]}))
         return parsed
 
-    def classify_intent(
-        self, question: str, cache_key: str | None = None
-    ) -> Intent:
+    def classify_intent(self, question: str, cache_key: str | None = None) -> Intent:
         prompt = (
             f"Question: {question}\n"
             "Classify the question intent as exactly one of: "
@@ -170,7 +165,7 @@ class SmallLLM:
         key = self._key("classify_intent", cache_key, question)
         cached = self._cache_get(key)
         if cached in _INTENTS:
-            return cached  # type: ignore[return-value]
+            return cached
         raw = self._generate(prompt)
         label = _parse_intent(raw)
         if label is None:
@@ -299,16 +294,13 @@ class SmallLLM:
 
     def _cache_get(self, key: str) -> str | None:
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT value FROM cache WHERE key = ?", (key,)
-            ).fetchone()
+            row = conn.execute("SELECT value FROM cache WHERE key = ?", (key,)).fetchone()
         return row[0] if row else None
 
     def _cache_put(self, key: str, value: str) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO cache (key, value, created_at) "
-                "VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO cache (key, value, created_at) VALUES (?, ?, ?)",
                 (key, value, time.time()),
             )
 
@@ -346,7 +338,7 @@ def _parse_intent(raw: str | None) -> Intent | None:
         return None
     token = raw.strip().lower().strip(".,!?\"'`").split()[0] if raw.strip() else ""
     if token in _INTENTS:
-        return token  # type: ignore[return-value]
+        return token
     return None
 
 

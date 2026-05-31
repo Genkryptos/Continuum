@@ -37,6 +37,7 @@ TaskMode classification recorded in ``row.telemetry.task_mode``.
 
 Pure stdlib — no extra deps, no charts, just a tight text table.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,7 +47,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-
 
 # ── parsing helpers ────────────────────────────────────────────────────────
 
@@ -110,10 +110,15 @@ def _summary_for(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Single-bucket aggregation. Safe on empty input."""
     if not rows:
         return {
-            "n": 0, "judged_acc": 0.0, "abstain_rate": 0.0,
-            "head_short_circuit_rate": 0.0, "avg_llm_calls": 0.0,
-            "max_llm_calls": 0, "cap_hit_rate": 0.0,
-            "p50_ms": 0.0, "p95_ms": 0.0,
+            "n": 0,
+            "judged_acc": 0.0,
+            "abstain_rate": 0.0,
+            "head_short_circuit_rate": 0.0,
+            "avg_llm_calls": 0.0,
+            "max_llm_calls": 0,
+            "cap_hit_rate": 0.0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
         }
     judged = [_judged(r) for r in rows]
     judged_known = [v for v in judged if v is not None]
@@ -126,8 +131,7 @@ def _summary_for(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "n": len(rows),
         "judged_acc": (
-            sum(1 for v in judged_known if v) / len(judged_known)
-            if judged_known else 0.0
+            sum(1 for v in judged_known if v) / len(judged_known) if judged_known else 0.0
         ),
         "judged_n": len(judged_known),
         "abstain_rate": sum(abstained) / len(rows),
@@ -162,11 +166,11 @@ def _render_table(title: str, summaries: dict[str, dict[str, Any]]) -> str:
         out.append(
             f"{bucket[:28]:<28}"
             f"{s['n']:>6}"
-            f"{s['judged_acc']*100:>9.1f} "
-            f"{s['abstain_rate']*100:>7.1f} "
-            f"{s['head_short_circuit_rate']*100:>7.1f} "
+            f"{s['judged_acc'] * 100:>9.1f} "
+            f"{s['abstain_rate'] * 100:>7.1f} "
+            f"{s['head_short_circuit_rate'] * 100:>7.1f} "
             f"{s['avg_llm_calls']:>8.2f} "
-            f"{s['cap_hit_rate']*100:>6.1f} "
+            f"{s['cap_hit_rate'] * 100:>6.1f} "
             f"{s['p50_ms']:>8.0f} "
             f"{s['p95_ms']:>8.0f}"
         )
@@ -194,12 +198,17 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Render the iterative-reasoner smoke-run numbers from a baseline JSON.",
     )
-    p.add_argument("input", type=Path,
-                   help="Path to a baseline_*.json written by bootstrap_ollama.")
-    p.add_argument("--by-mode", action="store_true",
-                   help="Also break results down by the reasoner's TaskMode.")
-    p.add_argument("--no-write", action="store_true",
-                   help="Don't write the structured summary JSON next to the input.")
+    p.add_argument(
+        "input", type=Path, help="Path to a baseline_*.json written by bootstrap_ollama."
+    )
+    p.add_argument(
+        "--by-mode", action="store_true", help="Also break results down by the reasoner's TaskMode."
+    )
+    p.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Don't write the structured summary JSON next to the input.",
+    )
     args = p.parse_args(argv)
 
     if not args.input.exists():
@@ -213,16 +222,20 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = _summarise(payload, by_mode=args.by_mode)
 
-    print(_render_table(
-        "Iterative-reasoner smoke — overall + per question_type",
-        {"OVERALL": summary["overall"], **summary["per_question_type"]},
-    ))
+    print(
+        _render_table(
+            "Iterative-reasoner smoke — overall + per question_type",
+            {"OVERALL": summary["overall"], **summary["per_question_type"]},
+        )
+    )
     if args.by_mode and summary.get("per_task_mode"):
         print()
-        print(_render_table(
-            "Per TaskMode (from row.telemetry.task_mode)",
-            summary["per_task_mode"],
-        ))
+        print(
+            _render_table(
+                "Per TaskMode (from row.telemetry.task_mode)",
+                summary["per_task_mode"],
+            )
+        )
 
     if not args.no_write:
         # Prefix so the output doesn't collide with the input under a

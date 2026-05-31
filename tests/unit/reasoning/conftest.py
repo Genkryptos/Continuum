@@ -5,6 +5,7 @@ Reusable fakes for :class:`IterativeReasoner` tests. None of these
 touch disk, network, or any real LLM — they record calls so tests
 can assert on call counts, cache-key shapes, and ordering.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -12,7 +13,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-
 
 # ── Fake LLMs ──────────────────────────────────────────────────────────────
 
@@ -60,11 +60,18 @@ class FakeSmallLLM:
         return self.intent_replies.pop(0)
 
     async def span_select(
-        self, question: str, passage: str, cache_key: str | None = None,
+        self,
+        question: str,
+        passage: str,
+        cache_key: str | None = None,
     ) -> str:
-        self.span_calls.append({
-            "question": question, "passage": passage, "cache_key": cache_key,
-        })
+        self.span_calls.append(
+            {
+                "question": question,
+                "passage": passage,
+                "cache_key": cache_key,
+            }
+        )
         if not self.span_replies:
             return ""
         return self.span_replies.pop(0)
@@ -76,6 +83,7 @@ class FakeSmallLLM:
 @dataclass
 class _FakeCtx:
     """Object the reasoner passes into extract_*_fn callables."""
+
     payload: Any = None
 
 
@@ -106,6 +114,7 @@ class FakeRetriever:
 @dataclass
 class FakeCandidate:
     """Minimal candidate shape — enough for verify/filter/packet."""
+
     value: str
     claim: str = ""
     confidence: float = 0.5
@@ -139,10 +148,12 @@ class FakePacket:
 @pytest.fixture
 def fake_composer() -> FakeComposerLLM:
     """Default composer with two scripted replies (decompose + synthesis)."""
-    return FakeComposerLLM(replies=[
-        "1. sub-q one\n2. sub-q two",  # decompose
-        "synthesised final answer",     # synthesis
-    ])
+    return FakeComposerLLM(
+        replies=[
+            "1. sub-q one\n2. sub-q two",  # decompose
+            "synthesised final answer",  # synthesis
+        ]
+    )
 
 
 @pytest.fixture
@@ -205,6 +216,7 @@ class _StubMode:
 def _route_to(mode: Any) -> Callable[..., Any]:
     def _route(question: str, **kw: Any) -> Any:
         return mode
+
     return _route
 
 

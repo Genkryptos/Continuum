@@ -15,10 +15,10 @@ of the real longmemeval modules.
 This is the closest unit-level proof that the wiring is wired correctly —
 short of an actual LongMemEval row, which needs a live LLM.
 """
+
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 import pytest
 
@@ -30,7 +30,6 @@ from evals.longmemeval.iterative_reasoner_wiring import (
     heuristic_rewrite,
 )
 from evals.longmemeval.task_router import TaskMode
-
 from tests.unit.reasoning.conftest import FakeComposerLLM, FakeSmallLLM
 
 pytestmark = pytest.mark.unit
@@ -47,10 +46,15 @@ def _ctx(*contents: str) -> ContextBundle:
         for i, text in enumerate(contents)
     ]
     return ContextBundle(
-        items=items, messages=[], tokens_used=0,
+        items=items,
+        messages=[],
+        tokens_used=0,
         budget=TokenBudget(
-            total=4000, stm_reserved=0, mtm_reserved=0,
-            ltm_reserved=2000, response_reserved=100,
+            total=4000,
+            stm_reserved=0,
+            mtm_reserved=0,
+            ltm_reserved=2000,
+            response_reserved=100,
         ),
     )
 
@@ -82,8 +86,7 @@ def test_heuristic_rewrite_strips_stopwords() -> None:
     assert heuristic_rewrite("Where do I live now?", 0) == "Where live now"
     # Returns the input unchanged when stripping would leave nothing.
     assert heuristic_rewrite("the a an", 0) == "the a an"
-    assert heuristic_rewrite("How many shirts for Boston 2024?", 0) == \
-           "many shirts Boston 2024"
+    assert heuristic_rewrite("How many shirts for Boston 2024?", 0) == "many shirts Boston 2024"
 
 
 @pytest.mark.asyncio
@@ -106,10 +109,12 @@ async def test_wiring_runs_end_to_end_with_real_modules() -> None:
         "I work at MIT and have lived in Boston since 2018.",
     )
     retriever = _ScriptedRetriever(ctx)
-    composer = FakeComposerLLM(replies=[
-        "1. Where do I live?",   # decompose
-        "Boston",                # synthesis
-    ])
+    composer = FakeComposerLLM(
+        replies=[
+            "1. Where do I live?",  # decompose
+            "Boston",  # synthesis
+        ]
+    )
     small = FakeSmallLLM()
 
     reasoner = build_iterative_reasoner(

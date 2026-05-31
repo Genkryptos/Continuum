@@ -24,6 +24,7 @@ the order it was returned and treats that as the rank order.
 ``HybridRetriever`` is a thin alias for the common "cosine + BM25"
 case — see :func:`HybridRetriever`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -95,7 +96,10 @@ class ReciprocalRankFusion:
     async def retrieve(self, query: Query, budget: TokenBudget) -> ContextBundle:
         if not self._retrievers:
             return ContextBundle(
-                items=[], messages=[], tokens_used=0, budget=budget,
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
                 debug_info={"rrf": "no retrievers"},
             )
 
@@ -133,10 +137,7 @@ class ReciprocalRankFusion:
         merged_keys = merged_keys[:top_k]
 
         merged_items = [item_by_id[key] for key in merged_keys]
-        messages = [
-            {"role": "system", "content": item.content}
-            for item in merged_items
-        ]
+        messages = [{"role": "system", "content": item.content} for item in merged_items]
         debug = {
             "rrf_k": self._k,
             "rrf_scores": {key: round(scores[key], 6) for key in merged_keys},
@@ -154,14 +155,20 @@ class ReciprocalRankFusion:
     # ── helpers ─────────────────────────────────────────────────────────
 
     async def _safe_retrieve(
-        self, retriever: _Retriever, query: Query, budget: TokenBudget,
+        self,
+        retriever: _Retriever,
+        query: Query,
+        budget: TokenBudget,
     ) -> ContextBundle:
         try:
             return await retriever.retrieve(query, budget)
         except Exception:
             log.exception("child retriever failed in RRF — contributing 0 hits")
             return ContextBundle(
-                items=[], messages=[], tokens_used=0, budget=budget,
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
             )
 
 

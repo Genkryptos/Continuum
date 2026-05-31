@@ -33,6 +33,7 @@ Usage
 The CLI is a thin bridge onto :func:`run_locomo`, which tests drive
 directly with fakes.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,6 @@ import asyncio
 import json
 import logging
 import statistics
-import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -55,13 +55,14 @@ log = logging.getLogger(__name__)
 
 def _build_llm(provider: str, model: str | None, rpm: int) -> Any:
     """Build an answerer/judge LLM by provider, reusing bootstrap clients."""
-    from evals.longmemeval import bootstrap_ollama as B
+    from evals.longmemeval import bootstrap_ollama as boot
+
     if provider == "openrouter":
-        return B.OpenRouterLLM(model=model or B.DEFAULT_OPENROUTER_MODEL, rpm=rpm)
+        return boot.OpenRouterLLM(model=model or boot.DEFAULT_OPENROUTER_MODEL, rpm=rpm)
     if provider == "groq":
-        return B.GroqLLM(model=model or B.DEFAULT_GROQ_MODEL, rpm=rpm)
+        return boot.GroqLLM(model=model or boot.DEFAULT_GROQ_MODEL, rpm=rpm)
     if provider == "openai":
-        return B.OpenAILLM(model=model or B.DEFAULT_OPENAI_MODEL, rpm=rpm)
+        return boot.OpenAILLM(model=model or boot.DEFAULT_OPENAI_MODEL, rpm=rpm)
     raise ValueError(f"unsupported provider for LOCOMO: {provider!r}")
 
 
@@ -100,9 +101,7 @@ def _summarise(system: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
             "recall": (statistics.fmean(recs) if recs else None),
             "p50_ms": _percentile(lat, 0.50),
             "p95_ms": _percentile(lat, 0.95),
-            "avg_llm_calls": (
-                statistics.fmean([r.get("llm_calls", 0) for r in rs]) if rs else 0.0
-            ),
+            "avg_llm_calls": (statistics.fmean([r.get("llm_calls", 0) for r in rs]) if rs else 0.0),
         }
 
     return {
@@ -118,9 +117,11 @@ def _render(summary: dict[str, Any]) -> str:
     lines = [f"LOCOMO — {summary['system']}", "=" * len(head), head, "-" * len(head)]
 
     def row(label: str, s: dict[str, Any]) -> str:
-        rec = f"{s['recall']*100:>8.1f}" if s.get("recall") is not None else f"{'n/a':>8}"
-        return (f"{label[:16]:<16}{s['n']:>6}{s['judged_acc']*100:>9.1f} "
-                f"{rec} {s['p50_ms']:>8.0f} {s['p95_ms']:>8.0f}")
+        rec = f"{s['recall'] * 100:>8.1f}" if s.get("recall") is not None else f"{'n/a':>8}"
+        return (
+            f"{label[:16]:<16}{s['n']:>6}{s['judged_acc'] * 100:>9.1f} "
+            f"{rec} {s['p50_ms']:>8.0f} {s['p95_ms']:>8.0f}"
+        )
 
     lines.append(row("OVERALL", summary["overall"]))
     for cat, s in summary["per_category"].items():
@@ -150,7 +151,9 @@ async def _run_system(
             continue
         if system == "continuum":
             ans: Any = ContinuumLocomoAnswerer(
-                conversation, llm=answerer, embedder=embedder,
+                conversation,
+                llm=answerer,
+                embedder=embedder,
             )
         else:
             ans = Mem0LocomoAnswerer(conversation, llm=answerer)
@@ -163,40 +166,41 @@ async def _run_system(
                 result = await ans.answer(q.question, category=q.category)
             except Exception as exc:
                 log.exception("answer failed (%s) for %s", system, q.question[:60])
-                result = {"answer": "", "latency_ms": None, "llm_calls": 0,
-                          "retrieved_dia_ids": []}
+                result = {"answer": "", "latency_ms": None, "llm_calls": 0, "retrieved_dia_ids": []}
                 result["error"] = repr(exc)
             answer = result.get("answer", "")
             try:
-                correct = bool(answer) and await judge.is_correct(
-                    q.question, q.answer, answer
-                )
+                correct = bool(answer) and await judge.is_correct(q.question, q.answer, answer)
             except Exception:
                 log.exception("judge failed for %s", q.question[:60])
                 correct = False
-            rows.append({
-                "sample_id": q.sample_id,
-                "question": q.question,
-                "expected": q.answer,
-                "answer": answer,
-                "category": q.category,
-                "category_label": q.category_label,
-                "correct": correct,
-                "latency_ms": result.get("latency_ms"),
-                "llm_calls": result.get("llm_calls", 0),
-                # dia_id recall only applies to systems that retrieve raw
-                # turns (continuum). Mem0 retrieves distilled facts with no
-                # dia_id mapping → recall is N/A (None), not 0.
-                "recall": (
-                    _recall(result["retrieved_dia_ids"], q.evidence)
-                    if "retrieved_dia_ids" in result else None
-                ),
-                "error": result.get("error"),
-            })
+            rows.append(
+                {
+                    "sample_id": q.sample_id,
+                    "question": q.question,
+                    "expected": q.answer,
+                    "answer": answer,
+                    "category": q.category,
+                    "category_label": q.category_label,
+                    "correct": correct,
+                    "latency_ms": result.get("latency_ms"),
+                    "llm_calls": result.get("llm_calls", 0),
+                    # dia_id recall only applies to systems that retrieve raw
+                    # turns (continuum). Mem0 retrieves distilled facts with no
+                    # dia_id mapping → recall is N/A (None), not 0.
+                    "recall": (
+                        _recall(result["retrieved_dia_ids"], q.evidence)
+                        if "retrieved_dia_ids" in result
+                        else None
+                    ),
+                    "error": result.get("error"),
+                }
+            )
             if asked % 25 == 0:
                 ok = sum(1 for r in rows if r["correct"])
-                log.info("%s: %d asked, %d correct (%.1f%%)",
-                         system, asked, ok, 100 * ok / len(rows))
+                log.info(
+                    "%s: %d asked, %d correct (%.1f%%)", system, asked, ok, 100 * ok / len(rows)
+                )
     return rows
 
 
@@ -221,8 +225,12 @@ async def run_locomo(
         log.info("=== running system: %s ===", system)
         answerer = answerer_factory()
         rows = await _run_system(
-            system, samples, answerer=answerer, judge=judge,
-            limit=limit, embedder=embedder,
+            system,
+            samples,
+            answerer=answerer,
+            judge=judge,
+            limit=limit,
+            embedder=embedder,
         )
         summary = _summarise(system, rows)
         summary["rows"] = rows
@@ -240,8 +248,7 @@ def _print_delta(summaries: dict[str, dict[str, Any]]) -> None:
         c = summaries["continuum"]["overall"]["judged_acc"] * 100
         m = summaries["mem0"]["overall"]["judged_acc"] * 100
         print("=" * 50)
-        print(f"HEAD-TO-HEAD  continuum {c:.1f}%  vs  mem0 {m:.1f}%  "
-              f"(delta {c - m:+.1f}pp)")
+        print(f"HEAD-TO-HEAD  continuum {c:.1f}%  vs  mem0 {m:.1f}%  (delta {c - m:+.1f}pp)")
         print("=" * 50)
 
 
@@ -250,8 +257,7 @@ def _print_delta(summaries: dict[str, dict[str, Any]]) -> None:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="LOCOMO benchmark — Continuum vs Mem0.")
-    p.add_argument("--dataset", type=Path,
-                   default=Path("evals/locomo/data/locomo10.json"))
+    p.add_argument("--dataset", type=Path, default=Path("evals/locomo/data/locomo10.json"))
     p.add_argument("--system", choices=("continuum", "mem0", "both"), default="both")
     p.add_argument("--provider", default="openrouter")
     p.add_argument("--model", default=None)
@@ -279,15 +285,17 @@ def _cli_main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI
     def answerer_factory() -> Any:
         return _build_llm(args.provider, args.model, args.rpm)
 
-    asyncio.run(run_locomo(
-        dataset=args.dataset,
-        systems=systems,
-        answerer_factory=answerer_factory,
-        judge=judge,
-        output_dir=args.output,
-        limit=args.limit,
-        embedder=embedder,
-    ))
+    asyncio.run(
+        run_locomo(
+            dataset=args.dataset,
+            systems=systems,
+            answerer_factory=answerer_factory,
+            judge=judge,
+            output_dir=args.output,
+            limit=args.limit,
+            embedder=embedder,
+        )
+    )
     return 0
 
 

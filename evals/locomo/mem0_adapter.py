@@ -32,6 +32,7 @@ compatible) via ``OPENROUTER_API_KEY`` so it runs without an OpenAI
 key. Override the model with ``MEM0_LLM_MODEL`` /
 ``MEM0_EMBED_MODEL`` if needed.
 """
+
 from __future__ import annotations
 
 import os
@@ -77,9 +78,7 @@ def _build_memory() -> Any:
     # the answerer (the answerer stays gpt-oss-120b on both sides for
     # fairness), so a clean-JSON model here is correct, not a handicap.
     llm_model = os.environ.get("MEM0_LLM_MODEL", "meta-llama/llama-3.3-70b-instruct")
-    embed_model = os.environ.get(
-        "MEM0_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
-    )
+    embed_model = os.environ.get("MEM0_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     # all-MiniLM-L6-v2 → 384 dims. Mem0 otherwise defaults the vector
     # store collection to 1536 (OpenAI's size), causing a shape
     # mismatch (0,1536) vs (384,). Tell BOTH the embedder and the
@@ -163,8 +162,7 @@ class Mem0LocomoAnswerer:
         # Add the conversation as OpenAI-style messages so Mem0's
         # extractor sees speaker structure. Mem0.add is sync.
         messages = [
-            {"role": "user", "content": f"{t.speaker}: {t.text}"}
-            for t in self._conversation.turns
+            {"role": "user", "content": f"{t.speaker}: {t.text}"} for t in self._conversation.turns
         ]
         # Add in chunks — Mem0's extractor over a 200-turn conversation
         # in one call can blow context; chunk to keep extraction sane.
@@ -175,13 +173,18 @@ class Mem0LocomoAnswerer:
         return memory
 
     async def answer(
-        self, question: str, *, category: int | None = None,
+        self,
+        question: str,
+        *,
+        category: int | None = None,
     ) -> dict[str, Any]:
         memory = await self._ensure_ingested()
         t0 = time.perf_counter()
         try:
             search_result = memory.search(
-                question, user_id=self._user_id, limit=self._search_limit,
+                question,
+                user_id=self._user_id,
+                limit=self._search_limit,
             )
         except TypeError:
             # Older mem0 signatures don't take ``limit``.
@@ -196,7 +199,8 @@ class Mem0LocomoAnswerer:
             f"Question: {question}\nAnswer:"
         )
         answer = await self._llm.complete(
-            prompt=prompt, max_tokens=self._answer_max_tokens,
+            prompt=prompt,
+            max_tokens=self._answer_max_tokens,
         )
         latency_ms = (time.perf_counter() - t0) * 1000.0
         return {

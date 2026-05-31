@@ -54,11 +54,12 @@ if the routed ``TaskMode`` has a head and the head produces a
 non-empty answer from the union of all sub-questions' claims, that
 answer is returned directly.
 """
+
 from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -199,11 +200,12 @@ class IterativeReasoner:
         trace["intent_source"] = "deterministic"
         if not intent_matched and budget.can_afford(1):
             try:
-                intent_str = await _maybe_await(
-                    self._small_llm.classify_intent(
-                        question, cache_key=f"intent:{question}"
+                intent_str = (
+                    await _maybe_await(
+                        self._small_llm.classify_intent(question, cache_key=f"intent:{question}")
                     )
-                ) or intent_str
+                    or intent_str
+                )
                 budget.spend()
                 trace["small_llm_calls"] += 1
                 trace["intent_source"] = "small_llm"
@@ -222,13 +224,15 @@ class IterativeReasoner:
         # 3. Decompose — 1 composer call.
         if not budget.can_afford(1):
             return self._best_effort(
-                [], trace, budget, packet=None, reason="budget_exhausted",
+                [],
+                trace,
+                budget,
+                packet=None,
+                reason="budget_exhausted",
             )
         try:
             prompt, parser = self._decompose_fn(question)
-            reply = await _maybe_await(
-                self._composer_llm.complete(prompt=prompt, max_tokens=256)
-            )
+            reply = await _maybe_await(self._composer_llm.complete(prompt=prompt, max_tokens=256))
             budget.spend()
             trace["composer_calls"] += 1
             subqs = parser(reply, original=question) or [question]
@@ -244,7 +248,10 @@ class IterativeReasoner:
             sub_results.append(result)
             if budget.exhausted:
                 return self._best_effort(
-                    sub_results, trace, budget, packet=None,
+                    sub_results,
+                    trace,
+                    budget,
+                    packet=None,
                     reason="budget_exhausted",
                 )
 
@@ -253,8 +260,10 @@ class IterativeReasoner:
         all_candidates = [c for r in sub_results for c in r["candidates"]]
         all_claims = [c for r in sub_results for c in r["claims"]]
         packet = self._build_packet_fn(
-            question, all_verified,
-            all_candidates=all_candidates, max_claims=6,
+            question,
+            all_verified,
+            all_candidates=all_candidates,
+            max_claims=6,
         )
 
         # 6. Heads-first short-circuit (0 LLM).
@@ -269,26 +278,37 @@ class IterativeReasoner:
                 trace["head_short_circuit"] = True
                 trace["head_fired"] = getattr(head, "__name__", str(head))
                 return ReasoningResult(
-                    answer=head_answer, evidence=packet, trace=trace,
-                    abstained=False, llm_call_count=budget.spent,
+                    answer=head_answer,
+                    evidence=packet,
+                    trace=trace,
+                    abstained=False,
+                    llm_call_count=budget.spent,
                 )
 
         # 7. Composer synthesis (1 call).
         if not budget.can_afford(1):
             return self._best_effort(
-                sub_results, trace, budget, packet=packet,
+                sub_results,
+                trace,
+                budget,
+                packet=packet,
                 reason="budget_exhausted",
             )
         if not all_verified:
             # No verified evidence at all — synthesising would
             # hallucinate. Abstain with best-effort claim.
             return self._best_effort(
-                sub_results, trace, budget, packet=packet,
+                sub_results,
+                trace,
+                budget,
+                packet=packet,
                 reason="no_verified_claims",
             )
         try:
             final_prompt = self._build_final_prompt_fn(
-                question, subanswers=[], evidence_packet=packet,
+                question,
+                subanswers=[],
+                evidence_packet=packet,
             )
             text = await _maybe_await(
                 self._composer_llm.complete(prompt=final_prompt, max_tokens=128)
@@ -298,18 +318,27 @@ class IterativeReasoner:
         except Exception:
             log.exception("composer synthesis failed; abstaining with best-effort")
             return self._best_effort(
-                sub_results, trace, budget, packet=packet,
+                sub_results,
+                trace,
+                budget,
+                packet=packet,
                 reason="no_verified_claims",
             )
         text = (text or "").strip()
         if not text:
             return self._best_effort(
-                sub_results, trace, budget, packet=packet,
+                sub_results,
+                trace,
+                budget,
+                packet=packet,
                 reason="no_verified_claims",
             )
         return ReasoningResult(
-            answer=text, evidence=packet, trace=trace,
-            abstained=False, llm_call_count=budget.spent,
+            answer=text,
+            evidence=packet,
+            trace=trace,
+            abstained=False,
+            llm_call_count=budget.spent,
         )
 
     # ── private helpers ────────────────────────────────────────────────────
@@ -327,10 +356,7 @@ class IterativeReasoner:
         claims: list[Any] = []
         ctx: Any = None
 
-        qtype = (
-            self._mode_to_qtype_fn(mode)
-            if self._mode_to_qtype_fn is not None else None
-        )
+        qtype = self._mode_to_qtype_fn(mode) if self._mode_to_qtype_fn is not None else None
 
         # ``max_rounds`` counts REFINE rounds, not total attempts. With
         # ``max_rounds=2`` we get up to 3 retrieve attempts: initial,
@@ -346,20 +372,24 @@ class IterativeReasoner:
             claims = self._extract_claims_fn(ctx) if ctx is not None else []
             try:
                 results = self._verify_fn(
-                    sub_q, candidates, question_type=qtype,
+                    sub_q,
+                    candidates,
+                    question_type=qtype,
                 )
             except TypeError:
                 # verify_fn may not accept question_type kwarg.
                 results = self._verify_fn(sub_q, candidates)
             verified = self._filter_passing_fn(results)
-            trace["rounds"].append({
-                "sub_q": sub_q,
-                "round": attempt,
-                "query": query,
-                "n_candidates": len(candidates),
-                "n_verified": len(verified),
-                "rewrite": None,
-            })
+            trace["rounds"].append(
+                {
+                    "sub_q": sub_q,
+                    "round": attempt,
+                    "query": query,
+                    "n_candidates": len(candidates),
+                    "n_verified": len(verified),
+                    "rewrite": None,
+                }
+            )
             if verified:
                 break
             if attempt >= self._max_rounds:
@@ -377,7 +407,8 @@ class IterativeReasoner:
                 try:
                     rewritten = await _maybe_await(
                         self._small_llm.span_select(
-                            sub_q, _rephrase_passage(sub_q),
+                            sub_q,
+                            _rephrase_passage(sub_q),
                             cache_key=f"rewrite:{sub_q}",
                         )
                     )
@@ -409,8 +440,11 @@ class IterativeReasoner:
         best = _pick_highest_confidence(sub_results)
         trace["abstain_reason"] = reason
         return ReasoningResult(
-            answer=best, evidence=packet, trace=trace,
-            abstained=True, llm_call_count=budget.spent,
+            answer=best,
+            evidence=packet,
+            trace=trace,
+            abstained=True,
+            llm_call_count=budget.spent,
         )
 
 
@@ -463,6 +497,7 @@ def _pick_highest_confidence(sub_results: list[dict[str, Any]]) -> str:
     ``claim`` / ``content`` string we can find. Returns "" when no
     candidate exists at all.
     """
+
     def _conf(c: Any) -> float:
         return float(getattr(c, "confidence", 0.0) or 0.0)
 
@@ -480,8 +515,9 @@ def _pick_highest_confidence(sub_results: list[dict[str, Any]]) -> str:
         for c in r.get("candidates", []) or []:
             if c not in pool_verified:
                 pool_other.append(c)
-    pool = sorted(pool_verified, key=_conf, reverse=True) or \
-           sorted(pool_other, key=_conf, reverse=True)
+    pool = sorted(pool_verified, key=_conf, reverse=True) or sorted(
+        pool_other, key=_conf, reverse=True
+    )
     for c in pool:
         t = _text(c)
         if t:

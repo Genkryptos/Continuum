@@ -20,3 +20,6 @@ __pycache__/
 
 # Claude worktrees
 .claude/worktrees/
+
+# LOCOMO dataset (downloaded on demand by the loader / make bench-locomo)
+evals/locomo/data/

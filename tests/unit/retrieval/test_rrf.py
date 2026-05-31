@@ -7,6 +7,7 @@ The child retrievers are :class:`_StaticRetriever` instances that
 return a pre-baked list of items so the test can assert the exact
 fused order — no embedder, no index, no LLM in the loop.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -32,7 +33,7 @@ pytestmark = pytest.mark.unit
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
-def _mi(content: str, *, id: str | None = None) -> MemoryItem:  # noqa: A002
+def _mi(content: str, *, id: str | None = None) -> MemoryItem:
     return MemoryItem(
         id=id or str(uuid.uuid4()),
         content=content,
@@ -42,8 +43,11 @@ def _mi(content: str, *, id: str | None = None) -> MemoryItem:  # noqa: A002
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=4000, stm_reserved=0, mtm_reserved=0,
-        ltm_reserved=2000, response_reserved=100,
+        total=4000,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=2000,
+        response_reserved=100,
     )
 
 
@@ -55,8 +59,10 @@ class _StaticRetriever:
 
     async def retrieve(self, query: Query, budget: TokenBudget) -> ContextBundle:
         return ContextBundle(
-            items=list(self._items), messages=[],
-            tokens_used=0, budget=budget,
+            items=list(self._items),
+            messages=[],
+            tokens_used=0,
+            budget=budget,
         )
 
 
@@ -109,10 +115,12 @@ async def test_rrf_score_formula_matches_specification() -> None:
     expected_shared = 1 / 61 + 1 / 61
     expected_singleton = 1 / 62
     assert bundle.debug_info["rrf_scores"]["shared"] == pytest.approx(
-        expected_shared, abs=1e-6,
+        expected_shared,
+        abs=1e-6,
     )
     assert bundle.debug_info["rrf_scores"]["oA"] == pytest.approx(
-        expected_singleton, abs=1e-6,
+        expected_singleton,
+        abs=1e-6,
     )
 
 
@@ -156,7 +164,9 @@ async def test_rrf_top_k_falls_back_to_query_top_k() -> None:
 async def test_rrf_boom_retriever_contributes_nothing() -> None:
     a = _mi("A", id="A")
     rrf = ReciprocalRankFusion(
-        [_StaticRetriever([a]), _BoomRetriever()], k=60, top_k=10,
+        [_StaticRetriever([a]), _BoomRetriever()],
+        k=60,
+        top_k=10,
     )
     bundle = await rrf.retrieve(Query(text="x"), _budget())
     assert [it.id for it in bundle.items] == ["A"]

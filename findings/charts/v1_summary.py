@@ -33,6 +33,7 @@ Then render::
 
     python3.12 findings/charts/v1_summary.py results/v1_final/baseline_<DATE>.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-
 
 # ── parsing ────────────────────────────────────────────────────────────────
 
@@ -73,25 +73,27 @@ def _percentile(values: list[float], q: float) -> float:
 def _bucket_stats(rows: list[dict[str, Any]]) -> dict[str, float | int]:
     """Per-bucket numbers used by every row of the table."""
     if not rows:
-        return {"n": 0, "judged_acc": 0.0, "abstain_rate": 0.0,
-                "avg_llm_calls": 0.0, "p50_ms": 0.0, "p95_ms": 0.0,
-                "total_cost_usd": 0.0}
+        return {
+            "n": 0,
+            "judged_acc": 0.0,
+            "abstain_rate": 0.0,
+            "avg_llm_calls": 0.0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "total_cost_usd": 0.0,
+        }
     judged = [_judged(r) for r in rows]
     judged_known = [v for v in judged if v is not None]
     abstained = [bool(_telem(r).get("abstained")) for r in rows]
     calls = [int(_telem(r).get("llm_call_count") or 0) for r in rows]
     latencies = [
-        float(r["latency_ms"]) for r in rows
-        if isinstance(r.get("latency_ms"), (int, float))
+        float(r["latency_ms"]) for r in rows if isinstance(r.get("latency_ms"), (int, float))
     ]
-    costs = [
-        float(r.get("cost_usd") or 0.0) for r in rows
-    ]
+    costs = [float(r.get("cost_usd") or 0.0) for r in rows]
     return {
         "n": len(rows),
         "judged_acc": (
-            sum(1 for v in judged_known if v) / len(judged_known)
-            if judged_known else 0.0
+            sum(1 for v in judged_known if v) / len(judged_known) if judged_known else 0.0
         ),
         "abstain_rate": sum(abstained) / len(rows),
         "avg_llm_calls": statistics.fmean(calls) if calls else 0.0,
@@ -123,8 +125,7 @@ def _render_table(overall: dict, per_cat: dict[str, dict]) -> str:
         f"{'cost_$':>10}"
     )
     sep = "-" * len(head)
-    lines = ["v1 IterativeReasoner — full LongMemEval-S sweep",
-             "=" * len(head), head, sep]
+    lines = ["v1 IterativeReasoner — full LongMemEval-S sweep", "=" * len(head), head, sep]
     # Overall first
     lines.append(_row("OVERALL", overall))
     # Per-category, sorted alphabetically for stable diffs across runs.
@@ -137,8 +138,8 @@ def _row(label: str, s: dict[str, float | int]) -> str:
     return (
         f"{label[:28]:<28}"
         f"{int(s['n']):>6}"
-        f"{float(s['judged_acc'])*100:>9.1f} "
-        f"{float(s['abstain_rate'])*100:>7.1f} "
+        f"{float(s['judged_acc']) * 100:>9.1f} "
+        f"{float(s['abstain_rate']) * 100:>7.1f} "
         f"{float(s['avg_llm_calls']):>9.2f} "
         f"{float(s['p50_ms']):>8.0f} "
         f"{float(s['p95_ms']):>8.0f} "
@@ -199,7 +200,8 @@ def _load_and_merge(paths: list[Path]) -> dict[str, Any] | None:
             qid = r.get("question_id") or f"{p.stem}#{i}"
             merged_rows[qid] = r
     out: dict[str, Any] = {
-        "dataset": dataset, "answerer": answerer,
+        "dataset": dataset,
+        "answerer": answerer,
         "rows": list(merged_rows.values()),
     }
     # Only carry run-level metrics through when there's a single file —
@@ -213,11 +215,18 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Render v1-final headline numbers from one or more baseline JSONs.",
     )
-    p.add_argument("input", type=Path, nargs="+",
-                   help="Path(s) to baseline_*.json from bootstrap_ollama. "
-                        "Multiple files are merged (batched sweeps).")
-    p.add_argument("--no-write", action="store_true",
-                   help="Don't write the structured summary JSON next to the input.")
+    p.add_argument(
+        "input",
+        type=Path,
+        nargs="+",
+        help="Path(s) to baseline_*.json from bootstrap_ollama. "
+        "Multiple files are merged (batched sweeps).",
+    )
+    p.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Don't write the structured summary JSON next to the input.",
+    )
     args = p.parse_args(argv)
 
     payload = _load_and_merge(list(args.input))

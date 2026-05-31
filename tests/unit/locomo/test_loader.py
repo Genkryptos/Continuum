@@ -5,6 +5,7 @@ Unit tests for the LOCOMO dataset loader — parsed against a synthetic
 two-session fixture mirroring the real ``locomo10.json`` shape, so we
 never need the (large) dataset present to verify parsing logic.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,12 +35,24 @@ _FIXTURE = [
             ],
         },
         "qa": [
-            {"question": "What breed is Rex?", "answer": "golden retriever",
-             "evidence": ["D2:1"], "category": 4},
-            {"question": "How many days between adopting Rex and learning his breed?",
-             "answer": "12 days", "evidence": ["D1:1", "D2:1"], "category": 2},
-            {"question": "What is Alice's cat's name?", "answer": "Not mentioned",
-             "evidence": [], "category": 5},
+            {
+                "question": "What breed is Rex?",
+                "answer": "golden retriever",
+                "evidence": ["D2:1"],
+                "category": 4,
+            },
+            {
+                "question": "How many days between adopting Rex and learning his breed?",
+                "answer": "12 days",
+                "evidence": ["D1:1", "D2:1"],
+                "category": 2,
+            },
+            {
+                "question": "What is Alice's cat's name?",
+                "answer": "Not mentioned",
+                "evidence": [],
+                "category": 5,
+            },
         ],
     }
 ]
@@ -95,18 +108,23 @@ def test_category_name_maps_known_and_unknown():
 
 
 def test_missing_file_raises_with_download_hint(tmp_path):
-    with pytest.raises(FileNotFoundError, match="locomo10.json"):
+    with pytest.raises(FileNotFoundError, match=r"locomo10\.json"):
         load_locomo(tmp_path / "nope.json")
 
 
 def test_numeric_answer_coerced_to_str(tmp_path):
-    fixture = [{
-        "sample_id": "S2",
-        "conversation": {"speaker_a": "A", "speaker_b": "B",
-                         "session_1_date_time": "d",
-                         "session_1": [{"speaker": "A", "dia_id": "D1:1", "text": "hi"}]},
-        "qa": [{"question": "how many?", "answer": 3, "evidence": ["D1:1"], "category": 1}],
-    }]
+    fixture = [
+        {
+            "sample_id": "S2",
+            "conversation": {
+                "speaker_a": "A",
+                "speaker_b": "B",
+                "session_1_date_time": "d",
+                "session_1": [{"speaker": "A", "dia_id": "D1:1", "text": "hi"}],
+            },
+            "qa": [{"question": "how many?", "answer": 3, "evidence": ["D1:1"], "category": 1}],
+        }
+    ]
     p = tmp_path / "locomo10.json"
     p.write_text(json.dumps(fixture))
     _, questions = load_locomo(p)[0]

@@ -28,6 +28,7 @@ surface terms, leaving paraphrase-recovery to the embedding side of
 the fusion. Stemming + stop-word filters can be added later if smoke
 data shows token-recall is hurting precision.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -91,9 +92,7 @@ class BM25Index:
         tokenized = [tokenize(it.content) for it in self._items]
         # rank_bm25 raises on an empty corpus — guard so empty-corpus
         # callers get a fast empty-result path instead of an exception.
-        self._bm25: BM25Okapi | None = (
-            BM25Okapi(tokenized) if tokenized else None
-        )
+        self._bm25: BM25Okapi | None = BM25Okapi(tokenized) if tokenized else None
 
     @property
     def items(self) -> list[MemoryItem]:
@@ -196,13 +195,19 @@ class BM25Retriever:
             log.exception("%s corpus_provider failed", self.name)
             debug["error"] = repr(exc)
             return ContextBundle(
-                items=[], messages=[], tokens_used=0, budget=budget,
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
                 debug_info=debug,
             )
         if not items:
             debug["corpus_size"] = 0
             return ContextBundle(
-                items=[], messages=[], tokens_used=0, budget=budget,
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
                 debug_info=debug,
             )
         index = BM25Index(items)
@@ -211,10 +216,7 @@ class BM25Retriever:
         debug["corpus_size"] = len(items)
         debug["hits"] = len(hits)
         bundle_items = [si.item for si in hits]
-        messages = [
-            {"role": "system", "content": it.content}
-            for it in bundle_items
-        ]
+        messages = [{"role": "system", "content": it.content} for it in bundle_items]
         return ContextBundle(
             items=bundle_items,
             messages=messages,

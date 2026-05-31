@@ -17,6 +17,7 @@ the retrievers and ``_DirectAnswerAdapter`` operate on
 :class:`MemoryItem`, not on any LongMemEval-specific shape, so they
 drop straight onto LOCOMO conversations.
 """
+
 from __future__ import annotations
 
 import time
@@ -82,43 +83,54 @@ class ContinuumLocomoAnswerer:
         # dia_id so the retriever can rank sessions and the runner can
         # score recall against LOCOMO's evidence dia_ids.
         for turn in self._conversation.turns:
-            await store.append(MemoryItem(
-                content=f"{turn.speaker}: {turn.text}",
-                tier=MemoryTier.STM,
-                metadata={
-                    "role": "user",
-                    "session_id": turn.session_id,
-                    "speaker": turn.speaker,
-                    "dia_id": turn.dia_id,
-                    "date": turn.session_date,
-                },
-            ))
+            await store.append(
+                MemoryItem(
+                    content=f"{turn.speaker}: {turn.text}",
+                    tier=MemoryTier.STM,
+                    metadata={
+                        "role": "user",
+                        "session_id": turn.session_id,
+                        "speaker": turn.speaker,
+                        "dia_id": turn.dia_id,
+                        "date": turn.session_date,
+                    },
+                )
+            )
 
         # Cosine side: session-aware (cross-session coverage) or plain.
         if self._session_aware:
             cosine: Any = SessionAwareSemanticRetriever(
-                store=store, embedder=self._embedder, top_k=self._top_k,
+                store=store,
+                embedder=self._embedder,
+                top_k=self._top_k,
                 session_top_k=self._session_top_k,
                 turns_per_session=self._turns_per_session,
                 max_items=self._top_k,
             )
         else:
             cosine = STMSemanticRetriever(
-                store=store, embedder=self._embedder, top_k=self._top_k,
+                store=store,
+                embedder=self._embedder,
+                top_k=self._top_k,
             )
         bm25 = BM25HaystackRetriever(store=store, top_k=self._top_k)
         retriever = HybridRetriever(cosine, bm25, k=self._rrf_k, top_k=self._top_k)
 
         session = _MiniSession(store=store, retriever=retriever)
         self._adapter = _DirectAnswerAdapter(
-            session=session, llm=self._llm,
+            session=session,
+            llm=self._llm,
             answer_max_tokens=self._answer_max_tokens,
-            top_k=self._top_k, max_context_chars=self._max_context_chars,
+            top_k=self._top_k,
+            max_context_chars=self._max_context_chars,
         )
         return self._adapter
 
     async def answer(
-        self, question: str, *, category: int | None = None,
+        self,
+        question: str,
+        *,
+        category: int | None = None,
     ) -> dict[str, Any]:
         """
         Answer one question. Returns ``{answer, retrieved_dia_ids,

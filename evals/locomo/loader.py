@@ -37,6 +37,7 @@ hard-depend on the exact set):
 
     1 multi-hop · 2 temporal · 3 open-domain · 4 single-hop · 5 adversarial
 """
+
 from __future__ import annotations
 
 import json
@@ -68,16 +69,18 @@ def category_name(category: Any) -> str:
 @dataclass
 class LocomoTurn:
     """One dialogue turn, tagged with where it sits in the conversation."""
+
     speaker: str
     text: str
     dia_id: str
-    session_id: str        # e.g. "session_3"
-    session_date: str      # raw LOCOMO date-time string ("" if absent)
+    session_id: str  # e.g. "session_3"
+    session_date: str  # raw LOCOMO date-time string ("" if absent)
 
 
 @dataclass
 class LocomoConversation:
     """One LOCOMO sample's full multi-session dialogue."""
+
     sample_id: str
     speaker_a: str
     speaker_b: str
@@ -87,10 +90,11 @@ class LocomoConversation:
 @dataclass
 class LocomoQuestion:
     """One QA row from a sample's ``qa`` list."""
+
     sample_id: str
     question: str
     answer: str
-    evidence: list[str]    # dialog ids (dia_id) containing the answer
+    evidence: list[str]  # dialog ids (dia_id) containing the answer
     category: int | None
     category_label: str
 
@@ -127,15 +131,19 @@ def _parse_conversation(sample: dict[str, Any]) -> LocomoConversation:
             text = str(turn.get("text", "") or "").strip()
             if not text:
                 continue
-            turns.append(LocomoTurn(
-                speaker=str(turn.get("speaker", "") or ""),
-                text=text,
-                dia_id=str(turn.get("dia_id", "") or ""),
-                session_id=skey,
-                session_date=date,
-            ))
+            turns.append(
+                LocomoTurn(
+                    speaker=str(turn.get("speaker", "") or ""),
+                    text=text,
+                    dia_id=str(turn.get("dia_id", "") or ""),
+                    session_id=skey,
+                    session_date=date,
+                )
+            )
     return LocomoConversation(
-        sample_id=sample_id, speaker_a=speaker_a, speaker_b=speaker_b,
+        sample_id=sample_id,
+        speaker_a=speaker_a,
+        speaker_b=speaker_b,
         turns=turns,
     )
 
@@ -153,15 +161,17 @@ def _parse_questions(sample: dict[str, Any]) -> list[LocomoQuestion]:
         ev = qa.get("evidence") or []
         if not isinstance(ev, list):
             ev = [ev]
-        out.append(LocomoQuestion(
-            sample_id=sample_id,
-            question=q,
-            # answers can be numeric/bool in LOCOMO — coerce to str.
-            answer=str(qa.get("answer", "")),
-            evidence=[str(e) for e in ev],
-            category=int(cat) if isinstance(cat, int) else None,
-            category_label=category_name(cat),
-        ))
+        out.append(
+            LocomoQuestion(
+                sample_id=sample_id,
+                question=q,
+                # answers can be numeric/bool in LOCOMO — coerce to str.
+                answer=str(qa.get("answer", "")),
+                evidence=[str(e) for e in ev],
+                category=int(cat) if isinstance(cat, int) else None,
+                category_label=category_name(cat),
+            )
+        )
     return out
 
 

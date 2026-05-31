@@ -14,23 +14,27 @@ The fix is :func:`_merge_retrieved_contexts`, which unions every
 sub-question's retrieved bundle (deduping by item id) while preserving
 each item's metadata so the session ids survive.
 """
+
 from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from continuum.core.types import ContextBundle, MemoryItem, MemoryTier, TokenBudget
 from evals.longmemeval.baseline import _extract_retrieved_session_ids
 from evals.longmemeval.bootstrap_ollama import _merge_retrieved_contexts
-
-import pytest
 
 pytestmark = pytest.mark.unit
 
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8000, stm_reserved=500, mtm_reserved=500,
-        ltm_reserved=2000, response_reserved=500,
+        total=8000,
+        stm_reserved=500,
+        mtm_reserved=500,
+        ltm_reserved=2000,
+        response_reserved=500,
     )
 
 
@@ -46,7 +50,10 @@ def _item(session_id: str, content: str = "x") -> MemoryItem:
 def _bundle(*session_ids: str) -> ContextBundle:
     items = [_item(s) for s in session_ids]
     return ContextBundle(
-        items=items, messages=[], tokens_used=0, budget=_budget(),
+        items=items,
+        messages=[],
+        tokens_used=0,
+        budget=_budget(),
     )
 
 
@@ -80,7 +87,8 @@ def test_recall_extraction_sees_merged_session_ids() -> None:
     recall would now be non-zero.
     """
     merged = _merge_retrieved_contexts(
-        [_bundle("answer_d61669c7", "distractor")], _budget(),
+        [_bundle("answer_d61669c7", "distractor")],
+        _budget(),
     )
 
     class _FakeAdapter:
@@ -93,6 +101,7 @@ def test_recall_extraction_sees_merged_session_ids() -> None:
 
 def test_recall_extraction_empty_when_last_ctx_none() -> None:
     """The pre-fix behaviour: no last_ctx → empty ids → recall 0."""
+
     class _FakeAdapter:
         last_ctx = None
 

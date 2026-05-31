@@ -8,10 +8,10 @@ Every test is hermetic — no fixtures touch disk, network, or any model
 download. Items are tiny inline `MemoryItem` instances so the test runs
 in milliseconds.
 """
+
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 import pytest
 
@@ -29,7 +29,7 @@ pytestmark = pytest.mark.unit
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
-def _mi(content: str, *, id: str | None = None) -> MemoryItem:  # noqa: A002
+def _mi(content: str, *, id: str | None = None) -> MemoryItem:
     return MemoryItem(
         id=id or str(uuid.uuid4()),
         content=content,
@@ -39,8 +39,11 @@ def _mi(content: str, *, id: str | None = None) -> MemoryItem:  # noqa: A002
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=4000, stm_reserved=0, mtm_reserved=0,
-        ltm_reserved=2000, response_reserved=100,
+        total=4000,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=2000,
+        response_reserved=100,
     )
 
 
@@ -50,7 +53,12 @@ def _budget() -> TokenBudget:
 def test_tokenize_lowercases_and_splits_on_punct() -> None:
     assert tokenize("Hello, World!") == ["hello", "world"]
     assert tokenize("Roscioli's pasta — Roman, Italian, sublime.") == [
-        "roscioli", "s", "pasta", "roman", "italian", "sublime",
+        "roscioli",
+        "s",
+        "pasta",
+        "roman",
+        "italian",
+        "sublime",
     ]
 
 
@@ -63,7 +71,12 @@ def test_tokenize_keeps_digits() -> None:
     # Number-bearing queries (LongMemEval count questions) need to
     # surface ``5 eggs`` style facts — both tokens must survive.
     assert tokenize("Use 5 eggs and 2 tomatoes") == [
-        "use", "5", "eggs", "and", "2", "tomatoes",
+        "use",
+        "5",
+        "eggs",
+        "and",
+        "2",
+        "tomatoes",
     ]
 
 
@@ -191,5 +204,3 @@ async def test_retriever_uses_query_top_k_when_not_overridden() -> None:
     q = Query(text="term", top_k=4)
     bundle = await retr.retrieve(q, _budget())
     assert len(bundle.items) == 4
-
-

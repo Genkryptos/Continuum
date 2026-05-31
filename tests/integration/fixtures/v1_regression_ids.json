@@ -1,0 +1,16 @@
+{
+  "description": "v1 regression gate: 10 LongMemEval-S questions the v1 direct-mode pipeline answered correctly (judged), balanced across categories. See tests/integration/test_v1_pipeline.py.",
+  "source": "results/v1_final/judged.json",
+  "question_ids": [
+    "001be529",
+    "0862e8bf",
+    "0862e8bf_abs",
+    "0e5e2d1a",
+    "1568498a",
+    "16c90bf4",
+    "0100672e",
+    "078150f1",
+    "031748ae",
+    "08f4fc43"
+  ]
+}

@@ -34,6 +34,7 @@ Scope (deliberate, documented)
   caller needs it (it would slot into :meth:`search_hybrid` as a
   filter, no schema changes required).
 """
+
 from __future__ import annotations
 
 import logging
@@ -108,7 +109,7 @@ class InMemoryLTM:
         self._invalidated_at.pop(node_id, None)
         return node_id
 
-    async def update(self, id: uuid.UUID | str, patch: dict[str, Any]) -> None:  # noqa: A002
+    async def update(self, id: uuid.UUID | str, patch: dict[str, Any]) -> None:
         node_id = _to_uuid(id)
         if node_id is None or node_id not in self._rows:
             return
@@ -133,9 +134,7 @@ class InMemoryLTM:
         )
         self._rows[node_id] = merged
 
-    async def invalidate(
-        self, id: uuid.UUID | str, at: datetime | None = None  # noqa: A002
-    ) -> None:
+    async def invalidate(self, id: uuid.UUID | str, at: datetime | None = None) -> None:
         """
         Bi-temporal supersession: stamp ``invalidated_at`` so every
         downstream read path skips this row. Mirrors
@@ -148,9 +147,7 @@ class InMemoryLTM:
 
     # ── reads ──────────────────────────────────────────────────────────────
 
-    async def search_hybrid(
-        self, q: Query, k: int = 10
-    ) -> list[ScoredItem]:
+    async def search_hybrid(self, q: Query, k: int = 10) -> list[ScoredItem]:
         """
         Dense (cosine over ``embedding``) + sparse (BM25 over
         ``content``) fused by Reciprocal Rank Fusion, filtered to
@@ -196,16 +193,16 @@ class InMemoryLTM:
         by_id = {row.id: row for row in live}
         out: list[ScoredItem] = []
         for rid, score in ranked:
-            row = by_id.get(rid)
-            if row is None:
+            hit = by_id.get(rid)
+            if hit is None:
                 continue
             sb = ScoreBreakdown.compute(
                 relevance=min(1.0, score),
-                importance=float(row.importance),
+                importance=float(hit.importance),
                 recency=0.0,
-                confidence=float(row.confidence),
+                confidence=float(hit.confidence),
             )
-            out.append(ScoredItem(item=row, scores=sb))
+            out.append(ScoredItem(item=hit, scores=sb))
         return out
 
     async def neighbors(

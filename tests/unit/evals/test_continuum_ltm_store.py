@@ -8,6 +8,7 @@ Each test is hermetic — stubbed FactExtractor and Mem0Promoter, no
 embedder downloads, no network. The full STM → facts → LTM →
 supersession path is exercised on a tiny scripted input.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -42,7 +43,9 @@ class _CannedFactExtractor:
         self.calls: list[SummaryBlock] = []
 
     async def extract_facts(
-        self, block: SummaryBlock, entities: list[Any],
+        self,
+        block: SummaryBlock,
+        entities: list[Any],
     ) -> list[Fact]:
         self.calls.append(block)
         # Re-stamp source_block_id so each invocation sees the actual block.
@@ -66,7 +69,8 @@ class _CannedPromoter:
         self.calls: list[list[tuple[Fact, list[ScoredItem]]]] = []
 
     async def decide_operations_batch(
-        self, items: list[tuple[Fact, list[ScoredItem]]],
+        self,
+        items: list[tuple[Fact, list[ScoredItem]]],
     ) -> list[Decision]:
         self.calls.append(list(items))
         # Always return one decision per input, in order. Test code
@@ -75,10 +79,15 @@ class _CannedPromoter:
         for i, (fact, _) in enumerate(items):
             dec = self._decisions[i]
             # Re-stamp candidate_text so the audit log is accurate.
-            out.append(Decision(
-                op=dec.op, target_id=dec.target_id, rationale=dec.rationale,
-                merged_text=dec.merged_text, candidate_text=fact.text,
-            ))
+            out.append(
+                Decision(
+                    op=dec.op,
+                    target_id=dec.target_id,
+                    rationale=dec.rationale,
+                    merged_text=dec.merged_text,
+                    candidate_text=fact.text,
+                )
+            )
         return out
 
 
@@ -121,18 +130,25 @@ def _fact(text: str, **kw: Any) -> Fact:
 @pytest.mark.asyncio
 async def test_finalize_triggers_promotion_and_writes_ltm_facts_into_items() -> None:
     ltm = InMemoryLTM()
-    extractor = _CannedFactExtractor([
-        _fact("User lives in Paris", entities=["Paris"]),
-        _fact("User drives a Tesla", entities=["Tesla"]),
-    ])
-    promoter = _CannedPromoter([
-        Decision(op="ADD", target_id=None, rationale="new fact"),
-        Decision(op="ADD", target_id=None, rationale="new fact"),
-    ])
+    extractor = _CannedFactExtractor(
+        [
+            _fact("User lives in Paris", entities=["Paris"]),
+            _fact("User drives a Tesla", entities=["Tesla"]),
+        ]
+    )
+    promoter = _CannedPromoter(
+        [
+            Decision(op="ADD", target_id=None, rationale="new fact"),
+            Decision(op="ADD", target_id=None, rationale="new fact"),
+        ]
+    )
     store = ContinuumLTMHaystackStore(
-        ltm=ltm, embedder=_NullEmbedder(),
-        promoter=promoter, fact_extractor=extractor,
-        llm_available=True, ltm_backend_label="in_memory",
+        ltm=ltm,
+        embedder=_NullEmbedder(),
+        promoter=promoter,
+        fact_extractor=extractor,
+        llm_available=True,
+        ltm_backend_label="in_memory",
     )
 
     await store.append(_turn("s1", "user", "I moved to Paris last year."))
@@ -145,7 +161,8 @@ async def test_finalize_triggers_promotion_and_writes_ltm_facts_into_items() -> 
     # LTM facts were extracted, upserted, and pushed back onto items.
     fact_items = [it for it in store.items if it.metadata.get("source") == "ltm_fact"]
     assert {f.content for f in fact_items} == {
-        "User lives in Paris", "User drives a Tesla",
+        "User lives in Paris",
+        "User drives a Tesla",
     }
     # Promoter was called with both facts in one batch.
     assert promoter.calls and len(promoter.calls[0]) == 2
@@ -164,22 +181,31 @@ async def test_supersession_on_contradiction_removes_stale_fact_from_items() -> 
     # Pre-seed the LTM with the stale fact so the promoter has a
     # target_id to point DELETE at. In a real run this would be a
     # row from an earlier session inside the same row.
-    stale_id = await ltm.upsert(MemoryItem(
-        content="User lives in Berlin",
-        tier=MemoryTier.LTM,
-        metadata={"kind": "fact", "source": "ltm_fact"},
-    ))
+    stale_id = await ltm.upsert(
+        MemoryItem(
+            content="User lives in Berlin",
+            tier=MemoryTier.LTM,
+            metadata={"kind": "fact", "source": "ltm_fact"},
+        )
+    )
 
-    extractor = _CannedFactExtractor([
-        _fact("User lives in Paris", entities=["Paris"]),
-    ])
-    promoter = _CannedPromoter([
-        Decision(op="DELETE", target_id=stale_id, rationale="contradicts Berlin"),
-    ])
+    extractor = _CannedFactExtractor(
+        [
+            _fact("User lives in Paris", entities=["Paris"]),
+        ]
+    )
+    promoter = _CannedPromoter(
+        [
+            Decision(op="DELETE", target_id=stale_id, rationale="contradicts Berlin"),
+        ]
+    )
     store = ContinuumLTMHaystackStore(
-        ltm=ltm, embedder=_NullEmbedder(),
-        promoter=promoter, fact_extractor=extractor,
-        llm_available=True, ltm_backend_label="in_memory",
+        ltm=ltm,
+        embedder=_NullEmbedder(),
+        promoter=promoter,
+        fact_extractor=extractor,
+        llm_available=True,
+        ltm_backend_label="in_memory",
     )
 
     await store.append(_turn("s2", "user", "I moved to Paris."))
@@ -202,8 +228,10 @@ async def test_no_finalize_double_fires() -> None:
     extractor = _CannedFactExtractor([_fact("X")])
     promoter = _CannedPromoter([Decision(op="ADD", target_id=None, rationale="")])
     store = ContinuumLTMHaystackStore(
-        ltm=ltm, embedder=_NullEmbedder(),
-        promoter=promoter, fact_extractor=extractor,
+        ltm=ltm,
+        embedder=_NullEmbedder(),
+        promoter=promoter,
+        fact_extractor=extractor,
         llm_available=True,
     )
     await store.append(_turn("s", "user", "stuff"))
@@ -222,25 +250,34 @@ async def test_no_finalize_double_fires() -> None:
 async def test_heuristic_path_emits_delete_on_update_marker() -> None:
     """No LLM available → regex over 'no longer / now' markers fires DELETE."""
     ltm = InMemoryLTM()
-    stale_id = await ltm.upsert(MemoryItem(
-        content="User lives in Berlin",
-        tier=MemoryTier.LTM,
-        metadata={"kind": "fact"},
-    ))
-    store = ContinuumLTMHaystackStore(
-        ltm=ltm, embedder=_NullEmbedder(),
-        promoter=None, fact_extractor=None,
-        llm_available=False, ltm_backend_label="in_memory",
+    stale_id = await ltm.upsert(
+        MemoryItem(
+            content="User lives in Berlin",
+            tier=MemoryTier.LTM,
+            metadata={"kind": "fact"},
+        )
     )
-    await store.append(_turn(
-        "s3", "user", "I no longer live in Berlin; I moved to Paris.",
-    ))
+    store = ContinuumLTMHaystackStore(
+        ltm=ltm,
+        embedder=_NullEmbedder(),
+        promoter=None,
+        fact_extractor=None,
+        llm_available=False,
+        ltm_backend_label="in_memory",
+    )
+    await store.append(
+        _turn(
+            "s3",
+            "user",
+            "I no longer live in Berlin; I moved to Paris.",
+        )
+    )
     await store.finalize()
     m = store.metrics()
     assert m["promoter_path"] == "heuristic"
     assert m["supersessions"] == 1
     # Berlin row was invalidated.
-    assert stale_id in ltm._invalidated_at  # noqa: SLF001 — test invariant
+    assert stale_id in ltm._invalidated_at
     live = {row.content async for row in ltm.iter_live()}
     assert "User lives in Berlin" not in live
 
@@ -249,8 +286,10 @@ async def test_heuristic_path_emits_delete_on_update_marker() -> None:
 async def test_heuristic_path_noop_when_no_update_marker() -> None:
     ltm = InMemoryLTM()
     store = ContinuumLTMHaystackStore(
-        ltm=ltm, embedder=_NullEmbedder(),
-        promoter=None, fact_extractor=None,
+        ltm=ltm,
+        embedder=_NullEmbedder(),
+        promoter=None,
+        fact_extractor=None,
         llm_available=False,
     )
     await store.append(_turn("s4", "user", "I really like pasta."))
@@ -259,9 +298,7 @@ async def test_heuristic_path_noop_when_no_update_marker() -> None:
     assert m["supersessions"] == 0
     # The user statement was still upserted as a fact and pushed back
     # into items so the retriever sees it.
-    assert any(
-        it.metadata.get("source") == "ltm_fact" for it in store.items
-    )
+    assert any(it.metadata.get("source") == "ltm_fact" for it in store.items)
 
 
 # ── InMemoryLTM — direct tests ─────────────────────────────────────────────
@@ -271,7 +308,7 @@ async def test_heuristic_path_noop_when_no_update_marker() -> None:
 async def test_inmemory_search_hybrid_excludes_invalidated_rows() -> None:
     ltm = InMemoryLTM()
     a = await ltm.upsert(MemoryItem(content="Boston is the capital", tier=MemoryTier.LTM))
-    b = await ltm.upsert(MemoryItem(content="Paris is the capital", tier=MemoryTier.LTM))
+    await ltm.upsert(MemoryItem(content="Paris is the capital", tier=MemoryTier.LTM))
     await ltm.invalidate(a, datetime.now(UTC))
     hits = await ltm.search_hybrid(Query(text="capital"), k=5)
     contents = [h.item.content for h in hits]
@@ -285,7 +322,7 @@ async def test_inmemory_search_hybrid_excludes_invalidated_rows() -> None:
 async def test_inmemory_iter_live_skips_invalidated() -> None:
     ltm = InMemoryLTM()
     a = await ltm.upsert(MemoryItem(content="A", tier=MemoryTier.LTM))
-    b = await ltm.upsert(MemoryItem(content="B", tier=MemoryTier.LTM))
+    await ltm.upsert(MemoryItem(content="B", tier=MemoryTier.LTM))
     await ltm.invalidate(a)
     live = [row.content async for row in ltm.iter_live()]
     assert live == ["B"]

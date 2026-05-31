@@ -8,6 +8,7 @@ retriever, no embedders. Each test scripts the exact answers/decisions
 the reasoner will see and asserts what flows through the trace,
 the budget, and the abstain machinery.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -16,18 +17,13 @@ from typing import Any
 import pytest
 
 from continuum.reasoning import IterativeReasoner
-
 from tests.unit.reasoning.conftest import (
     FakeCandidate,
-    FakeClaim,
     FakeComposerLLM,
     FakeCtx,
-    FakePacket,
     FakeRetriever,
     FakeSmallLLM,
     FakeVerifierResult,
-    _StubIntent,
-    _StubMode,
     _build_final_prompt,
     _build_packet,
     _decompose_empty,
@@ -38,6 +34,7 @@ from tests.unit.reasoning.conftest import (
     _passthrough_verify,
     _render_packet,
     _route_to,
+    _StubMode,
     _unmatched_intent,
 )
 
@@ -98,7 +95,9 @@ async def test_easy_head_short_circuits_no_composer() -> None:
 
     heads = {_StubMode: lambda claims, q: "Paris"}
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["only sub-q"]),
         heads_by_mode=heads,
     )
@@ -123,7 +122,9 @@ async def test_typical_two_subqs_synthesis() -> None:
     small = FakeSmallLLM()
     retriever = FakeRetriever(default_ctx=ctx)
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         heads_by_mode={},  # no head registered → composer runs
     )
     res = await reasoner.answer("What and why?")
@@ -158,7 +159,9 @@ async def test_refine_round_2_uses_small_llm_rewrite() -> None:
     composer = FakeComposerLLM(replies=["1. Q", "OK"])
     small = FakeSmallLLM(span_replies=["rewritten Q"])
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         heads_by_mode={},  # force synthesis
         max_rounds=2,
@@ -170,10 +173,7 @@ async def test_refine_round_2_uses_small_llm_rewrite() -> None:
     # The last round entry for sub-q "Q" records a SmallLLM rewrite.
     rounds = [r for r in res.trace["rounds"] if r["sub_q"] == "Q"]
     assert rounds
-    assert any(
-        r["rewrite"] and r["rewrite"].startswith("small_llm:")
-        for r in rounds
-    )
+    assert any(r["rewrite"] and r["rewrite"].startswith("small_llm:") for r in rounds)
     # The SmallLLM rewrite was retried with the new query.
     assert "rewritten Q" in retriever.queries
 
@@ -191,7 +191,9 @@ async def test_budget_exhausted_returns_best_effort_abstain() -> None:
     small = FakeSmallLLM()
     retriever = FakeRetriever(default_ctx=ctx)
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         heads_by_mode={},  # composer would run if budget allowed
         max_llm_calls=1,
@@ -221,7 +223,9 @@ async def test_no_verified_claims_abstains_with_empty_answer() -> None:
         return [FakeVerifierResult(candidate=c, verdict="FAIL") for c in candidates]
 
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         verify_fn=reject_all,
         heads_by_mode={},
@@ -247,7 +251,9 @@ async def test_intent_llm_fallback_when_deterministic_unknown() -> None:
     small = FakeSmallLLM(intent_replies=["compose"])
     retriever = FakeRetriever(default_ctx=ctx)
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         intent_fn=_unmatched_intent,
         heads_by_mode={},
@@ -270,7 +276,9 @@ async def test_decompose_failure_falls_back_to_original_question() -> None:
     small = FakeSmallLLM()
     retriever = FakeRetriever(default_ctx=ctx)
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=_decompose_empty,  # parser returns []
         heads_by_mode={},
     )
@@ -296,7 +304,9 @@ async def test_trace_records_all_rounds() -> None:
         return [FakeVerifierResult(candidate=c, verdict="FAIL") for c in candidates]
 
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         verify_fn=reject_all,
         heads_by_mode={},
         max_llm_calls=6,  # plenty for the rewrites
@@ -323,6 +333,7 @@ async def test_composer_synthesis_exception_returns_abstain() -> None:
     class _BoomComposer:
         def __init__(self) -> None:
             self.calls = 0
+
         async def complete(self, prompt: str, max_tokens: int) -> str:
             self.calls += 1
             if self.calls == 1:
@@ -335,7 +346,9 @@ async def test_composer_synthesis_exception_returns_abstain() -> None:
     composer = _BoomComposer()
     small = FakeSmallLLM()
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         heads_by_mode={},
     )
@@ -356,7 +369,9 @@ async def test_head_returns_empty_falls_through_to_composer() -> None:
     retriever = FakeRetriever(default_ctx=ctx)
     heads = {_StubMode: lambda claims, q: ""}  # head abdicates
     reasoner = _make_reasoner(
-        retriever=retriever, composer=composer, small=small,
+        retriever=retriever,
+        composer=composer,
+        small=small,
         decompose_fn=lambda q: ("p", lambda r, original: ["Q"]),
         heads_by_mode=heads,
     )

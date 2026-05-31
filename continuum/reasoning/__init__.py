@@ -9,6 +9,7 @@ Reasoning-time orchestration. Currently exports:
   composer synthesis. Designed to be agnostic of the LongMemEval
   rig: every domain-specific step is injected as a callable.
 """
+
 from __future__ import annotations
 
 from continuum.reasoning.iterative_reasoner import (
