@@ -184,7 +184,13 @@ async def _run_system(
                 "correct": correct,
                 "latency_ms": result.get("latency_ms"),
                 "llm_calls": result.get("llm_calls", 0),
-                "recall": _recall(result.get("retrieved_dia_ids", []), q.evidence),
+                # dia_id recall only applies to systems that retrieve raw
+                # turns (continuum). Mem0 retrieves distilled facts with no
+                # dia_id mapping → recall is N/A (None), not 0.
+                "recall": (
+                    _recall(result["retrieved_dia_ids"], q.evidence)
+                    if "retrieved_dia_ids" in result else None
+                ),
                 "error": result.get("error"),
             })
             if asked % 25 == 0:
