@@ -2,6 +2,8 @@
 .env
 .env.*
 *.env
+# …but DO track the sample so others can copy it
+!.env.example
 
 # Local development overrides
 *.local
