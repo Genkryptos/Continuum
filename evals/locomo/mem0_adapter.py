@@ -68,7 +68,15 @@ def _build_memory() -> Any:
     """
     from mem0 import Memory  # lazy so the module loads without mem0ai
 
-    llm_model = os.environ.get("MEM0_LLM_MODEL", "openai/gpt-oss-120b")
+    # Mem0's add() asks the LLM to emit structured JSON memory ops.
+    # REASONING models (gpt-oss-120b) are bad at this: they burn tokens
+    # thinking and return truncated/unterminated JSON ("Unterminated
+    # string" → mem0's 'list has no attribute get'). Use a NON-reasoning
+    # instruct model for extraction — what mem0's own default
+    # (gpt-4o-mini) assumes. This is mem0's memory-layer internals, NOT
+    # the answerer (the answerer stays gpt-oss-120b on both sides for
+    # fairness), so a clean-JSON model here is correct, not a handicap.
+    llm_model = os.environ.get("MEM0_LLM_MODEL", "meta-llama/llama-3.3-70b-instruct")
     embed_model = os.environ.get(
         "MEM0_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -86,6 +94,9 @@ def _build_memory() -> Any:
                 "model": llm_model,
                 "openai_base_url": _OPENROUTER_BASE,
                 "api_key": api_key,
+                # Headroom so the extraction JSON completes, not truncates.
+                "max_tokens": 2048,
+                "temperature": 0.0,
             },
         },
         "embedder": {
