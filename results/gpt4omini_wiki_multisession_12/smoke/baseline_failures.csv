@@ -1,2 +1,0 @@
-question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,partial_recall,missing_expected_session_ids,error,latency_ms
-6d550036,wrong_retrieval,2,3 projects.,answer_ec904b3c_1;answer_ec904b3c_4;answer_ec904b3c_3;answer_ec904b3c_2,2e4430d8_2;answer_ec904b3c_1;dae3906e_2;sharegpt_J7ZAFLd_0;sharegpt_zciCXP1_12;sharegpt_nVi6tIt_0;answer_ec904b3c_4;sharegpt_JlhNyfC_0,0.500,answer_ec904b3c_3;answer_ec904b3c_2,,10666.9

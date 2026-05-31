@@ -17,9 +17,28 @@ __pycache__/
 
 # IDE
 .idea/
+.vscode/
 
 # Claude worktrees
 .claude/worktrees/
 
-# LOCOMO dataset (downloaded on demand by the loader / make bench-locomo)
-evals/locomo/data/
+# OS / tooling cruft
+.DS_Store
+.coverage
+.coverage.*
+htmlcov/
+nohup.out
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Datasets — downloaded on demand, never committed
+evals/locomo/data/                 # LOCOMO (make bench-locomo)
+evals/longmemeval/LongMemEval/     # LongMemEval-S (clone upstream / make repro)
+
+# Eval + benchmark run outputs (regenerated; not source)
+results/
+bench/results/*.json
+evals/**/.wiki_cache*/
