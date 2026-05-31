@@ -16,6 +16,7 @@ Acceptance scenarios from the spec:
 
 Plus per-branch unit tests and a telemetry round-trip.
 """
+
 from __future__ import annotations
 
 from continuum.core.types import MemoryItem
@@ -36,7 +37,8 @@ def _item(session_id: str, *, content: str = "", item_id: str = "") -> MemoryIte
 
 
 def _verified(
-    session_id: str, *,
+    session_id: str,
+    *,
     value: str = "verified value",
     confidence: float = 0.8,
     subject: str = "x",
@@ -73,9 +75,9 @@ def test_unrelated_sessions_dropped_when_top_session_verified():
     session ids are recorded for telemetry.
     """
     items = [
-        _item("S_correct",   content="user: I got my Bachelor's at UCLA."),
-        _item("S_chat_1",    content="user: Hi, how are you today?"),
-        _item("S_chat_2",    content="assistant: Sure, I can help with that."),
+        _item("S_correct", content="user: I got my Bachelor's at UCLA."),
+        _item("S_chat_1", content="user: Hi, how are you today?"),
+        _item("S_chat_2", content="assistant: Sure, I can help with that."),
     ]
     verified = [
         _verified("S_correct", value="UCLA", confidence=0.9),
@@ -95,7 +97,7 @@ def test_narrow_preserves_all_items_from_top_session():
     """When the top session contributed multiple items, all of them survive."""
     items = [
         _item("S1", content="rank 1 — first window", item_id="s1-a"),
-        _item("S2", content="rank 2 — distractor",   item_id="s2-a"),
+        _item("S2", content="rank 2 — distractor", item_id="s2-a"),
         _item("S1", content="rank 3 — second S1 window", item_id="s1-b"),
     ]
     verified = [_verified("S1", confidence=0.8)]
@@ -124,11 +126,15 @@ def test_narrow_keeps_rank_order_within_top_session():
 def test_multi_session_hint_bypasses_narrowing():
     """Explicit multi-session questions keep all sessions."""
     items = [
-        _item("S1"), _item("S2"), _item("S3"),
+        _item("S1"),
+        _item("S2"),
+        _item("S3"),
     ]
     verified = [_verified("S1", confidence=0.95)]  # high conf but irrelevant
     result = narrow_to_top_session(
-        items, verified, multi_session_hint=True,
+        items,
+        verified,
+        multi_session_hint=True,
     )
     assert not result.narrowed
     assert result.reason == "multi_session_hint"
@@ -300,7 +306,10 @@ def test_realistic_trace_expected_at_rank1_with_full_recall():
     assert result.chosen_session_id == "expected"
     # All four distractor sessions are recorded as dropped.
     assert set(result.dropped_session_ids) == {
-        "sharegpt_a", "sharegpt_b", "ultrachat_a", "ultrachat_b",
+        "sharegpt_a",
+        "sharegpt_b",
+        "ultrachat_a",
+        "ultrachat_b",
     }
     # The model now only sees one item — the answer-bearing window.
     assert len(result.items) == 1

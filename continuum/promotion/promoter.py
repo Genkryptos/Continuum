@@ -34,6 +34,7 @@ scope, and :class:`PromotionRunReport` exposes ``scope`` /
 ``promoted_count`` / ``skipped_count`` so it is a drop-in for the existing
 core ``PromotionReport`` consumers.
 """
+
 from __future__ import annotations
 
 import logging
@@ -191,9 +192,7 @@ class Promoter:
 
     # ── protocol entry point ────────────────────────────────────────────────
 
-    async def promote(
-        self, scope: PromotionScope | str | None = None
-    ) -> PromotionRunReport:
+    async def promote(self, scope: PromotionScope | str | None = None) -> PromotionRunReport:
         """Run the full pipeline for *scope*; never raises."""
         t0 = time.perf_counter()
         sc = PromotionScope.parse(scope)
@@ -208,20 +207,22 @@ class Promoter:
         self._emit("promoter.added", len(report.added))
         self._emit("promoter.errors", len(report.errors))
         log.info(
-            "promotion done scope=%s blocks=%d add=%d upd=%d del=%d "
-            "noop=%d err=%d %.0fms $%.5f",
-            report.scope, report.blocks_processed, len(report.added),
-            len(report.updated), len(report.deleted), report.noop_count,
-            len(report.errors), report.duration_seconds * 1000,
+            "promotion done scope=%s blocks=%d add=%d upd=%d del=%d noop=%d err=%d %.0fms $%.5f",
+            report.scope,
+            report.blocks_processed,
+            len(report.added),
+            len(report.updated),
+            len(report.deleted),
+            report.noop_count,
+            len(report.errors),
+            report.duration_seconds * 1000,
             report.cost_usd,
         )
         return report
 
     # ── pipeline ────────────────────────────────────────────────────────────
 
-    async def _run(
-        self, sc: PromotionScope, report: PromotionRunReport
-    ) -> None:
+    async def _run(self, sc: PromotionScope, report: PromotionRunReport) -> None:
         # Branch on policy engine availability. The legacy Mem0 path is the
         # default and ships unchanged for callers that don't wire a policy
         # engine.
@@ -230,9 +231,7 @@ class Promoter:
             return
         await self._run_legacy(sc, report)
 
-    async def _run_legacy(
-        self, sc: PromotionScope, report: PromotionRunReport
-    ) -> None:
+    async def _run_legacy(self, sc: PromotionScope, report: PromotionRunReport) -> None:
         # Steps 1–3: scan + extract → (fact, neighbors) candidate pairs.
         pairs: list[tuple[Fact, list[ScoredItem]]] = []
         processed_blocks: list[uuid.UUID] = []
@@ -267,9 +266,7 @@ class Promoter:
                 try:
                     nbrs = await self._neighbors(fact)
                 except Exception as exc:
-                    report.errors.append(
-                        f"fact {fact.text[:48]!r}: neighbors: {exc!r}"
-                    )
+                    report.errors.append(f"fact {fact.text[:48]!r}: neighbors: {exc!r}")
                     self._emit("promoter.errors", 1)
                     continue
                 pairs.append((fact, nbrs))
@@ -295,21 +292,17 @@ class Promoter:
                 await self._execute(fact, decision, report)
             except Exception as exc:
                 report.errors.append(
-                    f"fact {fact.text[:48]!r}: execute "
-                    f"{getattr(decision, 'op', '?')}: {exc!r}"
+                    f"fact {fact.text[:48]!r}: execute {getattr(decision, 'op', '?')}: {exc!r}"
                 )
                 self._emit("promoter.errors", 1)
-                log.exception("execute failed for a %s decision",
-                              getattr(decision, "op", "?"))
+                log.exception("execute failed for a %s decision", getattr(decision, "op", "?"))
 
         # Step 6: mark blocks processed.
         await self._mark_processed(processed_blocks, report)
 
     # ── policy-engine pipeline ──────────────────────────────────────────────
 
-    async def _run_policy_engine(
-        self, sc: PromotionScope, report: PromotionRunReport
-    ) -> None:
+    async def _run_policy_engine(self, sc: PromotionScope, report: PromotionRunReport) -> None:
         """
         Policy-driven promotion path.
 
@@ -337,17 +330,11 @@ class Promoter:
 
             try:
                 entities = await self._extract_entities(block.text)
-                candidates = await self._candidate_extractor.extract_candidates(
-                    block, entities
-                )
+                candidates = await self._candidate_extractor.extract_candidates(block, entities)
             except Exception as exc:
-                report.errors.append(
-                    f"block {block.id}: extract_candidates: {exc!r}"
-                )
+                report.errors.append(f"block {block.id}: extract_candidates: {exc!r}")
                 self._emit("promoter.errors", 1)
-                log.exception(
-                    "candidate extraction failed for block %s", block.id
-                )
+                log.exception("candidate extraction failed for block %s", block.id)
                 continue
 
             # Block-level handling is considered done once extraction
@@ -360,21 +347,15 @@ class Promoter:
 
             ctx = PolicyEvaluationContext(
                 now=self._clock(),
-                session_id=self._coerce_uuid(
-                    getattr(block, "session_id", None)
-                ),
+                session_id=self._coerce_uuid(getattr(block, "session_id", None)),
                 existing_neighbors=[],
                 config=self._policy_config.model_dump(),
             )
 
             try:
-                evaluated = await self._policy_engine.evaluate_many(
-                    candidates, ctx
-                )
+                evaluated = await self._policy_engine.evaluate_many(candidates, ctx)
             except Exception as exc:
-                report.errors.append(
-                    f"block {block.id}: policy.evaluate_many: {exc!r}"
-                )
+                report.errors.append(f"block {block.id}: policy.evaluate_many: {exc!r}")
                 self._emit("promoter.errors", 1)
                 log.exception("policy evaluation failed for block %s", block.id)
                 continue
@@ -385,13 +366,9 @@ class Promoter:
                 try:
                     await self._storage_router.execute(candidate, plan)
                 except Exception as exc:
-                    report.errors.append(
-                        f"candidate {candidate.id}: storage_router: {exc!r}"
-                    )
+                    report.errors.append(f"candidate {candidate.id}: storage_router: {exc!r}")
                     self._emit("promoter.errors", 1)
-                    log.exception(
-                        "storage_router failed for candidate %s", candidate.id
-                    )
+                    log.exception("storage_router failed for candidate %s", candidate.id)
 
         # Persist traces best-effort (TraceWriter never raises).
         if traces and self._trace_writer is not None:
@@ -403,9 +380,7 @@ class Promoter:
 
         await self._mark_processed(processed_blocks, report)
 
-    def _account_policy_decision(
-        self, plan: Any, report: PromotionRunReport
-    ) -> None:
+    def _account_policy_decision(self, plan: Any, report: PromotionRunReport) -> None:
         """Map a MemoryAction onto the legacy add/upd/del/noop counters."""
         action = getattr(plan, "action", None)
         cand_id = getattr(plan, "candidate_id", None)
@@ -467,9 +442,7 @@ class Promoter:
         elif op == "UPDATE":
             tid = decision.target_id
             if tid is None:
-                report.errors.append(
-                    f"UPDATE without target_id for {fact.text[:48]!r}"
-                )
+                report.errors.append(f"UPDATE without target_id for {fact.text[:48]!r}")
                 return
             merged = getattr(decision, "merged_text", None) or fact.text
             await self._ltm.update(tid, {"content": merged})
@@ -477,9 +450,7 @@ class Promoter:
         elif op == "DELETE":
             tid = decision.target_id
             if tid is None:
-                report.errors.append(
-                    f"DELETE without target_id for {fact.text[:48]!r}"
-                )
+                report.errors.append(f"DELETE without target_id for {fact.text[:48]!r}")
                 return
             await self._ltm.invalidate(tid, self._clock())
             report.deleted.append(self._as_uuid(tid))
@@ -502,9 +473,9 @@ class Promoter:
 
     @staticmethod
     def _in_scope(block: Any, sc: PromotionScope) -> bool:
-        if sc.session_id is not None and str(
-            getattr(block, "session_id", None)
-        ) != str(sc.session_id):
+        if sc.session_id is not None and str(getattr(block, "session_id", None)) != str(
+            sc.session_id
+        ):
             return False
         if sc.since is not None:
             created = getattr(block, "created_at", None)

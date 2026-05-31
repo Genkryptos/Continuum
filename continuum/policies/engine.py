@@ -54,9 +54,7 @@ class PolicyEngine:
 
     def __init__(self, policies: list[MemoryPolicy]) -> None:
         # Highest priority first — the *base* plan on conflict.
-        self.policies: list[MemoryPolicy] = sorted(
-            policies, key=lambda p: p.priority, reverse=True
-        )
+        self.policies: list[MemoryPolicy] = sorted(policies, key=lambda p: p.priority, reverse=True)
 
     # ── single-candidate path ───────────────────────────────────────────────
 
@@ -66,18 +64,14 @@ class PolicyEngine:
         context: PolicyEvaluationContext,
     ) -> tuple[MemoryHandlingPlan, MemoryDecisionTrace]:
         """Run the policy cascade, resolve conflicts, emit a trace."""
-        matching: list[MemoryPolicy] = [
-            p for p in self.policies if p.supports(candidate)
-        ]
+        matching: list[MemoryPolicy] = [p for p in self.policies if p.supports(candidate)]
         plans: list[tuple[MemoryPolicy, MemoryHandlingPlan]] = []
         rejected: list[str] = []
         for policy in matching:
             try:
                 plan = await policy.evaluate(candidate, context)
             except Exception:
-                log.exception(
-                    "policy %s.evaluate failed — skipping", policy.policy_id
-                )
+                log.exception("policy %s.evaluate failed — skipping", policy.policy_id)
                 rejected.append(policy.policy_id)
                 continue
             if plan is None:
@@ -118,9 +112,7 @@ class PolicyEngine:
         candidates: list[MemoryCandidate],
         context: PolicyEvaluationContext,
     ) -> list[tuple[MemoryCandidate, MemoryHandlingPlan, MemoryDecisionTrace]]:
-        results: list[
-            tuple[MemoryCandidate, MemoryHandlingPlan, MemoryDecisionTrace]
-        ] = []
+        results: list[tuple[MemoryCandidate, MemoryHandlingPlan, MemoryDecisionTrace]] = []
         for c in candidates:
             plan, trace = await self.evaluate(c, context)
             results.append((c, plan, trace))
@@ -143,9 +135,7 @@ class PolicyEngine:
         _base_policy, base_plan = plans[0]
         privacy = base_plan.privacy
         retention = base_plan.retention
-        projections: list[StorageProjection] = list(
-            base_plan.storage_projections
-        )
+        projections: list[StorageProjection] = list(base_plan.storage_projections)
         action = base_plan.action
         policy_ids: list[str] = list(base_plan.policy_ids)
         # Highest matching sensitivity drives the *displayed* sensitivity.
@@ -176,9 +166,7 @@ class PolicyEngine:
                 "policy_ids": policy_ids,
             }
         )
-        merged.metadata.setdefault(
-            "derived_sensitivity", derived_sensitivity.value
-        )
+        merged.metadata.setdefault("derived_sensitivity", derived_sensitivity.value)
         return merged
 
     # ── helpers ─────────────────────────────────────────────────────────────
@@ -187,25 +175,18 @@ class PolicyEngine:
     def _strictest_privacy(a: PrivacyPolicy, b: PrivacyPolicy) -> PrivacyPolicy:
         """Per-field maximum on the *restrictive* axis."""
         return PrivacyPolicy(
-            requires_user_approval=(
-                a.requires_user_approval or b.requires_user_approval
-            ),
-            redact_before_storage=(
-                a.redact_before_storage or b.redact_before_storage
-            ),
+            requires_user_approval=(a.requires_user_approval or b.requires_user_approval),
+            redact_before_storage=(a.redact_before_storage or b.redact_before_storage),
             encrypt_at_rest=a.encrypt_at_rest or b.encrypt_at_rest,
             allow_cross_session_retrieval=(
-                a.allow_cross_session_retrieval
-                and b.allow_cross_session_retrieval
+                a.allow_cross_session_retrieval and b.allow_cross_session_retrieval
             ),
             allow_team_scope=a.allow_team_scope and b.allow_team_scope,
             allow_org_scope=a.allow_org_scope and b.allow_org_scope,
         )
 
     @staticmethod
-    def _tightest_retention(
-        a: RetentionPolicy, b: RetentionPolicy
-    ) -> RetentionPolicy:
+    def _tightest_retention(a: RetentionPolicy, b: RetentionPolicy) -> RetentionPolicy:
         """Shorter TTL wins; earlier expire_at wins."""
 
         def _min_or_none(x: int | None, y: int | None) -> int | None:
@@ -226,15 +207,11 @@ class PolicyEngine:
             ttl_seconds=_min_or_none(a.ttl_seconds, b.ttl_seconds),
             expire_at=_earliest(a.expire_at, b.expire_at),
             on_expiry=a.on_expiry,
-            retain_raw_evidence=(
-                a.retain_raw_evidence and b.retain_raw_evidence
-            ),
+            retain_raw_evidence=(a.retain_raw_evidence and b.retain_raw_evidence),
         )
 
     @staticmethod
-    def _ignore_plan(
-        candidate: MemoryCandidate, reason: str
-    ) -> MemoryHandlingPlan:
+    def _ignore_plan(candidate: MemoryCandidate, reason: str) -> MemoryHandlingPlan:
         """Build an explicit IGNORE plan for un-policied candidates."""
         from continuum.policies.models import (
             CompactionPolicy,

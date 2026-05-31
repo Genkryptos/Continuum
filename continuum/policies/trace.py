@@ -54,9 +54,7 @@ class TraceWriter:
         table: str = "memory_decision_traces",
     ) -> None:
         if dsn is None and conn_factory is None and record_sink is None:
-            raise ValueError(
-                "TraceWriter needs one of dsn, conn_factory, or record_sink"
-            )
+            raise ValueError("TraceWriter needs one of dsn, conn_factory, or record_sink")
         self._dsn = dsn
         self._conn_factory = conn_factory
         self._record_sink = record_sink
@@ -76,9 +74,7 @@ class TraceWriter:
                 "Install it with:  pip install 'psycopg[binary]>=3.1'"
             ) from exc
         assert self._dsn is not None
-        conn = await psycopg.AsyncConnection.connect(
-            self._dsn, autocommit=True
-        )
+        conn = await psycopg.AsyncConnection.connect(self._dsn, autocommit=True)
         try:
             yield conn
         finally:
@@ -123,8 +119,7 @@ class TraceWriter:
                 for r in rows:
                     await conn.execute(sql, r)
         except Exception:
-            log.exception("TraceWriter.write failed — %d trace(s) dropped",
-                          len(traces))
+            log.exception("TraceWriter.write failed — %d trace(s) dropped", len(traces))
 
 
 __all__ = ["TraceWriter", "RecordSink"]

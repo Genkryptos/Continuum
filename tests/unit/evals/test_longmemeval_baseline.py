@@ -16,6 +16,7 @@ Coverage
 * ``--limit`` short-circuits the loop
 * `last_ctx` is used to extract retrieved session ids
 """
+
 from __future__ import annotations
 
 import csv
@@ -62,9 +63,7 @@ class _FakeAdapter:
     ) -> None:
         self.answer = answer
         self.raise_on_answer = raise_on_answer
-        self.last_ctx: ContextBundle | None = _make_ctx(
-            retrieved_session_ids or []
-        )
+        self.last_ctx: ContextBundle | None = _make_ctx(retrieved_session_ids or [])
         self.process_calls = 0
         self.answer_calls = 0
 
@@ -93,8 +92,11 @@ def _make_ctx(session_ids: list[str]) -> ContextBundle:
         messages=[],
         tokens_used=0,
         budget=TokenBudget(
-            total=4000, stm_reserved=500, mtm_reserved=500,
-            ltm_reserved=2000, response_reserved=100,
+            total=4000,
+            stm_reserved=500,
+            mtm_reserved=500,
+            ltm_reserved=2000,
+            response_reserved=100,
         ),
     )
 
@@ -354,8 +356,11 @@ async def test_limit_caps_iteration(tmp_path: Path) -> None:
 
 def test_baseline_results_aggregates_empty() -> None:
     results = BaselineResults(
-        dataset="d", answerer="a", rows=[],
-        started_at="", finished_at="",
+        dataset="d",
+        answerer="a",
+        rows=[],
+        started_at="",
+        finished_at="",
     )
     # Aggregations don't divide by zero on empty input.
     assert results.accuracy == 0.0
@@ -371,30 +376,48 @@ def test_baseline_results_breakdown_in_payload() -> None:
 
     rows = [
         RowResult(
-            question_id="a", correct=False, latency_ms=10.0,
-            answer_tokens=5, cost_usd=0.01,
-            retrieved_session_ids=[], expected_session_ids=["s1"],
-            answer="x", expected_answer="y",
+            question_id="a",
+            correct=False,
+            latency_ms=10.0,
+            answer_tokens=5,
+            cost_usd=0.01,
+            retrieved_session_ids=[],
+            expected_session_ids=["s1"],
+            answer="x",
+            expected_answer="y",
             failure_category="missing_fact",
         ),
         RowResult(
-            question_id="b", correct=False, latency_ms=20.0,
-            answer_tokens=5, cost_usd=0.01,
-            retrieved_session_ids=["s1"], expected_session_ids=["s1"],
-            answer="x", expected_answer="y",
+            question_id="b",
+            correct=False,
+            latency_ms=20.0,
+            answer_tokens=5,
+            cost_usd=0.01,
+            retrieved_session_ids=["s1"],
+            expected_session_ids=["s1"],
+            answer="x",
+            expected_answer="y",
             failure_category="wrong_retrieval",
         ),
         RowResult(
-            question_id="c", correct=True, latency_ms=30.0,
-            answer_tokens=5, cost_usd=0.01,
-            retrieved_session_ids=["s1"], expected_session_ids=["s1"],
-            answer="y", expected_answer="y",
+            question_id="c",
+            correct=True,
+            latency_ms=30.0,
+            answer_tokens=5,
+            cost_usd=0.01,
+            retrieved_session_ids=["s1"],
+            expected_session_ids=["s1"],
+            answer="y",
+            expected_answer="y",
             failure_category=None,
         ),
     ]
     res = BaselineResults(
-        dataset="d", answerer="a", rows=rows,
-        started_at="", finished_at="",
+        dataset="d",
+        answerer="a",
+        rows=rows,
+        started_at="",
+        finished_at="",
     )
     payload = res.to_dict()
     assert payload["metrics"]["accuracy"] == pytest.approx(1 / 3)

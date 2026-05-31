@@ -151,7 +151,9 @@ class IdleStmFlush:
                 if n:
                     log.debug(
                         "idle-flush: %d items %s → MTM (idle %.1fs)",
-                        n, session_id, elapsed,
+                        n,
+                        session_id,
+                        elapsed,
                     )
             except Exception:
                 log.exception("idle-flush iteration failed (swallowed)")

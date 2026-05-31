@@ -57,9 +57,7 @@ class TaskUrgencyPolicy:
             expire_at = candidate.valid_until + timedelta(hours=grace_hours)
         else:
             expire_at = context.now + timedelta(days=7)
-        ttl_seconds = max(
-            0, int((expire_at - context.now).total_seconds())
-        )
+        ttl_seconds = max(0, int((expire_at - context.now).total_seconds()))
 
         return MemoryHandlingPlan(
             candidate_id=candidate.id,

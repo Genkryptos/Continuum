@@ -23,6 +23,7 @@ Tests are organised into four groups matching the spec's
 3. Subject-relation reranking for the five examples
 4. User-turn preference over assistant advice
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.answer_post import (
@@ -83,9 +84,7 @@ def test_scaffold_filter_lets_real_answers_through():
 
 def test_bundle_role_prefix_catches_turn_n_user():
     """``turn 1 (user): ...`` is bundle scaffolding, never an answer."""
-    assert is_bundle_role_prefix(
-        "turn 1 (user): Give me 100 prompt parameters"
-    )
+    assert is_bundle_role_prefix("turn 1 (user): Give me 100 prompt parameters")
 
 
 def test_bundle_role_prefix_catches_dashed_variants():
@@ -99,21 +98,15 @@ def test_bundle_role_prefix_catches_dashed_variants():
 
 def test_bundle_role_prefix_does_not_match_content_with_role_word():
     """A sentence that mentions 'user' or 'assistant' mid-text is content."""
-    assert not is_bundle_role_prefix(
-        "Yes, I told you about the user interface yesterday."
-    )
-    assert not is_bundle_role_prefix(
-        "The assistant is a junior role in our marketing team."
-    )
+    assert not is_bundle_role_prefix("Yes, I told you about the user interface yesterday.")
+    assert not is_bundle_role_prefix("The assistant is a junior role in our marketing team.")
     assert not is_bundle_role_prefix("user friendly")  # no colon
 
 
 def test_bundle_role_prefix_treated_as_scaffold():
     """``is_scaffold_text`` must catch the prefix leak — that's how the
     answer-validation gate excludes it as a final answer."""
-    assert is_scaffold_text(
-        "turn 1 (user): Give me 100 prompt parameters for video production"
-    )
+    assert is_scaffold_text("turn 1 (user): Give me 100 prompt parameters for video production")
     assert is_scaffold_text("- (user): I bought a yellow dress")
     assert is_scaffold_text("assistant: Business Administration")
     # Plain answers still pass through.
@@ -148,12 +141,9 @@ def test_generic_intro_lets_substantive_answers_through():
     """An intro followed by a real answer is content, not scaffold."""
     # >3 substantive tail tokens → let through (real answer).
     assert not is_generic_intro(
-        "Sure, here are some good ones: tomatoes, basil, mozzarella, "
-        "and olive oil for a Caprese."
+        "Sure, here are some good ones: tomatoes, basil, mozzarella, and olive oil for a Caprese."
     )
-    assert not is_generic_intro(
-        "Of course! The book I recommended was The Three-Body Problem."
-    )
+    assert not is_generic_intro("Of course! The book I recommended was The Three-Body Problem.")
 
 
 def test_generic_intro_does_not_match_real_answers():
@@ -183,12 +173,8 @@ def test_user_request_catches_imperative_open():
     """The v8 failure where ``Brainstorm ideas for ...`` got returned
     as an assistant-memory answer. Imperative-verb opens are user
     prompts, not assistant memories."""
-    assert is_user_request_sentence(
-        "Brainstorm ideas for work from home jobs for seniors."
-    )
-    assert is_user_request_sentence(
-        "Give me 100 prompt parameters for video production."
-    )
+    assert is_user_request_sentence("Brainstorm ideas for work from home jobs for seniors.")
+    assert is_user_request_sentence("Give me 100 prompt parameters for video production.")
     assert is_user_request_sentence("Create a marketing plan.")
     assert is_user_request_sentence("Generate some social media posts.")
     assert is_user_request_sentence("Write me a poem about coffee.")
@@ -202,15 +188,9 @@ def test_user_request_catches_imperative_open():
 def test_user_request_does_not_match_first_person_facts():
     """A leading subject pronoun (I, We, You) rescues the sentence —
     it's content, not a request."""
-    assert not is_user_request_sentence(
-        "I brainstorm ideas every morning before work."
-    )
-    assert not is_user_request_sentence(
-        "We create lots of variants for our internal review."
-    )
-    assert not is_user_request_sentence(
-        "I suggested two restaurants when we last met."
-    )
+    assert not is_user_request_sentence("I brainstorm ideas every morning before work.")
+    assert not is_user_request_sentence("We create lots of variants for our internal review.")
+    assert not is_user_request_sentence("I suggested two restaurants when we last met.")
     # Real factual answers also pass through.
     assert not is_user_request_sentence("Roscioli")
     assert not is_user_request_sentence("Marketing specialist at a startup")
@@ -296,13 +276,9 @@ def test_extractor_skips_markdown_headings_and_role_prefixes():
     # Many extractors leave object_/subject empty — that's not scaffold,
     # just unset.
     for c in candidates:
-        assert not is_scaffold_text(c.value), (
-            f"scaffold leak: value={c.value!r}"
-        )
+        assert not is_scaffold_text(c.value), f"scaffold leak: value={c.value!r}"
         if c.object_:
-            assert not is_scaffold_text(c.object_), (
-                f"scaffold leak: object={c.object_!r}"
-            )
+            assert not is_scaffold_text(c.object_), f"scaffold leak: object={c.object_!r}"
     # And the bullet body text DOES make it through (positive check).
     haystack = " ".join(c.source_text for c in candidates).lower()
     assert "business administration" in haystack or any(
@@ -326,7 +302,8 @@ def test_verifier_pre_filter_rejects_scaffold_candidate():
         confidence=0.5,
     )
     result = verify_claim(
-        "What degree did I graduate with?", bogus,
+        "What degree did I graduate with?",
+        bogus,
         question_type=QuestionType.ENTITY_NAME,
     )
     assert result.verdict == "FAIL"
@@ -379,7 +356,8 @@ def test_validate_accepts_short_concrete_answer():
     ok, _ = validate_answer_shape("February 14th", QuestionType.DATE_TIME)
     assert ok
     ok, _ = validate_answer_shape(
-        "Marketing specialist at a small startup", QuestionType.GENERIC_FACT,
+        "Marketing specialist at a small startup",
+        QuestionType.GENERIC_FACT,
     )
     assert ok
 
@@ -388,17 +366,23 @@ def test_best_candidate_fallback_picks_top_confidence():
     """When verified candidates exist, fallback returns the strongest one."""
     cands = [
         Candidate(
-            value="February 14th", normalized_value="february 14th",
-            candidate_type="date", answer_type="date",
-            subject="fundraising dinner", relation="located_at",
+            value="February 14th",
+            normalized_value="february 14th",
+            candidate_type="date",
+            answer_type="date",
+            subject="fundraising dinner",
+            relation="located_at",
             object_="February 14th",
             source_span="on February 14th",
             confidence=0.85,
         ),
         Candidate(
-            value="March 3rd", normalized_value="march 3rd",
-            candidate_type="date", answer_type="date",
-            subject="some other event", relation="located_at",
+            value="March 3rd",
+            normalized_value="march 3rd",
+            candidate_type="date",
+            answer_type="date",
+            subject="some other event",
+            relation="located_at",
             object_="March 3rd",
             source_span="on March 3rd",
             confidence=0.4,
@@ -416,14 +400,20 @@ def test_best_candidate_fallback_drops_scaffold_candidates():
     """A scaffold candidate snuck into the verified pool is rejected."""
     cands = [
         Candidate(
-            value="Sub-answer", normalized_value="sub-answer",
-            candidate_type="entity", answer_type="entity",
-            object_="Sub-answer", confidence=0.95,
+            value="Sub-answer",
+            normalized_value="sub-answer",
+            candidate_type="entity",
+            answer_type="entity",
+            object_="Sub-answer",
+            confidence=0.95,
         ),
         Candidate(
-            value="UCLA", normalized_value="ucla",
-            candidate_type="location", answer_type="location",
-            object_="UCLA", confidence=0.6,
+            value="UCLA",
+            normalized_value="ucla",
+            candidate_type="location",
+            answer_type="location",
+            object_="UCLA",
+            confidence=0.6,
         ),
     ]
     assert best_candidate_fallback_answer(cands) == "UCLA"
@@ -440,13 +430,21 @@ def test_is_idk_recognises_known_refusals():
 
 
 def _build(
-    *, value: str, subject: str, relation: str = "is",
-    claim: str = "", source_span: str = "",
-    candidate_type: str = "entity", answer_type: str = "entity",
-    role: str = "user", session_id: str = "s1", confidence: float = 0.7,
+    *,
+    value: str,
+    subject: str,
+    relation: str = "is",
+    claim: str = "",
+    source_span: str = "",
+    candidate_type: str = "entity",
+    answer_type: str = "entity",
+    role: str = "user",
+    session_id: str = "s1",
+    confidence: float = 0.7,
 ) -> Candidate:
     return Candidate(
-        value=value, normalized_value=value.lower(),
+        value=value,
+        normalized_value=value.lower(),
         candidate_type=candidate_type,  # type: ignore[arg-type]
         answer_type=answer_type,
         subject=subject,
@@ -482,7 +480,8 @@ def test_degree_question_prefers_graduated_with_claim():
         ),
     ]
     ranked = rank_claims_for_question(
-        cands, "What degree did I graduate with?",
+        cands,
+        "What degree did I graduate with?",
         question_type=QuestionType.ENTITY_NAME,
     )
     assert ranked
@@ -543,7 +542,8 @@ def test_previous_occupation_picks_job_phrase():
         ),
     ]
     ranked = rank_claims_for_question(
-        cands, "What was my previous occupation?",
+        cands,
+        "What was my previous occupation?",
         question_type=QuestionType.GENERIC_FACT,
     )
     assert ranked
@@ -583,7 +583,8 @@ def test_sister_birthday_gift_rejects_surgery_and_flowers():
         ),
     ]
     ranked = rank_claims_for_question(
-        cands, "What did I buy for my sister's birthday gift?",
+        cands,
+        "What did I buy for my sister's birthday gift?",
         question_type=QuestionType.ENTITY_NAME,
     )
     assert ranked
@@ -619,7 +620,8 @@ def test_count_shirts_keeps_seven_shirts():
         ),
     ]
     ranked = rank_claims_for_question(
-        cands, "How many shirts did I pack for the trip?",
+        cands,
+        "How many shirts did I pack for the trip?",
         question_type=QuestionType.COUNT,
     )
     assert ranked
@@ -675,7 +677,8 @@ def test_assistant_text_not_fully_discarded():
         confidence=0.7,
     )
     ranked = rank_claims_for_question(
-        [only_assistant], "Where did I get my Bachelor's degree?",
+        [only_assistant],
+        "Where did I get my Bachelor's degree?",
         question_type=QuestionType.LOCATION,
     )
     # Assistant-only pool — the candidate must still be ranked.
@@ -697,11 +700,13 @@ def test_user_turn_boost_does_not_apply_to_third_person_question():
     # Same candidate scored on a personal vs non-personal question —
     # the personal-question variant should rank it strictly higher.
     personal_rank = rank_claims_for_question(
-        [user_fact], "Where did I get my Bachelor's degree?",
+        [user_fact],
+        "Where did I get my Bachelor's degree?",
         question_type=QuestionType.LOCATION,
     )
     impersonal_rank = rank_claims_for_question(
-        [user_fact], "Where is UCLA located?",
+        [user_fact],
+        "Where is UCLA located?",
         question_type=QuestionType.LOCATION,
     )
     assert personal_rank and impersonal_rank

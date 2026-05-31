@@ -19,6 +19,7 @@ Covers
 * :func:`cosine_similarity_matrix` matches a numpy reference
 * Bundle plumbing: messages / tier_breakdown / debug_info updated
 """
+
 from __future__ import annotations
 
 import uuid
@@ -46,8 +47,11 @@ _BASE = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8_000, stm_reserved=500, mtm_reserved=2_000,
-        ltm_reserved=2_000, response_reserved=500,
+        total=8_000,
+        stm_reserved=500,
+        mtm_reserved=2_000,
+        ltm_reserved=2_000,
+        response_reserved=500,
     )
 
 
@@ -146,18 +150,14 @@ def test_cosine_matrix_handles_zero_row() -> None:
 @pytest.mark.asyncio
 async def test_no_op_when_below_threshold_count() -> None:
     items = [_ltm(f"fact {i}", _emb(float(i))) for i in range(5)]
-    out = await SemanticDedupe(skip_if_fewer_than=10).apply(
-        _bundle(items), _budget()
-    )
+    out = await SemanticDedupe(skip_if_fewer_than=10).apply(_bundle(items), _budget())
     assert out is _bundle(items) or len(out.items) == len(items)
 
 
 @pytest.mark.asyncio
 async def test_no_op_when_no_embeddings() -> None:
     items = [_ltm(f"fact {i}", None) for i in range(20)]
-    out = await SemanticDedupe(skip_if_fewer_than=2).apply(
-        _bundle(items), _budget()
-    )
+    out = await SemanticDedupe(skip_if_fewer_than=2).apply(_bundle(items), _budget())
     # No embeddings → no dedup candidates → no-op (returns original).
     assert len(out.items) == len(items)
 
@@ -165,12 +165,10 @@ async def test_no_op_when_no_embeddings() -> None:
 @pytest.mark.asyncio
 async def test_no_op_when_all_dissimilar() -> None:
     # Orthogonal one-hot embeddings — pairwise cosine = 0.
-    items = [
-        _ltm(f"distinct fact {i}", _emb(*([0.0] * i + [1.0])))
-        for i in range(12)
-    ]
+    items = [_ltm(f"distinct fact {i}", _emb(*([0.0] * i + [1.0]))) for i in range(12)]
     out = await SemanticDedupe(
-        threshold=0.92, skip_if_fewer_than=2,
+        threshold=0.92,
+        skip_if_fewer_than=2,
     ).apply(_bundle(items), _budget())
     assert len(out.items) == len(items)
 
@@ -195,7 +193,8 @@ async def test_near_duplicates_removed() -> None:
     ctx = _bundle([a, b, *rest])
 
     out = await SemanticDedupe(
-        threshold=0.92, skip_if_fewer_than=2,
+        threshold=0.92,
+        skip_if_fewer_than=2,
     ).apply(ctx, _budget())
 
     # The lower-scored duplicate (a, importance=0.4) is removed; b kept.
@@ -215,13 +214,8 @@ async def test_highest_scored_wins() -> None:
     near2 = _emb(0.98, 0.2, 0.0)
     low = _ltm("low score", near, importance=0.2, confidence=0.5)
     high = _ltm("high score", near2, importance=0.9, confidence=0.9)
-    filler = [
-        _ltm(f"filler {i}", _emb(*([0.0] * (i + 3) + [1.0])))
-        for i in range(8)
-    ]
-    out = await SemanticDedupe(skip_if_fewer_than=2).apply(
-        _bundle([low, high, *filler]), _budget()
-    )
+    filler = [_ltm(f"filler {i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)]
+    out = await SemanticDedupe(skip_if_fewer_than=2).apply(_bundle([low, high, *filler]), _budget())
     survivors = {it.id for it in out.items}
     assert high.id in survivors
     assert low.id not in survivors
@@ -234,9 +228,7 @@ async def test_custom_score_key_used() -> None:
     # By default importance=0.5 ties → tie-break by created_at.
     a = _ltm("first", near, importance=0.5, offset_seconds=0)
     b = _ltm("second", near2, importance=0.5, offset_seconds=10)
-    filler = [
-        _ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)
-    ]
+    filler = [_ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)]
     # Score by content length: "second" > "first".
     out = await SemanticDedupe(
         skip_if_fewer_than=2,
@@ -256,11 +248,10 @@ async def test_transitive_duplicates_collapse_to_one() -> None:
     a = _ltm("paraphrase A", _emb(1.0, 0.05, 0.05), importance=0.3)
     b = _ltm("paraphrase B", _emb(0.99, 0.1, 0.05), importance=0.5)
     c = _ltm("paraphrase C", _emb(0.98, 0.15, 0.05), importance=0.9)
-    filler = [
-        _ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)
-    ]
+    filler = [_ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)]
     out = await SemanticDedupe(
-        threshold=0.92, skip_if_fewer_than=2,
+        threshold=0.92,
+        skip_if_fewer_than=2,
     ).apply(_bundle([a, b, c, *filler]), _budget())
     survivors = {it.id for it in out.items}
     assert c.id in survivors
@@ -278,20 +269,20 @@ async def test_higher_threshold_keeps_more() -> None:
     # Cosine ≈ 0.95 between the first two.
     a = _ltm("a", _emb(1.0, 0.0, 0.0), importance=0.3)
     b = _ltm("b", _emb(0.95, 0.31, 0.0), importance=0.9)
-    filler = [
-        _ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)
-    ]
+    filler = [_ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)]
     items = [a, b, *filler]
 
     permissive = await SemanticDedupe(
-        threshold=0.90, skip_if_fewer_than=2,
+        threshold=0.90,
+        skip_if_fewer_than=2,
     ).apply(_bundle(items), _budget())
     strict = await SemanticDedupe(
-        threshold=0.99, skip_if_fewer_than=2,
+        threshold=0.99,
+        skip_if_fewer_than=2,
     ).apply(_bundle(items), _budget())
 
     assert len(permissive.items) < len(items)  # dedupe fired
-    assert len(strict.items) == len(items)     # nothing crossed threshold
+    assert len(strict.items) == len(items)  # nothing crossed threshold
 
 
 @pytest.mark.asyncio
@@ -300,12 +291,10 @@ async def test_dissimilar_items_never_removed() -> None:
         _ltm("Acme launched analytics", _emb(1.0, 0.0, 0.0)),
         _ltm("Weather is warm", _emb(0.0, 1.0, 0.0)),
         _ltm("Birds are nesting", _emb(0.0, 0.0, 1.0)),
-    ] + [
-        _ltm(f"distinct {i}", _emb(*([0.0] * (i + 4) + [1.0])))
-        for i in range(8)
-    ]
+    ] + [_ltm(f"distinct {i}", _emb(*([0.0] * (i + 4) + [1.0]))) for i in range(8)]
     out = await SemanticDedupe(
-        threshold=0.92, skip_if_fewer_than=2,
+        threshold=0.92,
+        skip_if_fewer_than=2,
     ).apply(_bundle(items), _budget())
     assert len(out.items) == len(items)
 
@@ -321,9 +310,7 @@ async def test_messages_and_breakdown_rebuilt() -> None:
     dup = _emb(0.99, 0.14)
     a = _ltm("removed me", base, importance=0.1)
     b = _ltm("kept me", dup, importance=0.9)
-    filler = [
-        _ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)
-    ]
+    filler = [_ltm(f"f{i}", _emb(*([0.0] * (i + 3) + [1.0]))) for i in range(8)]
     ctx = _bundle([a, b, *filler])
 
     out = await SemanticDedupe(skip_if_fewer_than=2).apply(ctx, _budget())

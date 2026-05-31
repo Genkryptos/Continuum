@@ -16,6 +16,7 @@ The tests also pin the metric shape, the per-case dataset contents,
 and the JSON serialisation so a regression in the metrics block
 surfaces in CI rather than next week's benchmark spend.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -58,8 +59,7 @@ def test_every_answerable_case_has_recall_at_1_by_construction():
             continue
         session_ids = {s.session_id for s in case.sessions}
         assert case.expected_session_id in session_ids, (
-            f"case {case.case_id}: expected session "
-            f"{case.expected_session_id!r} not in bundle"
+            f"case {case.case_id}: expected session {case.expected_session_id!r} not in bundle"
         )
 
 
@@ -151,10 +151,10 @@ def test_filtered_pipeline_passes_each_regression_case_individually():
     """Pin every regression case so individual failures surface in CI."""
     by_id = {c.case_id: c for c in DATASET}
     expectations = {
-        "serenity_yoga":          "Serenity Yoga",
-        "ikea_bookshelf_4h":      "4 hours",
-        "painting_worth_triple":  "triple what I paid",
-        "ucla_bachelors":         "UCLA",
+        "serenity_yoga": "Serenity Yoga",
+        "ikea_bookshelf_4h": "4 hours",
+        "painting_worth_triple": "triple what I paid",
+        "ucla_bachelors": "UCLA",
     }
     for case_id, expected_substr in expectations.items():
         result = run_filtered_pipeline(by_id[case_id])
@@ -175,8 +175,7 @@ def test_filtered_pipeline_abstains_on_no_answer_cases():
     results = [run_filtered_pipeline(c) for c in abstention_cases]
     for r in results:
         assert r.abstention_correct, (
-            f"case {r.case_id}: pipeline returned {r.actual_answer!r} "
-            "instead of abstaining"
+            f"case {r.case_id}: pipeline returned {r.actual_answer!r} instead of abstaining"
         )
         assert "i don't know" in r.actual_answer.lower()
 
@@ -196,10 +195,7 @@ def test_noise_token_ratio_drops_under_filtered_pipeline():
 def test_evidence_precision_improves_under_filtered_pipeline():
     noisy = [run_noisy_pipeline(c) for c in DATASET]
     filtered = [run_filtered_pipeline(c) for c in DATASET]
-    assert (
-        aggregate(filtered)["evidence_precision"]
-        > aggregate(noisy)["evidence_precision"]
-    )
+    assert aggregate(filtered)["evidence_precision"] > aggregate(noisy)["evidence_precision"]
 
 
 def test_verified_candidate_accuracy_high_in_filtered_pipeline():
@@ -222,9 +218,7 @@ def test_recall_at_k_is_always_one_for_answerable_cases():
     """By construction, recall@k=1.0 for every case in the dataset."""
     for case in DATASET:
         result = run_filtered_pipeline(case)
-        assert result.recall_at_k == 1.0, (
-            f"case {case.case_id}: recall_at_k={result.recall_at_k}"
-        )
+        assert result.recall_at_k == 1.0, f"case {case.case_id}: recall_at_k={result.recall_at_k}"
 
 
 # ─── Aggregate + serialisation ────────────────────────────────────────────
@@ -268,6 +262,7 @@ def test_filtered_metrics_strictly_dominate_noisy():
 def test_payload_serializes_to_json():
     """Full payload must round-trip through json — required for trace logs."""
     import json
+
     payload = run_benchmark()
     serialized = json.dumps(payload, default=str)
     parsed = json.loads(serialized)

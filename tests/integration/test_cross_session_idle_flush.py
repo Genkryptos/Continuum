@@ -24,6 +24,7 @@ Postgres + bi-temporal LTM) sits on top of these protocols; if a turn
 makes it into MTM here, it would make it into LTM in production by the
 same Promoter logic.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -76,8 +77,10 @@ async def test_partial_stm_survives_session_switch() -> None:
     # ── Session A ──────────────────────────────────────────────────────────
     stm_a = InMemorySTM()
     flush_a = IdleStmFlush(
-        stm=stm_a, mtm=shared_mtm,
-        idle_seconds=0.15, check_interval_seconds=0.05,
+        stm=stm_a,
+        mtm=shared_mtm,
+        idle_seconds=0.15,
+        check_interval_seconds=0.05,
     )
     session_a = ContinuumSession(
         config=ContinuumConfig(),
@@ -91,13 +94,15 @@ async def test_partial_stm_survives_session_switch() -> None:
 
     # Push a "remember this" turn directly into STM (no LLM responder
     # needed to demonstrate the plumbing).
-    await stm_a.append(MemoryItem(
-        id=str(uuid.uuid4()),
-        content="my favorite color is blue",
-        tier=MemoryTier.STM,
-        session_id="user-mayank:chat-a",
-        metadata={"role": "user"},
-    ))
+    await stm_a.append(
+        MemoryItem(
+            id=str(uuid.uuid4()),
+            content="my favorite color is blue",
+            tier=MemoryTier.STM,
+            session_id="user-mayank:chat-a",
+            metadata={"role": "user"},
+        )
+    )
 
     # Sanity-check: MTM has NOT received the item yet (idle hasn't fired).
     assert shared_mtm.find("blue") is None
@@ -107,9 +112,7 @@ async def test_partial_stm_survives_session_switch() -> None:
 
     # The colour preference should now live in MTM.
     promoted = shared_mtm.find("blue")
-    assert promoted is not None, (
-        "idle-flush did not promote the partial STM row to MTM"
-    )
+    assert promoted is not None, "idle-flush did not promote the partial STM row to MTM"
     assert promoted.tier == MemoryTier.MTM
     assert promoted.processing_state == ProcessingState.UNPROCESSED
 
@@ -144,8 +147,10 @@ async def test_active_session_is_not_prematurely_flushed() -> None:
     shared_mtm = _MinimalMTM()
     stm = InMemorySTM()
     flush = IdleStmFlush(
-        stm=stm, mtm=shared_mtm,
-        idle_seconds=0.2, check_interval_seconds=0.05,
+        stm=stm,
+        mtm=shared_mtm,
+        idle_seconds=0.2,
+        check_interval_seconds=0.05,
     )
     session = ContinuumSession(
         config=ContinuumConfig(),
@@ -156,12 +161,14 @@ async def test_active_session_is_not_prematurely_flushed() -> None:
     )
     await session.start()
 
-    await stm.append(MemoryItem(
-        content="user is still typing turn 1",
-        tier=MemoryTier.STM,
-        session_id="hot-conv",
-        metadata={"role": "user"},
-    ))
+    await stm.append(
+        MemoryItem(
+            content="user is still typing turn 1",
+            tier=MemoryTier.STM,
+            session_id="hot-conv",
+            metadata={"role": "user"},
+        )
+    )
 
     # Simulate continuous activity: touch every 50 ms for 250 ms (the
     # idle window is 200 ms — but each touch resets the clock).

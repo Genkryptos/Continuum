@@ -48,9 +48,7 @@ class DecisionPolicy:
         candidate: MemoryCandidate,
         context: PolicyEvaluationContext,
     ) -> MemoryHandlingPlan:
-        preserve = bool(
-            context.config.get("preserve_decision_versions", True)
-        )
+        preserve = bool(context.config.get("preserve_decision_versions", True))
         return MemoryHandlingPlan(
             candidate_id=candidate.id,
             action=MemoryAction.STORE,

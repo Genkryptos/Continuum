@@ -7,6 +7,7 @@ Covers every deterministic stage (exact / normalized / numeric / unit /
 rule_semantic), the cache key stability rule, mode gating, and the
 async LLM fallback contract.
 """
+
 from __future__ import annotations
 
 import json
@@ -192,7 +193,10 @@ async def test_hybrid_invokes_judge_when_deterministic_fails():
     judge = _FakeJudge(verdict=True)
     s = HybridScorer(mode="hybrid", llm_judge=judge)
     result, cache_hit = await s.score(
-        "q?", "the famous Mayo Clinic", "Cleveland Clinic", question_id="x",
+        "q?",
+        "the famous Mayo Clinic",
+        "Cleveland Clinic",
+        question_id="x",
     )
     assert result.correct
     assert result.method == "llm"

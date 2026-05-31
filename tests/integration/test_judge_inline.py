@@ -19,6 +19,7 @@ A 25-row run exercises every meaningful combination:
   fact)
 * adapter explodes and the judge is skipped (verdict stays ``None``)
 """
+
 from __future__ import annotations
 
 import json
@@ -30,7 +31,6 @@ import pytest
 
 from continuum.core.types import ContextBundle, MemoryItem, MemoryTier, TokenBudget
 from evals.longmemeval.baseline import EvalRow, run_baseline
-
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -83,8 +83,11 @@ def _ctx(session_ids: list[str]) -> ContextBundle:
         messages=[],
         tokens_used=0,
         budget=TokenBudget(
-            total=4000, stm_reserved=500, mtm_reserved=500,
-            ltm_reserved=2000, response_reserved=100,
+            total=4000,
+            stm_reserved=500,
+            mtm_reserved=500,
+            ltm_reserved=2000,
+            response_reserved=100,
         ),
     )
 

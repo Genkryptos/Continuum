@@ -29,6 +29,7 @@ Cost / robustness
 litellm is imported lazily; unit tests inject ``completion_fn`` and need
 neither litellm nor network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -178,9 +179,7 @@ class LLMEntityExtractor:
         except Exception:
             # Retry exhaustion (tenacity reraise=True), per-attempt timeout,
             # bad JSON, or any provider error → never regress the baseline.
-            log.exception(
-                "LLM extraction failed — falling back to GLiNER entities only"
-            )
+            log.exception("LLM extraction failed — falling back to GLiNER entities only")
             return list(gliner_entities), []
 
         llm_entities = self._parse_entities(data.get("entities", []))
@@ -193,9 +192,7 @@ class LLMEntityExtractor:
     def _retrying(self) -> AsyncRetrying:
         return AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
-            wait=wait_exponential_jitter(
-                initial=self._backoff_initial, max=self._backoff_max
-            ),
+            wait=wait_exponential_jitter(initial=self._backoff_initial, max=self._backoff_max),
             retry=retry_if_exception(_is_transient),
             reraise=True,
         )
@@ -203,9 +200,7 @@ class LLMEntityExtractor:
     async def _complete(self, messages: list[dict[str, str]]) -> str:
         async for attempt in self._retrying():
             with attempt:
-                resp = await asyncio.wait_for(
-                    self._call(messages), timeout=self.config.timeout
-                )
+                resp = await asyncio.wait_for(self._call(messages), timeout=self.config.timeout)
                 return self._content(resp)
         raise RuntimeError("unreachable retry exit")  # pragma: no cover
 
@@ -222,8 +217,7 @@ class LLMEntityExtractor:
             import litellm
         except ImportError as exc:  # pragma: no cover - via completion_fn
             raise ImportError(
-                "litellm is required for LLMEntityExtractor.\n"
-                "Install it with:  pip install litellm"
+                "litellm is required for LLMEntityExtractor.\nInstall it with:  pip install litellm"
             ) from exc
         return await litellm.acompletion(
             model=self.config.model,

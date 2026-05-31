@@ -20,6 +20,7 @@ ScoreAwareBudgetPrune — last-resort lossy strategy: drops the lowest-
 The full :func:`continuum.optimizer.chain.default_optimizer_chain` is
 now satisfied.
 """
+
 from __future__ import annotations
 
 from continuum.optimizer.strategies.llmlingua import (

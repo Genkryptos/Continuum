@@ -18,6 +18,7 @@ The acceptance scenarios come straight from the spec:
   Bachelor's at UCLA") and a *list of options* for Master's programs
   ("USC, Berkeley, …") — selector must surface UCLA, not the options.
 """
+
 from __future__ import annotations
 
 from continuum.core.types import MemoryItem
@@ -121,10 +122,7 @@ def test_bachelors_at_ucla_beats_masters_options():
     assert "USC" not in top.text and "Berkeley" not in top.text
     # The distractor lines (options / questions) must not crowd out
     # the stated fact even if they share content words like "Master's".
-    assert not any(
-        "USC" in s.text or "Berkeley" in s.text or "Stanford" in s.text
-        for s in spans
-    )
+    assert not any("USC" in s.text or "Berkeley" in s.text or "Stanford" in s.text for s in spans)
 
 
 # ─── Empty-selection forces abstain ────────────────────────────────────────
@@ -221,9 +219,7 @@ def test_role_falls_back_when_bullet_has_no_role_prefix():
 
 def test_max_spans_cap_respected():
     """At most ``max_spans`` results, regardless of how many candidates."""
-    lines = "\n".join(
-        f"- (user): The bookshelf took {n} hours session {n}." for n in range(1, 10)
-    )
+    lines = "\n".join(f"- (user): The bookshelf took {n} hours session {n}." for n in range(1, 10))
     window = _wiki_window("s_many", f"## Matched Turn\n{lines}\n")
     spans = select_spans(
         "How long did the bookshelf take?",
@@ -239,10 +235,7 @@ def test_dedupes_substring_repeats():
     repeated = "The IKEA bookshelf took 4 hours to assemble."
     window = _wiki_window(
         "s_dup",
-        "## Matched Turn\n"
-        f"- (user): {repeated}\n\n"
-        "## Nearby Context\n"
-        f"- (user): {repeated}\n",
+        f"## Matched Turn\n- (user): {repeated}\n\n## Nearby Context\n- (user): {repeated}\n",
     )
     spans = select_spans(
         "How long did the IKEA bookshelf take?",
@@ -294,8 +287,12 @@ def test_date_time_question_prefers_dated_span():
 
 def test_render_spans_for_prompt_includes_session_role_and_text():
     s = EvidenceSpan(
-        text="4 hours.", source_session_id="s1", source_turn_id="t1",
-        role="user", score=1.2, reason="overlap=2/4 has_duration",
+        text="4 hours.",
+        source_session_id="s1",
+        source_turn_id="t1",
+        role="user",
+        score=1.2,
+        reason="overlap=2/4 has_duration",
     )
     out = render_spans_for_prompt([s])
     assert "[session=s1]" in out

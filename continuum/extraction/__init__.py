@@ -21,6 +21,7 @@ RELATION_TYPES     — predicates the LLM prompt steers toward.
 ``gliner`` / ``torch`` / ``litellm`` are imported lazily, so importing this
 package is cheap and unit tests inject fakes without those packages.
 """
+
 from __future__ import annotations
 
 from continuum.extraction.candidate_extractor import MemoryCandidateExtractor

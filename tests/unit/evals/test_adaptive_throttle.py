@@ -7,6 +7,7 @@ provider's real sustainable rate instead of retry-storming a fixed pace.
 
 All tests are pure-logic (no network, no sleeps beyond a few ms).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -38,10 +39,10 @@ def test_rpm_floor_at_one() -> None:
 
 
 def test_on_429_widens_interval() -> None:
-    t = _AdaptiveThrottle(rpm=60)          # target 1.0 s
+    t = _AdaptiveThrottle(rpm=60)  # target 1.0 s
     assert t.interval == pytest.approx(1.0)
     t.on_429()
-    assert t.interval == pytest.approx(1.5)   # ×1.5
+    assert t.interval == pytest.approx(1.5)  # ×1.5
     t.on_429()
     assert t.interval == pytest.approx(2.25)  # ×1.5 again
 
@@ -50,7 +51,7 @@ def test_on_429_capped_at_max_interval() -> None:
     t = _AdaptiveThrottle(rpm=60, max_interval=3.0)
     for _ in range(20):
         t.on_429()
-    assert t.interval == pytest.approx(3.0)   # never exceeds the cap
+    assert t.interval == pytest.approx(3.0)  # never exceeds the cap
 
 
 # ---------------------------------------------------------------------------
@@ -59,10 +60,10 @@ def test_on_429_capped_at_max_interval() -> None:
 
 
 def test_success_streak_narrows_interval_back() -> None:
-    t = _AdaptiveThrottle(rpm=60, recover_after=5)   # target 1.0 s
+    t = _AdaptiveThrottle(rpm=60, recover_after=5)  # target 1.0 s
     t.on_429()
     t.on_429()
-    widened = t.interval                              # 2.25 s
+    widened = t.interval  # 2.25 s
     assert widened > 1.0
 
     # 4 successes — not enough to trigger recovery yet.
@@ -76,7 +77,7 @@ def test_success_streak_narrows_interval_back() -> None:
 
 
 def test_success_never_narrows_below_target() -> None:
-    t = _AdaptiveThrottle(rpm=60, recover_after=1)    # target 1.0 s
+    t = _AdaptiveThrottle(rpm=60, recover_after=1)  # target 1.0 s
     # Already at target — successes must not push below it.
     for _ in range(50):
         t.on_success()
@@ -85,12 +86,12 @@ def test_success_never_narrows_below_target() -> None:
 
 def test_429_resets_success_streak() -> None:
     t = _AdaptiveThrottle(rpm=60, recover_after=3)
-    t.on_429()                       # interval 1.5
+    t.on_429()  # interval 1.5
     t.on_success()
-    t.on_success()                   # streak = 2, one short of recovery
-    t.on_429()                       # streak reset, interval 2.25
+    t.on_success()  # streak = 2, one short of recovery
+    t.on_429()  # streak reset, interval 2.25
     t.on_success()
-    t.on_success()                   # streak only 2 again — no narrow
+    t.on_success()  # streak only 2 again — no narrow
     assert t.interval == pytest.approx(2.25)
 
 
@@ -110,17 +111,17 @@ async def test_await_slot_paces_calls() -> None:
     await t.await_slot()
     await t.await_slot()
     elapsed = loop.time() - start
-    assert elapsed >= 0.18   # ~0.2 s with scheduling slack
+    assert elapsed >= 0.18  # ~0.2 s with scheduling slack
 
 
 @pytest.mark.asyncio
 async def test_await_slot_widened_interval_paces_slower() -> None:
-    t = _AdaptiveThrottle(rpm=600)        # 0.1 s base
-    t.on_429()                            # → 0.15 s
-    t.on_429()                            # → 0.225 s
+    t = _AdaptiveThrottle(rpm=600)  # 0.1 s base
+    t.on_429()  # → 0.15 s
+    t.on_429()  # → 0.225 s
     loop = asyncio.get_event_loop()
     start = loop.time()
     await t.await_slot()
-    await t.await_slot()                  # one gap at the widened pace
+    await t.await_slot()  # one gap at the widened pace
     elapsed = loop.time() - start
-    assert elapsed >= 0.20    # ~0.225 s gap
+    assert elapsed >= 0.20  # ~0.225 s gap

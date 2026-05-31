@@ -23,6 +23,7 @@ Three acceptance scenarios from the spec:
    relation with a qualitative object, distinct from the
    ``"paid"`` relation that holds the numeric amount.
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.candidates import (
@@ -42,7 +43,10 @@ from evals.longmemeval.question_type import QuestionType
 def test_candidate_dataclass_back_compat():
     """Legacy positional/keyword construction still works."""
     c = Candidate(
-        value="7", normalized_value="7", candidate_type="count", unit="shirts",
+        value="7",
+        normalized_value="7",
+        candidate_type="count",
+        unit="shirts",
     )
     assert c.value == "7"
     assert c.candidate_type == "count"
@@ -57,8 +61,12 @@ def test_candidate_dataclass_back_compat():
 def test_candidate_to_dict_renders_object_key_without_underscore():
     """JSON-shape uses ``object`` (no underscore) per the spec."""
     c = Candidate(
-        value="UCLA", normalized_value="ucla", candidate_type="location",
-        subject="Bachelor's degree", relation="got_at", object_="UCLA",
+        value="UCLA",
+        normalized_value="ucla",
+        candidate_type="location",
+        subject="Bachelor's degree",
+        relation="got_at",
+        object_="UCLA",
         claim="I got my Bachelor's degree at UCLA in 2018.",
         source_span="at UCLA",
         answer_type="location",
@@ -152,17 +160,14 @@ def test_ucla_bachelors_outranks_stanford_masters():
     cs = extract_locations(text, source_session_id="s_edu")
     # Both UCLA and Stanford should be present
     objects = {c.object_ for c in cs}
-    assert "UCLA" in objects or "Ucla" in objects or any(
-        c.object_.lower() == "ucla" for c in cs
-    )
+    assert "UCLA" in objects or "Ucla" in objects or any(c.object_.lower() == "ucla" for c in cs)
     assert any(c.object_.lower() == "stanford" for c in cs)
 
     # Relations distinguish them
     ucla = next(c for c in cs if c.object_.lower() == "ucla")
     stanford = next(c for c in cs if c.object_.lower() == "stanford")
     assert ucla.relation in FACTUAL_RELATIONS
-    assert stanford.relation in HYPOTHETICAL_RELATIONS or \
-           stanford.relation == "looking_at"
+    assert stanford.relation in HYPOTHETICAL_RELATIONS or stanford.relation == "looking_at"
 
     # Rank for the Bachelor's question — UCLA must win
     ranked = rank_claims_for_question(
@@ -173,9 +178,7 @@ def test_ucla_bachelors_outranks_stanford_masters():
     assert ranked
     assert ranked[0].object_.lower() == "ucla"
     # And Stanford must NOT outrank UCLA
-    ucla_idx = next(
-        i for i, c in enumerate(ranked) if c.object_.lower() == "ucla"
-    )
+    ucla_idx = next(i for i, c in enumerate(ranked) if c.object_.lower() == "ucla")
     stanford_idx = next(
         (i for i, c in enumerate(ranked) if c.object_.lower() == "stanford"),
         None,

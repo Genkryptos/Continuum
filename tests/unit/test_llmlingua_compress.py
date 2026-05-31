@@ -21,6 +21,7 @@ Covers
 * `_split_back` aligns when separator survives; fuses otherwise
 * `_extract_compressed_text` handles dict/string return shapes
 """
+
 from __future__ import annotations
 
 import uuid
@@ -50,8 +51,11 @@ _BASE = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8_000, stm_reserved=500, mtm_reserved=2_000,
-        ltm_reserved=2_000, response_reserved=500,
+        total=8_000,
+        stm_reserved=500,
+        mtm_reserved=2_000,
+        ltm_reserved=2_000,
+        response_reserved=500,
     )
 
 
@@ -124,9 +128,7 @@ class _FakeCompressor:
     def __init__(self) -> None:
         self.calls = 0
 
-    def compress_prompt(
-        self, text: str, *, rate: float, force_tokens: list[str]
-    ) -> dict[str, str]:
+    def compress_prompt(self, text: str, *, rate: float, force_tokens: list[str]) -> dict[str, str]:
         self.calls += 1
         words = text.split()
         keep = max(1, int(len(words) * rate))
@@ -140,9 +142,7 @@ class _SeparatorPreservingCompressor:
         self.sep = sep
         self.calls = 0
 
-    def compress_prompt(
-        self, text: str, *, rate: float, force_tokens: list[str]
-    ) -> dict[str, str]:
+    def compress_prompt(self, text: str, *, rate: float, force_tokens: list[str]) -> dict[str, str]:
         self.calls += 1
         pieces = text.split(self.sep)
         compressed_pieces = []
@@ -203,7 +203,8 @@ async def test_skip_short_input() -> None:
     comp = _FakeCompressor()
     items = [_ltm("brief fact")]  # tiny
     out = await LLMLinguaCompress(
-        compressor=comp, min_input_tokens=100,
+        compressor=comp,
+        min_input_tokens=100,
     ).apply(_bundle(items), _budget())
     assert out is _bundle(items) or out.items == items
     assert comp.calls == 0
@@ -289,7 +290,9 @@ async def test_fallback_fuses_to_single_item_when_separator_lost() -> None:
 async def test_cache_hits_on_repeat_input() -> None:
     comp = _SeparatorPreservingCompressor()
     strategy = LLMLinguaCompress(
-        compressor=comp, ratio=0.5, min_input_tokens=50,
+        compressor=comp,
+        ratio=0.5,
+        min_input_tokens=50,
     )
     items = [_ltm(t, offset_seconds=i) for i, t in enumerate(_LONG_LTM)]
 

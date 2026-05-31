@@ -235,9 +235,7 @@ class ContinuumSession:
             try:
                 await self.idle_flush.start(self.session_id)
             except Exception:
-                log.exception(
-                    "idle_flush.start failed — continuing without watcher"
-                )
+                log.exception("idle_flush.start failed — continuing without watcher")
 
         self._started = True
         log.debug("ContinuumSession started")

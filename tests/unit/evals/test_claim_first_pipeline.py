@@ -15,6 +15,7 @@ Test groups (mirroring the spec's "Tests" section):
 7. Fallback prompt when question type / candidate type is wrong.
 8. Shortest-span extraction for the six regression examples.
 """
+
 from __future__ import annotations
 
 from continuum.core.types import ContextBundle, MemoryItem, TokenBudget
@@ -42,7 +43,9 @@ from evals.longmemeval.task_router import TaskMode, route_task
 
 def _bundle(items: list[MemoryItem]) -> ContextBundle:
     return ContextBundle(
-        items=items, messages=[], tokens_used=0,
+        items=items,
+        messages=[],
+        tokens_used=0,
         budget=TokenBudget(
             total=4096,
             stm_reserved=1024,
@@ -55,7 +58,10 @@ def _bundle(items: list[MemoryItem]) -> ContextBundle:
 
 
 def _item(
-    *, session_id: str, content: str, role: str = "user",
+    *,
+    session_id: str,
+    content: str,
+    role: str = "user",
     item_id: str = "",
 ) -> MemoryItem:
     return MemoryItem(
@@ -147,8 +153,9 @@ def test_legacy_claim_extraction_strips_turn_n_role_prefix():
     claims = extract_claims_from_context(_bundle(items))
     texts = [c.text for c in claims]
     # No claim should contain the raw bundle scaffolding.
-    assert not any(t.lower().startswith("turn ") for t in texts), \
+    assert not any(t.lower().startswith("turn ") for t in texts), (
         f"role-prefix leaked into claim text: {texts}"
+    )
     assert not any("turn 1 (user)" in t for t in texts)
     assert not any("turn 2 (assistant)" in t for t in texts)
     # The actual content survives, with the right role tagging.
@@ -175,25 +182,22 @@ def test_legacy_claim_extraction_strips_inline_role_prefix():
     for c in claims:
         by_role.setdefault(c.source_role, []).append(c.text)
     assert any("degree" in t.lower() for t in by_role.get("user", []))
-    assert any(
-        "business administration" in t.lower()
-        for t in by_role.get("assistant", [])
-    )
+    assert any("business administration" in t.lower() for t in by_role.get("assistant", []))
 
 
 def test_claim_extraction_preserves_content_for_business_admin():
     """The degree sentence survives extraction verbatim."""
-    items = [_item(
-        session_id="s1",
-        content="## Matched Turn\n"
-                "- (user): I graduated with a degree in Business "
-                "Administration from a state university.\n",
-    )]
+    items = [
+        _item(
+            session_id="s1",
+            content="## Matched Turn\n"
+            "- (user): I graduated with a degree in Business "
+            "Administration from a state university.\n",
+        )
+    ]
     claims = extract_claims_from_context(_bundle(items))
     assert claims
-    assert any(
-        "Business Administration" in c.text for c in claims
-    )
+    assert any("Business Administration" in c.text for c in claims)
 
 
 # ─── (3) User-turn preference for autobiographical facts ──────────────────
@@ -203,15 +207,21 @@ def test_user_turn_outranks_assistant_for_personal_question():
     claims = [
         Claim(
             text="You might consider getting a degree in Engineering.",
-            source_session_id="s1", source_role="assistant", confidence=0.6,
+            source_session_id="s1",
+            source_role="assistant",
+            confidence=0.6,
         ),
         Claim(
             text="I got my degree in Business Administration in 2018.",
-            source_session_id="s1", source_role="user", confidence=0.6,
+            source_session_id="s1",
+            source_role="user",
+            confidence=0.6,
         ),
     ]
     ranked = rank_claims(
-        "What degree did I graduate with?", claims, prefer_role="user",
+        "What degree did I graduate with?",
+        claims,
+        prefer_role="user",
     )
     assert ranked[0].source_role == "user"
     assert "Business Administration" in ranked[0].text
@@ -224,15 +234,20 @@ def test_assistant_turn_boosted_when_question_asks_what_assistant_said():
     claims = [
         Claim(
             text="I really enjoyed that thriller you suggested.",
-            source_session_id="s1", source_role="user", confidence=0.6,
+            source_session_id="s1",
+            source_role="user",
+            confidence=0.6,
         ),
         Claim(
-            text="You should try \"The Silent Patient\" — it's a good thriller.",
-            source_session_id="s1", source_role="assistant", confidence=0.6,
+            text='You should try "The Silent Patient" — it\'s a good thriller.',
+            source_session_id="s1",
+            source_role="assistant",
+            confidence=0.6,
         ),
     ]
     ranked = rank_claims(
-        "What book did you recommend to me?", claims,
+        "What book did you recommend to me?",
+        claims,
     )
     # Auto-detected from "did you recommend" → assistant preferred.
     assert ranked[0].source_role == "assistant"
@@ -243,61 +258,86 @@ def test_assistant_turn_boosted_when_question_asks_what_assistant_said():
 
 
 def test_route_fact_lookup_for_simple_user_question():
-    assert route_task(
-        "Where did I get my Bachelor's degree?",
-        question_type_hint="single-session-user",
-    ) == TaskMode.FACT_LOOKUP
+    assert (
+        route_task(
+            "Where did I get my Bachelor's degree?",
+            question_type_hint="single-session-user",
+        )
+        == TaskMode.FACT_LOOKUP
+    )
 
 
 def test_route_assistant_memory_for_did_you_questions():
-    assert route_task(
-        "What book did you recommend last week?",
-        question_type_hint="single-session-assistant",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What book did you recommend last week?",
+            question_type_hint="single-session-assistant",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_route_preference_for_favourite_questions():
-    assert route_task(
-        "What's my favorite restaurant?",
-        question_type_hint="single-session-preference",
-    ) == TaskMode.PREFERENCE_PROFILE
+    assert (
+        route_task(
+            "What's my favorite restaurant?",
+            question_type_hint="single-session-preference",
+        )
+        == TaskMode.PREFERENCE_PROFILE
+    )
 
 
 def test_route_knowledge_update_for_change_words():
-    assert route_task(
-        "What did I change my dog's name to?",
-        question_type_hint="knowledge-update",
-    ) == TaskMode.KNOWLEDGE_UPDATE
+    assert (
+        route_task(
+            "What did I change my dog's name to?",
+            question_type_hint="knowledge-update",
+        )
+        == TaskMode.KNOWLEDGE_UPDATE
+    )
 
 
 def test_route_multi_session_aggregate_for_how_many():
-    assert route_task(
-        "How many shirts did I pack across all my trips?",
-        question_type_hint="multi-session",
-    ) == TaskMode.MULTI_SESSION_AGGREGATE
+    assert (
+        route_task(
+            "How many shirts did I pack across all my trips?",
+            question_type_hint="multi-session",
+        )
+        == TaskMode.MULTI_SESSION_AGGREGATE
+    )
 
 
 def test_route_temporal_reasoning_for_how_long_ago():
-    assert route_task(
-        "How long ago did I start my job?",
-        question_type_hint="temporal-reasoning",
-    ) == TaskMode.TEMPORAL_REASONING
+    assert (
+        route_task(
+            "How long ago did I start my job?",
+            question_type_hint="temporal-reasoning",
+        )
+        == TaskMode.TEMPORAL_REASONING
+    )
 
 
 def test_router_wording_overrides_wrong_dataset_label():
     """Strong wording cues outrank a misleading dataset hint."""
     # Dataset says "single-session-user" but wording is temporal.
-    assert route_task(
-        "How long ago did I start the job?",
-        question_type_hint="single-session-user",
-    ) == TaskMode.TEMPORAL_REASONING
+    assert (
+        route_task(
+            "How long ago did I start the job?",
+            question_type_hint="single-session-user",
+        )
+        == TaskMode.TEMPORAL_REASONING
+    )
 
 
 def test_router_falls_back_to_fact_lookup_when_neutral():
     """No wording cues + no dataset hint → FACT_LOOKUP."""
-    assert route_task(
-        "Where did I park?", question_type_hint=None,
-    ) == TaskMode.FACT_LOOKUP
+    assert (
+        route_task(
+            "Where did I park?",
+            question_type_hint=None,
+        )
+        == TaskMode.FACT_LOOKUP
+    )
 
 
 # ─── Tier 1A: dataset hint plumbing ───────────────────────────────────────
@@ -311,71 +351,102 @@ def test_dataset_hint_routes_ambiguous_single_session_assistant():
     """
     q = "What was the title of the book?"
     assert route_task(q, question_type_hint=None) == TaskMode.FACT_LOOKUP
-    assert route_task(
-        q, question_type_hint="single-session-assistant",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            q,
+            question_type_hint="single-session-assistant",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_dataset_hint_routes_ambiguous_preference():
     """A bare "What X" with preference hint routes to PREFERENCE_PROFILE."""
     q = "What restaurant comes to mind for Italian food?"
     assert route_task(q, question_type_hint=None) == TaskMode.FACT_LOOKUP
-    assert route_task(
-        q, question_type_hint="single-session-preference",
-    ) == TaskMode.PREFERENCE_PROFILE
+    assert (
+        route_task(
+            q,
+            question_type_hint="single-session-preference",
+        )
+        == TaskMode.PREFERENCE_PROFILE
+    )
 
 
 def test_dataset_hint_routes_ambiguous_multi_session():
     """Multi-session aggregation when wording lacks explicit cues."""
     q = "What gifts have I bought?"
     assert route_task(q, question_type_hint=None) == TaskMode.FACT_LOOKUP
-    assert route_task(
-        q, question_type_hint="multi-session",
-    ) == TaskMode.MULTI_SESSION_AGGREGATE
+    assert (
+        route_task(
+            q,
+            question_type_hint="multi-session",
+        )
+        == TaskMode.MULTI_SESSION_AGGREGATE
+    )
 
 
 def test_dataset_hint_routes_ambiguous_knowledge_update():
     """Knowledge-update without 'changed/now/latest' wording cue."""
     q = "What is my pet's name?"
     assert route_task(q, question_type_hint=None) == TaskMode.FACT_LOOKUP
-    assert route_task(
-        q, question_type_hint="knowledge-update",
-    ) == TaskMode.KNOWLEDGE_UPDATE
+    assert (
+        route_task(
+            q,
+            question_type_hint="knowledge-update",
+        )
+        == TaskMode.KNOWLEDGE_UPDATE
+    )
 
 
 def test_is_multi_session_flag_forces_aggregate():
     """is_multi_session=True forces aggregate even without wording."""
-    assert route_task(
-        "What did I buy?",
-        is_multi_session=True,
-    ) == TaskMode.MULTI_SESSION_AGGREGATE
+    assert (
+        route_task(
+            "What did I buy?",
+            is_multi_session=True,
+        )
+        == TaskMode.MULTI_SESSION_AGGREGATE
+    )
 
 
 def test_dataset_hint_does_not_override_assistant_memory_cue():
     """Strong 'did you recommend' cue beats a wrong hint."""
-    assert route_task(
-        "What book did you recommend last week?",
-        question_type_hint="single-session-user",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What book did you recommend last week?",
+            question_type_hint="single-session-user",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_remind_me_routes_to_assistant():
     """``remind me what you recommended for X`` is assistant-memory."""
-    assert route_task(
-        "Remind me what you recommended for my next read.",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "Remind me what you recommended for my next read.",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_do_you_remember_routes_to_assistant():
-    assert route_task(
-        "Do you remember the book we discussed earlier?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "Do you remember the book we discussed earlier?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_we_talked_about_routes_to_assistant():
-    assert route_task(
-        "What was the playlist we talked about last week?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What was the playlist we talked about last week?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_previous_conversation_routes_to_assistant():
@@ -384,22 +455,34 @@ def test_assistant_memory_previous_conversation_routes_to_assistant():
     inside an assistant-memory frame. The new cue must beat the
     temporal regex.
     """
-    assert route_task(
-        "What was the advice in our previous conversation?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
-    assert route_task(
-        "Can you check back on what you suggested in the earlier session?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What was the advice in our previous conversation?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
+    assert (
+        route_task(
+            "Can you check back on what you suggested in the earlier session?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_what_was_the_x_you_gave_routes_to_assistant():
     """``what was the recipe you gave me`` — answer-recovery frame."""
-    assert route_task(
-        "What was the recipe you gave me for chocolate cake?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
-    assert route_task(
-        "What were the three parameters you listed for me?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What was the recipe you gave me for chocolate cake?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
+    assert (
+        route_task(
+            "What were the three parameters you listed for me?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_assistant_memory_with_temporal_words_still_routes_correctly():
@@ -410,17 +493,23 @@ def test_assistant_memory_with_temporal_words_still_routes_correctly():
     """
     # 'last week' alone is temporal; with 'you recommended' it's
     # assistant-memory.
-    assert route_task(
-        "What book did you recommend last week?",
-    ) == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    assert (
+        route_task(
+            "What book did you recommend last week?",
+        )
+        == TaskMode.ASSISTANT_MEMORY_LOOKUP
+    )
 
 
 def test_unknown_dataset_hint_falls_through_to_default():
     """Unrecognised hint string degrades gracefully to FACT_LOOKUP."""
-    assert route_task(
-        "Where did I park?",
-        question_type_hint="totally-unknown-category",
-    ) == TaskMode.FACT_LOOKUP
+    assert (
+        route_task(
+            "Where did I park?",
+            question_type_hint="totally-unknown-category",
+        )
+        == TaskMode.FACT_LOOKUP
+    )
 
 
 # ─── Tier 1C: refined failure buckets ─────────────────────────────────────
@@ -435,31 +524,45 @@ def _stats(**kw):
 
 
 def test_failure_llm_error_short_circuits():
-    assert _classify_failure(
-        answer="[error: timeout]", error=None,
-        retrieved=["s"], expected=["s"],
-    ) == "llm_error"
+    assert (
+        _classify_failure(
+            answer="[error: timeout]",
+            error=None,
+            retrieved=["s"],
+            expected=["s"],
+        )
+        == "llm_error"
+    )
 
 
 def test_failure_missing_fact_when_no_expected_session_retrieved():
-    assert _classify_failure(
-        answer="anything", error=None,
-        retrieved=["s_other"], expected=["s_gold"],
-    ) == "missing_fact"
+    assert (
+        _classify_failure(
+            answer="anything",
+            error=None,
+            retrieved=["s_other"],
+            expected=["s_gold"],
+        )
+        == "missing_fact"
+    )
 
 
 def test_failure_wrong_route_when_actual_route_disagrees():
     """Assistant-memory question routed as FACT_LOOKUP → wrong_route."""
-    assert _classify_failure(
-        answer="something",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="single-session-assistant",
-        decomposition_stats=_stats(
-            mode="claim_first",
-            claim_first_route="FACT_LOOKUP",
-        ),
-    ) == "wrong_route"
+    assert (
+        _classify_failure(
+            answer="something",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="single-session-assistant",
+            decomposition_stats=_stats(
+                mode="claim_first",
+                claim_first_route="FACT_LOOKUP",
+            ),
+        )
+        == "wrong_route"
+    )
 
 
 def test_failure_wrong_role_assistant_question_from_user_turn():
@@ -467,59 +570,75 @@ def test_failure_wrong_role_assistant_question_from_user_turn():
     Question type single-session-assistant; matched_claim's
     source_role is "user" — the answer came from the wrong speaker.
     """
-    assert _classify_failure(
-        answer="The Three-Body Problem",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="single-session-assistant",
-        decomposition_stats=_stats(
-            mode="claim_first_structured",
-            claim_first_route="ASSISTANT_MEMORY_LOOKUP",
-            structured_matched_claim={"source_role": "user", "text": "..."},
-        ),
-    ) == "wrong_role"
+    assert (
+        _classify_failure(
+            answer="The Three-Body Problem",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="single-session-assistant",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="ASSISTANT_MEMORY_LOOKUP",
+                structured_matched_claim={"source_role": "user", "text": "..."},
+            ),
+        )
+        == "wrong_role"
+    )
 
 
 def test_failure_wrong_role_user_question_from_assistant_turn():
-    assert _classify_failure(
-        answer="Marketing specialist",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="single-session-user",
-        decomposition_stats=_stats(
-            mode="claim_first_structured",
-            claim_first_route="FACT_LOOKUP",
-            structured_matched_claim={"source_role": "assistant", "text": "..."},
-        ),
-    ) == "wrong_role"
+    assert (
+        _classify_failure(
+            answer="Marketing specialist",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="single-session-user",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="FACT_LOOKUP",
+                structured_matched_claim={"source_role": "assistant", "text": "..."},
+            ),
+        )
+        == "wrong_role"
+    )
 
 
 def test_failure_missing_aggregation_for_multi_session_single_span():
     """Multi-session that returned one short noun phrase → not aggregated."""
-    assert _classify_failure(
-        answer="yellow dress",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="multi-session",
-        decomposition_stats=_stats(
-            mode="claim_first_structured",
-            claim_first_route="MULTI_SESSION_AGGREGATE",
-        ),
-    ) == "missing_aggregation"
+    assert (
+        _classify_failure(
+            answer="yellow dress",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="multi-session",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="MULTI_SESSION_AGGREGATE",
+            ),
+        )
+        == "missing_aggregation"
+    )
 
 
 def test_failure_missing_temporal_for_bare_date_answer():
     """Temporal question + a bare date answer → missing arithmetic."""
-    assert _classify_failure(
-        answer="February 14th",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="temporal-reasoning",
-        decomposition_stats=_stats(
-            mode="claim_first_structured",
-            claim_first_route="TEMPORAL_REASONING",
-        ),
-    ) == "missing_temporal_computation"
+    assert (
+        _classify_failure(
+            answer="February 14th",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="temporal-reasoning",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="TEMPORAL_REASONING",
+            ),
+        )
+        == "missing_temporal_computation"
+    )
 
 
 def test_failure_stale_fact_for_knowledge_update_with_used_to():
@@ -527,20 +646,24 @@ def test_failure_stale_fact_for_knowledge_update_with_used_to():
     Knowledge-update question; the matched claim's text contains
     "used to" — the stale half of the update pair was selected.
     """
-    assert _classify_failure(
-        answer="Bella",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="knowledge-update",
-        decomposition_stats=_stats(
-            mode="claim_first_structured",
-            claim_first_route="KNOWLEDGE_UPDATE",
-            structured_matched_claim={
-                "source_role": "user",
-                "text": "My dog used to be called Bella but we renamed her.",
-            },
-        ),
-    ) == "stale_fact"
+    assert (
+        _classify_failure(
+            answer="Bella",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="knowledge-update",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="KNOWLEDGE_UPDATE",
+                structured_matched_claim={
+                    "source_role": "user",
+                    "text": "My dog used to be called Bella but we renamed her.",
+                },
+            ),
+        )
+        == "stale_fact"
+    )
 
 
 def test_failure_wrong_span_when_route_right_session_right():
@@ -548,17 +671,21 @@ def test_failure_wrong_span_when_route_right_session_right():
     Right route, right session, but the answer doesn't match gold and
     no other specific bucket fires → wrong_span.
     """
-    assert _classify_failure(
-        answer="Best Buy",
-        error=None,
-        retrieved=["s_gold"], expected=["s_gold"],
-        question_type="single-session-user",
-        decomposition_stats=_stats(
-            mode="claim_first",
-            claim_first_route="FACT_LOOKUP",
-        ),
-        expected_answer="a yellow dress",
-    ) == "wrong_span"
+    assert (
+        _classify_failure(
+            answer="Best Buy",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="single-session-user",
+            decomposition_stats=_stats(
+                mode="claim_first",
+                claim_first_route="FACT_LOOKUP",
+            ),
+            expected_answer="a yellow dress",
+        )
+        == "wrong_span"
+    )
 
 
 def test_failure_backward_compat_without_new_kwargs():
@@ -568,15 +695,25 @@ def test_failure_backward_compat_without_new_kwargs():
     in ``wrong_span`` — more precise than the legacy
     ``wrong_retrieval`` catch-all.
     """
-    assert _classify_failure(
-        answer="anything", error=None,
-        retrieved=["s"], expected=["s"],
-    ) == "wrong_span"
+    assert (
+        _classify_failure(
+            answer="anything",
+            error=None,
+            retrieved=["s"],
+            expected=["s"],
+        )
+        == "wrong_span"
+    )
     # Pure retrieval miss still classifies as missing_fact.
-    assert _classify_failure(
-        answer="anything", error=None,
-        retrieved=["s_other"], expected=["s_gold"],
-    ) == "missing_fact"
+    assert (
+        _classify_failure(
+            answer="anything",
+            error=None,
+            retrieved=["s_other"],
+            expected=["s_gold"],
+        )
+        == "missing_fact"
+    )
 
 
 # ─── (6) Final-answer validation against claims ───────────────────────────
@@ -593,7 +730,8 @@ def test_validation_rejects_empty_and_scaffold():
 
 def test_validation_rejects_unsupported_answer():
     ok, reason = validate_against_claims(
-        "Berkeley", ["I got my Bachelor's at UCLA in 2018."],
+        "Berkeley",
+        ["I got my Bachelor's at UCLA in 2018."],
     )
     assert not ok
     assert reason == "unsupported_by_claim"
@@ -628,15 +766,19 @@ def test_extractive_fallback_prompt_includes_question_and_claims():
     claims = [
         Claim(
             text="I graduated with a Bachelor's in Business Administration in 2018.",
-            source_session_id="s_edu", source_role="user",
+            source_session_id="s_edu",
+            source_role="user",
         ),
         Claim(
             text="I worked at a small startup before joining the agency.",
-            source_session_id="s_work", source_role="user",
+            source_session_id="s_work",
+            source_role="user",
         ),
     ]
     prompt = build_extractive_prompt(
-        "What degree did I graduate with?", claims, max_claims=2,
+        "What degree did I graduate with?",
+        claims,
+        max_claims=2,
     )
     assert "What degree did I graduate with?" in prompt
     assert "Business Administration" in prompt
@@ -649,7 +791,8 @@ def test_extractive_fallback_validator_accepts_substring():
     claims = [
         Claim(
             text="I bought a yellow dress for my sister's birthday.",
-            source_session_id="s1", source_role="user",
+            source_session_id="s1",
+            source_role="user",
         ),
     ]
     assert validate_extracted_span("a yellow dress", claims)
@@ -666,10 +809,13 @@ def test_extractive_fallback_prompt_empty_when_no_claims():
 
 def test_e47becba_business_administration():
     """FACT_LOOKUP — degree fact."""
-    claims = [Claim(
-        text="I graduated with a degree in Business Administration from a state university in 2018.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="I graduated with a degree in Business Administration from a state university in 2018.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_fact_lookup(claims, "What degree did I graduate with?")
     assert "Business Administration" in out
     # Shortest faithful — must not return the entire sentence.
@@ -678,10 +824,13 @@ def test_e47becba_business_administration():
 
 def test_58ef2f1c_february_14th():
     """FACT_LOOKUP — date fact."""
-    claims = [Claim(
-        text="The animal shelter's fundraising dinner was on February 14th, 2024.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="The animal shelter's fundraising dinner was on February 14th, 2024.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_fact_lookup(
         claims,
         "When did I volunteer at the local animal shelter's fundraising dinner?",
@@ -691,44 +840,58 @@ def test_58ef2f1c_february_14th():
 
 def test_5d3d2817_marketing_specialist():
     """FACT_LOOKUP — previous occupation."""
-    claims = [Claim(
-        text="Before this role I was a Marketing specialist at a small startup downtown.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="Before this role I was a Marketing specialist at a small startup downtown.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_fact_lookup(claims, "What was my previous occupation?")
     assert "Marketing specialist" in out
 
 
 def test_66f24dbb_yellow_dress():
     """FACT_LOOKUP — birthday gift (object after 'bought')."""
-    claims = [Claim(
-        text="I bought a yellow dress for my sister's birthday last weekend.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="I bought a yellow dress for my sister's birthday last weekend.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_fact_lookup(
-        claims, "What did I buy for my sister's birthday gift?",
+        claims,
+        "What did I buy for my sister's birthday gift?",
     )
     assert "yellow dress" in out.lower()
 
 
 def test_af8d2e46_seven_shirts():
     """MULTI_SESSION_AGGREGATE — count with unit, single session here."""
-    claims = [Claim(
-        text="I packed 7 shirts for the trip last week.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="I packed 7 shirts for the trip last week.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_multi_session_aggregate(
-        claims, "How many shirts did I pack for the trip?",
+        claims,
+        "How many shirts did I pack for the trip?",
     )
     assert "7" in out
 
 
 def test_b86304ba_triple_what_i_paid():
     """FACT_LOOKUP — comparative value fact."""
-    claims = [Claim(
-        text="Today the painting is worth triple what I paid for it back in 2015.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="Today the painting is worth triple what I paid for it back in 2015.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     out = head_fact_lookup(claims, "What is the painting worth today?")
     assert "triple" in out.lower()
     assert "paid" in out.lower()
@@ -738,10 +901,13 @@ def test_b86304ba_triple_what_i_paid():
 
 
 def test_no_head_returns_idk_when_claims_exist():
-    claims = [Claim(
-        text="I went to the park yesterday afternoon.",
-        source_session_id="s1", source_role="user",
-    )]
+    claims = [
+        Claim(
+            text="I went to the park yesterday afternoon.",
+            source_session_id="s1",
+            source_role="user",
+        )
+    ]
     for head in (
         head_fact_lookup,
         head_assistant_memory,
@@ -798,25 +964,34 @@ def test_assistant_memory_picks_response_after_matching_user_turn():
     claims = [
         *_turn_claims(
             "Recommend a restaurant in Rome.",
-            session_id="s", role="user", base_turn_index=100,
+            session_id="s",
+            role="user",
+            base_turn_index=100,
         ),
         *_turn_claims(
             "Roscioli is great for Roman pasta.",
-            session_id="s", role="assistant", base_turn_index=200,
+            session_id="s",
+            role="assistant",
+            base_turn_index=200,
         ),
         *_turn_claims(
             "What about a hotel in Barcelona?",
-            session_id="s", role="user", base_turn_index=300,
+            session_id="s",
+            role="user",
+            base_turn_index=300,
         ),
         *_turn_claims(
             "Hotel Casa Camper has a quiet courtyard.",
-            session_id="s", role="assistant", base_turn_index=400,
+            session_id="s",
+            role="assistant",
+            base_turn_index=400,
         ),
     ]
     # Question matches the Rome user turn — answer must come from
     # the Roscioli assistant turn, not the Casa Camper one.
     out = head_assistant_memory(
-        claims, "What Italian restaurant did you recommend in Rome?",
+        claims,
+        "What Italian restaurant did you recommend in Rome?",
     )
     assert "Roscioli" in out
     assert "Casa Camper" not in out
@@ -831,20 +1006,28 @@ def test_assistant_memory_skips_unrelated_user_turns():
     claims = [
         *_turn_claims(
             "What book should I read next?",
-            session_id="s", role="user", base_turn_index=100,
+            session_id="s",
+            role="user",
+            base_turn_index=100,
         ),
         *_turn_claims(
             "Try The Three-Body Problem by Liu Cixin.",
-            session_id="s", role="assistant", base_turn_index=200,
+            session_id="s",
+            role="assistant",
+            base_turn_index=200,
         ),
         *_turn_claims(
             "Tell me about something unrelated entirely.",
-            session_id="s", role="user", base_turn_index=300,
+            session_id="s",
+            role="user",
+            base_turn_index=300,
         ),
         # Decoy: matches "book" topic but isn't the answer.
         *_turn_claims(
             "Books I'm reading: Dune, Foundation, and book trivia.",
-            session_id="s", role="assistant", base_turn_index=400,
+            session_id="s",
+            role="assistant",
+            base_turn_index=400,
         ),
     ]
     out = head_assistant_memory(claims, "What book did you recommend?")
@@ -859,17 +1042,28 @@ def test_ordinal_extraction_seventh_job():
     """
     user = _turn_claims(
         "Brainstorm ideas for work from home jobs for seniors.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     # Assistant turn: ten list items as separate claims.
     jobs = [
-        "Customer service representative", "Bookkeeper", "Online tutor",
-        "Virtual assistant", "Proofreader", "Translator",
-        "Transcriptionist", "Data entry clerk", "Social media manager",
+        "Customer service representative",
+        "Bookkeeper",
+        "Online tutor",
+        "Virtual assistant",
+        "Proofreader",
+        "Translator",
+        "Transcriptionist",
+        "Data entry clerk",
+        "Social media manager",
         "Pet sitter",
     ]
     assistant = _turn_claims(
-        *jobs, session_id="s", role="assistant", base_turn_index=200,
+        *jobs,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
         user + assistant,
@@ -883,13 +1077,17 @@ def test_ordinal_extraction_explicit_numbering_survives():
     explicit number prefix survived sentence splitting."""
     user = _turn_claims(
         "Give me three ingredient suggestions.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         "1. Sun-dried tomatoes",
         "2. Fresh mozzarella",
         "3. Extra-virgin olive oil",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
         user + assistant,
@@ -903,7 +1101,9 @@ def test_ordinal_extraction_last_picks_final_item():
     """``last`` resolves to the highest-indexed item / final claim."""
     user = _turn_claims(
         "Give me five tips.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         "Stretch every morning",
@@ -911,10 +1111,13 @@ def test_ordinal_extraction_last_picks_final_item():
         "Get sunlight",
         "Read daily",
         "Sleep eight hours",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
-        user + assistant, "What was the last tip you mentioned?",
+        user + assistant,
+        "What was the last tip you mentioned?",
     )
     assert "Sleep eight hours" in out
 
@@ -927,14 +1130,19 @@ def test_ordinal_falls_through_to_span_when_no_list_match():
     """
     user = _turn_claims(
         "Suggest a movie to watch tonight.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         "Watch The Princess Bride for a fun classic.",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
-        user + assistant, "What was the 27th movie you suggested?",
+        user + assistant,
+        "What was the 27th movie you suggested?",
     )
     # Ordinal couldn't resolve, so the span extractor took over —
     # the only assistant claim survives as the answer.
@@ -950,15 +1158,20 @@ def test_assistant_memory_returns_span_when_present_at_body_start():
     """
     user = _turn_claims(
         "What's a good name for my new puppy?",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         # Span extractor pulls "Andy" via the noun-phrase head.
         "Andy is a great choice for a puppy name.",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
-        user + assistant, "What name did you suggest for the puppy?",
+        user + assistant,
+        "What name did you suggest for the puppy?",
     )
     assert "Andy" in out
 
@@ -972,11 +1185,15 @@ def test_assistant_memory_rejects_nationality_adjective_alone():
     """
     user = _turn_claims(
         "Recommend a restaurant in Rome.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         "Roscioli is great for Roman pasta.",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
         user + assistant,
@@ -995,17 +1212,22 @@ def test_assistant_memory_returns_span_for_numeric_count():
     """
     user = _turn_claims(
         "Give me a quick omelette recipe.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     # Assistant's first sentence is intro; second sentence has the
     # actual numeric answer.
     assistant = _turn_claims(
         "Sure, here's a quick recipe for you to try.",
         "Use 2-3 eggs, beaten with a splash of milk.",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
-        user + assistant, "How many eggs did you suggest using?",
+        user + assistant,
+        "How many eggs did you suggest using?",
     )
     # Either the span ("2-3" / "2-3 eggs") OR the full second-sentence
     # body containing "2-3 eggs" is acceptable to the substring
@@ -1022,7 +1244,9 @@ def test_assistant_memory_soft_intro_demoted_in_favour_of_real_content():
     """
     user = _turn_claims(
         "Suggest a book for me.",
-        session_id="s", role="user", base_turn_index=100,
+        session_id="s",
+        role="user",
+        base_turn_index=100,
     )
     assistant = _turn_claims(
         # Soft intro — has tail words so is_generic_intro lets it
@@ -1030,10 +1254,13 @@ def test_assistant_memory_soft_intro_demoted_in_favour_of_real_content():
         "Sure, here are some great picks from my reading list.",
         # Real answer.
         "Vocal Prayer and Meditation by Karen Armstrong is a favorite.",
-        session_id="s", role="assistant", base_turn_index=200,
+        session_id="s",
+        role="assistant",
+        base_turn_index=200,
     )
     out = head_assistant_memory(
-        user + assistant, "What book did you recommend?",
+        user + assistant,
+        "What book did you recommend?",
     )
     assert "Vocal Prayer" in out or "Karen Armstrong" in out
 
@@ -1048,12 +1275,14 @@ def test_assistant_memory_falls_back_when_no_user_anchor_present():
     claims = [
         Claim(
             text="The recommended book was The Three-Body Problem.",
-            source_session_id="s", source_role="system",
+            source_session_id="s",
+            source_role="system",
             turn_index=100,
         ),
     ]
     out = head_assistant_memory(
-        claims, "What book did you recommend?",
+        claims,
+        "What book did you recommend?",
     )
     # Falls through to legacy ranker; non-empty answer.
     assert out != ""
@@ -1067,11 +1296,15 @@ def test_knowledge_update_prefers_current_marker():
     claims = [
         Claim(
             text="Previously I worked at a small startup downtown.",
-            source_session_id="s_old", source_role="user", turn_index=10,
+            source_session_id="s_old",
+            source_role="user",
+            turn_index=10,
         ),
         Claim(
             text="Currently I work at a large bank in the city.",
-            source_session_id="s_new", source_role="user", turn_index=50,
+            source_session_id="s_new",
+            source_role="user",
+            turn_index=50,
         ),
     ]
     out = head_knowledge_update(claims, "Where do I work?")
@@ -1086,15 +1319,18 @@ def test_preference_profile_summarises_likes_and_avoids():
     claims = [
         Claim(
             text="I love iced coffee in the morning.",
-            source_session_id="s1", source_role="user",
+            source_session_id="s1",
+            source_role="user",
         ),
         Claim(
             text="I really enjoy long walks on weekends.",
-            source_session_id="s2", source_role="user",
+            source_session_id="s2",
+            source_role="user",
         ),
         Claim(
             text="I hate mushrooms.",
-            source_session_id="s3", source_role="user",
+            source_session_id="s3",
+            source_role="user",
         ),
     ]
     out = head_preference_profile(claims, "What do I prefer?")
@@ -1110,20 +1346,24 @@ def test_multi_session_aggregate_sums_per_session():
     claims = [
         Claim(
             text="On the Tokyo trip I packed 7 shirts.",
-            source_session_id="s_tokyo", source_role="user",
+            source_session_id="s_tokyo",
+            source_role="user",
         ),
         Claim(
             text="For the Paris trip I packed 5 shirts.",
-            source_session_id="s_paris", source_role="user",
+            source_session_id="s_paris",
+            source_role="user",
         ),
         # Same trip mentioned again — should NOT double-count.
         Claim(
             text="I still remember packing 7 shirts for Tokyo.",
-            source_session_id="s_tokyo", source_role="user",
+            source_session_id="s_tokyo",
+            source_role="user",
         ),
     ]
     out = head_multi_session_aggregate(
-        claims, "How many shirts did I pack across all trips?",
+        claims,
+        "How many shirts did I pack across all trips?",
     )
     # 7 (Tokyo) + 5 (Paris) = 12 shirts
     assert "12" in out
@@ -1136,10 +1376,7 @@ def test_multi_session_aggregate_sums_per_session():
 # ─── b86304ba regression — the live failure ───────────────────────────────
 
 
-_B86_QUESTION = (
-    "How much is the painting of a sunset worth in terms of the "
-    "amount I paid for it?"
-)
+_B86_QUESTION = "How much is the painting of a sunset worth in terms of the amount I paid for it?"
 _B86_TOP_CLAIM = Claim(
     text=(
         "I was thinking about my flea market find, and I realized "
@@ -1167,9 +1404,7 @@ def test_b86304ba_routes_to_fact_lookup_not_aggregate():
     ``<num> <stopword>`` pattern.
     """
     mode = route_task(_B86_QUESTION)
-    assert mode == TaskMode.FACT_LOOKUP, (
-        f"expected FACT_LOOKUP for a worth-question, got {mode}"
-    )
+    assert mode == TaskMode.FACT_LOOKUP, f"expected FACT_LOOKUP for a worth-question, got {mode}"
 
 
 def test_b86304ba_fact_lookup_extracts_triple_what_i_paid():
@@ -1187,6 +1422,7 @@ def test_b86304ba_validator_rejects_110_for():
     """The validator must reject ``"110 for"`` as transcript junk
     even though both answer and claim share the token ``"for"``."""
     from evals.longmemeval.answer_post import validate_against_claims
+
     claims = [_B86_TOP_CLAIM.text, _B86_NOISE_CLAIM.text]
     ok, reason = validate_against_claims("110 for", claims)
     assert not ok, "validator must reject '110 for'"
@@ -1197,6 +1433,7 @@ def test_b86304ba_validator_rejects_110_for():
 def test_b86304ba_validator_accepts_correct_span():
     """Sanity: the validator passes the actual answer span."""
     from evals.longmemeval.answer_post import validate_against_claims
+
     ok, _ = validate_against_claims(
         "triple what I paid for it",
         [_B86_TOP_CLAIM.text],
@@ -1221,7 +1458,8 @@ def test_b86304ba_end_to_end_through_router_and_head():
     assert "110" not in span
 
     ok, reason = validate_against_claims(
-        span, [c.text for c in ranked[:5]],
+        span,
+        [c.text for c in ranked[:5]],
     )
     assert ok, f"validator rejected the correct span: {reason}"
 
@@ -1229,12 +1467,14 @@ def test_b86304ba_end_to_end_through_router_and_head():
 def test_validator_rejects_timestamp_junk_patterns():
     """Hard reject on '<num> <stopword>' patterns regardless of claim."""
     from evals.longmemeval.answer_post import validate_against_claims
+
     claim_text = "Anything goes here — for example a long sentence."
     for junk in ("110 for", "02 share", "04 principles", "7 every"):
         ok, reason = validate_against_claims(junk, [claim_text])
         assert not ok, f"junk passed: {junk!r}"
         assert reason in (
-            "answer_is_timestamp_junk", "unsupported_by_claim",
+            "answer_is_timestamp_junk",
+            "unsupported_by_claim",
         )
 
 
@@ -1281,14 +1521,14 @@ def test_b86304ba_terminal_no_postprocess_overwrite():
     # the real implementations work without any setup (ContextVar default
     # is None and end_row_telemetry returns None when no counter is set).
 
-    result = asyncio.run(adapter.answer_question(
-        "How much is the painting of a sunset worth in terms of "
-        "the amount I paid for it?",
-    ))
+    result = asyncio.run(
+        adapter.answer_question(
+            "How much is the painting of a sunset worth in terms of the amount I paid for it?",
+        )
+    )
     assert result == expected_span
     # And the trace state reflects the terminal claim-first decision.
-    assert adapter.last_decomposition_stats.get("validator_reason") == \
-        "claim_first_terminal"
+    assert adapter.last_decomposition_stats.get("validator_reason") == "claim_first_terminal"
     assert adapter.last_decomposition_stats.get("regeneration_attempted") is False
 
 
@@ -1315,9 +1555,7 @@ def test_b86304ba_correct_span_passes_validation_against_supporting_claim():
     over-tighten the validator while fixing the determinism bug."""
     from evals.longmemeval.answer_post import validate_against_claims
 
-    claim_text = (
-        "I realized that it's actually worth triple what I paid for it"
-    )
+    claim_text = "I realized that it's actually worth triple what I paid for it"
     for span in (
         "triple what I paid for it",
         "worth triple what I paid for it",
@@ -1341,12 +1579,13 @@ def test_58ef2f1c_prefers_specific_date_over_bare_month():
             "I might be free in May too, but the animal shelter's "
             "fundraising dinner was on February 14th, so I went then."
         ),
-        source_session_id="s1", source_role="user", confidence=0.8,
+        source_session_id="s1",
+        source_role="user",
+        confidence=0.8,
     )
     out = head_fact_lookup(
         [claim],
-        "When did I volunteer at the local animal shelter's "
-        "fundraising dinner?",
+        "When did I volunteer at the local animal shelter's fundraising dinner?",
     )
     assert "February" in out
     assert "14" in out
@@ -1360,11 +1599,15 @@ def test_58ef2f1c_specific_date_outranks_other_claim_with_bare_month():
     """
     distractor = Claim(
         text="In May I usually attend the spring potluck at work.",
-        source_session_id="s_potluck", source_role="user", confidence=0.6,
+        source_session_id="s_potluck",
+        source_role="user",
+        confidence=0.6,
     )
     correct = Claim(
         text="The animal shelter's fundraising dinner was on February 14th.",
-        source_session_id="s_shelter", source_role="user", confidence=0.85,
+        source_session_id="s_shelter",
+        source_role="user",
+        confidence=0.85,
     )
     out = head_fact_lookup(
         [distractor, correct],  # distractor ranked first by accident
@@ -1383,18 +1626,16 @@ def test_5d3d2817_user_request_claim_does_not_win():
     question must NOT outrank the actual occupation claim.
     """
     request = Claim(
-        text=(
-            "Can you help me organize my sales data from previous "
-            "markets?"
-        ),
-        source_session_id="s_request", source_role="user", confidence=0.7,
+        text=("Can you help me organize my sales data from previous markets?"),
+        source_session_id="s_request",
+        source_role="user",
+        confidence=0.7,
     )
     occupation = Claim(
-        text=(
-            "I used to be a Marketing specialist at a small startup "
-            "before I joined the agency."
-        ),
-        source_session_id="s_occupation", source_role="user", confidence=0.85,
+        text=("I used to be a Marketing specialist at a small startup before I joined the agency."),
+        source_session_id="s_occupation",
+        source_role="user",
+        confidence=0.85,
     )
     out = head_fact_lookup(
         [request, occupation],
@@ -1407,14 +1648,14 @@ def test_5d3d2817_user_request_claim_does_not_win():
 def test_5d3d2817_extracts_full_phrase_with_company_qualifier():
     """The 'at a small startup' qualifier survives the extractor."""
     claim = Claim(
-        text=(
-            "I used to be a Marketing specialist at a small startup "
-            "before I joined the agency."
-        ),
-        source_session_id="s1", source_role="user", confidence=0.85,
+        text=("I used to be a Marketing specialist at a small startup before I joined the agency."),
+        source_session_id="s1",
+        source_role="user",
+        confidence=0.85,
     )
     out = head_fact_lookup(
-        [claim], "What was my previous occupation?",
+        [claim],
+        "What was my previous occupation?",
     )
     assert "Marketing specialist" in out
     assert "startup" in out.lower()
@@ -1438,10 +1679,13 @@ def test_5d3d2817_long_responsibility_claim_does_not_leak_as_prose():
             "for managing marketing campaigns and product launches "
             "across the year and coordinating with the design team."
         ),
-        source_session_id="s_resp", source_role="user", confidence=0.8,
+        source_session_id="s_resp",
+        source_role="user",
+        confidence=0.8,
     )
     out = head_fact_lookup(
-        [responsibilities], "What was my previous occupation?",
+        [responsibilities],
+        "What was my previous occupation?",
     )
     # The prose body is too long to be a valid fact-lookup answer.
     # The head must return empty so the orchestrator's extractive
@@ -1458,7 +1702,9 @@ def test_5d3d2817_short_claim_body_still_falls_back_through():
     """
     short_claim = Claim(
         text="I went to the park yesterday afternoon.",
-        source_session_id="s1", source_role="user", confidence=0.6,
+        source_session_id="s1",
+        source_role="user",
+        confidence=0.6,
     )
     out = head_fact_lookup([short_claim], "Where did I go yesterday?")
     # The original whole-body fallback still kicks in for short claims.
@@ -1490,11 +1736,15 @@ def test_66f24dbb_heading_claim_is_skipped():
     """
     heading = Claim(
         text="**Sister's Birthday**",
-        source_session_id="s_heading", source_role="user", confidence=0.5,
+        source_session_id="s_heading",
+        source_role="user",
+        confidence=0.5,
     )
     purchase = Claim(
         text="I bought my sister a yellow dress for her birthday last weekend.",
-        source_session_id="s_purchase", source_role="user", confidence=0.85,
+        source_session_id="s_purchase",
+        source_role="user",
+        confidence=0.85,
     )
     out = head_fact_lookup(
         [heading, purchase],
@@ -1529,10 +1779,13 @@ def test_66f24dbb_extracts_dress_from_indirect_object_pattern():
     """``I bought my sister a yellow dress`` → ``a yellow dress``."""
     claim = Claim(
         text="I bought my sister a yellow dress for her birthday last weekend.",
-        source_session_id="s1", source_role="user", confidence=0.85,
+        source_session_id="s1",
+        source_role="user",
+        confidence=0.85,
     )
     out = head_fact_lookup(
-        [claim], "What did I buy for my sister's birthday gift?",
+        [claim],
+        "What did I buy for my sister's birthday gift?",
     )
     assert "yellow dress" in out.lower()
 
@@ -1542,42 +1795,47 @@ def test_66f24dbb_extracts_dress_from_indirect_object_pattern():
 
 def test_is_user_request_sentence_detects_common_shapes():
     from evals.longmemeval.scaffold_filter import is_user_request_sentence
+
     assert is_user_request_sentence("Can you help me with this?")
     assert is_user_request_sentence("Could you tell me more?")
     assert is_user_request_sentence("Please summarise the meeting.")
     assert is_user_request_sentence("Help me organize my notes.")
     assert is_user_request_sentence("Any advice on the new role?")
     # Not requests:
-    assert not is_user_request_sentence(
-        "I used to be a Marketing specialist at a small startup."
-    )
-    assert not is_user_request_sentence(
-        "The fundraising dinner was on February 14th."
-    )
+    assert not is_user_request_sentence("I used to be a Marketing specialist at a small startup.")
+    assert not is_user_request_sentence("The fundraising dinner was on February 14th.")
 
 
 def test_is_label_metadata_line_detects_common_shapes():
     from evals.longmemeval.scaffold_filter import is_label_metadata_line
+
     assert is_label_metadata_line("Occasion: Sister's birthday")
     assert is_label_metadata_line("Topic: Marketing")
     assert is_label_metadata_line("Date: February 14th")
-    assert not is_label_metadata_line(
-        "I bought my sister a yellow dress for her birthday."
-    )
+    assert not is_label_metadata_line("I bought my sister a yellow dress for her birthday.")
 
 
 def test_aggregate_router_still_fires_on_true_aggregation():
     """We tightened the router; verify true-aggregate questions still route correctly."""
-    assert route_task(
-        "How many shirts did I pack in total across all my trips?",
-    ) == TaskMode.MULTI_SESSION_AGGREGATE
-    assert route_task(
-        "List all the cities I visited.",
-    ) == TaskMode.MULTI_SESSION_AGGREGATE
+    assert (
+        route_task(
+            "How many shirts did I pack in total across all my trips?",
+        )
+        == TaskMode.MULTI_SESSION_AGGREGATE
+    )
+    assert (
+        route_task(
+            "List all the cities I visited.",
+        )
+        == TaskMode.MULTI_SESSION_AGGREGATE
+    )
     # Bare "how many" alone is FACT_LOOKUP — single session.
-    assert route_task(
-        "How many shirts did I pack for the trip?",
-    ) == TaskMode.FACT_LOOKUP
+    assert (
+        route_task(
+            "How many shirts did I pack for the trip?",
+        )
+        == TaskMode.FACT_LOOKUP
+    )
 
 
 def test_precision_claim_first_sample_file_contents():
@@ -1589,8 +1847,12 @@ def test_precision_claim_first_sample_file_contents():
         (repo / "samples" / "precision_claim_first_ids.json").read_text(),
     )
     expected = {
-        "e47becba", "58ef2f1c", "5d3d2817",
-        "66f24dbb", "af8d2e46", "b86304ba",
+        "e47becba",
+        "58ef2f1c",
+        "5d3d2817",
+        "66f24dbb",
+        "af8d2e46",
+        "b86304ba",
     }
     assert set(payload["question_ids"]) == expected
     assert payload["total"] == 6

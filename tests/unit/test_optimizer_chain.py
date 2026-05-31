@@ -16,6 +16,7 @@ Coverage
 * A failing strategy is swallowed; the chain keeps going
 * :meth:`OptimizerChain.cost_estimate` aggregates strategies' projections
 """
+
 from __future__ import annotations
 
 import uuid
@@ -85,9 +86,7 @@ class _RecordingOptimizer(BaseOptimizer):
         self.drop_one = drop_one
         self.raise_ = raise_
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         self.log.append(self.name)
         if self.raise_:
             raise RuntimeError(f"{self.name} boom")
@@ -126,8 +125,7 @@ def test_estimate_tokens_text_within_10pct_of_tiktoken() -> None:
 
     enc = tiktoken.get_encoding("cl100k_base")
     sample = (
-        "The quick brown fox jumps over the lazy dog — "
-        "Continuum keeps your context tight."
+        "The quick brown fox jumps over the lazy dog — Continuum keeps your context tight."
     ) * 4
     truth = len(enc.encode(sample))
     estimate = estimate_tokens_text(sample)
@@ -166,7 +164,10 @@ async def test_chain_applies_strategies_in_order() -> None:
     # Force a tight budget so the chain can't short-circuit.
     tight = TokenBudget(
         total=2,
-        stm_reserved=0, mtm_reserved=0, ltm_reserved=0, response_reserved=0,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
 
     chain = OptimizerChain([a, b, c])
@@ -191,7 +192,10 @@ async def test_chain_short_circuits_when_under_budget() -> None:
     # Generous budget — every step should be skipped.
     roomy = TokenBudget(
         total=10_000,
-        stm_reserved=0, mtm_reserved=0, ltm_reserved=0, response_reserved=0,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
 
     chain = OptimizerChain([a, b])
@@ -209,7 +213,10 @@ async def test_chain_short_circuits_midway() -> None:
     big_ctx = _bundle("alpha", "beta", "gamma", "delta")
     budget = TokenBudget(
         total=2,
-        stm_reserved=0, mtm_reserved=0, ltm_reserved=0, response_reserved=0,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
     # First strategy clears all but one item; subsequent strategies must skip.
     clear_all = _RecordingOptimizer("clear", log)
@@ -242,7 +249,10 @@ async def test_chain_swallows_strategy_errors() -> None:
     ctx = _bundle("alpha", "beta", "gamma")
     tight = TokenBudget(
         total=1,
-        stm_reserved=0, mtm_reserved=0, ltm_reserved=0, response_reserved=0,
+        stm_reserved=0,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
     chain = OptimizerChain([a, b])
     out = await chain.apply(ctx, tight)

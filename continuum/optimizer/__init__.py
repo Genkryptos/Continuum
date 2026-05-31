@@ -18,6 +18,7 @@ LLMLinguaCompress, ScoreAwareBudgetPrune) are imported lazily by
 ``default_optimizer_chain`` — this package imports cheaply even before
 they exist.
 """
+
 from __future__ import annotations
 
 from continuum.optimizer.base import (

@@ -127,24 +127,24 @@ class MemoryCandidateExtractor:
                 if span in seen_spans:
                     continue
                 seen_spans.add(span)
-                out.append(self._make(
-                    block=block,
-                    span=span,
-                    candidate_type=MemoryCandidateType.SENSITIVE_DATA,
-                    labels=[f"secret:{kind}"],
-                    sensitivity=Sensitivity.RESTRICTED,
-                    source_authority=SourceAuthority.INFERRED,
-                    volatility=Volatility.STABLE,
-                    importance=0.9,
-                    confidence=0.95,
-                ))
+                out.append(
+                    self._make(
+                        block=block,
+                        span=span,
+                        candidate_type=MemoryCandidateType.SENSITIVE_DATA,
+                        labels=[f"secret:{kind}"],
+                        sensitivity=Sensitivity.RESTRICTED,
+                        source_authority=SourceAuthority.INFERRED,
+                        volatility=Volatility.STABLE,
+                        importance=0.9,
+                        confidence=0.95,
+                    )
+                )
 
         # 2. Facts from the existing extractor (rich provenance + entities).
         if self._fact_extractor is not None:
             try:
-                facts = await self._fact_extractor.extract_facts(
-                    block, list(entities)
-                )
+                facts = await self._fact_extractor.extract_facts(block, list(entities))
             except Exception:
                 log.exception(
                     "fact extractor failed in candidate pipeline — "
@@ -156,84 +156,106 @@ class MemoryCandidateExtractor:
                 # the raw payload into LTM.
                 if any(s.lower() in fact.text.lower() for s in secret_spans):
                     continue
-                out.append(self._make(
-                    block=block,
-                    span=fact.text,
-                    candidate_type=MemoryCandidateType.FACT,
-                    labels=[fact.category] if fact.category else [],
-                    sensitivity=Sensitivity.PRIVATE,
-                    source_authority=SourceAuthority.INFERRED,
-                    importance=0.6,
-                    confidence=float(fact.confidence),
-                    entities=list(fact.entities_mentioned),
-                    metadata={"source_fact_id": str(fact.source_block_id)},
-                ))
+                out.append(
+                    self._make(
+                        block=block,
+                        span=fact.text,
+                        candidate_type=MemoryCandidateType.FACT,
+                        labels=[fact.category] if fact.category else [],
+                        sensitivity=Sensitivity.PRIVATE,
+                        source_authority=SourceAuthority.INFERRED,
+                        importance=0.6,
+                        confidence=float(fact.confidence),
+                        entities=list(fact.entities_mentioned),
+                        metadata={"source_fact_id": str(fact.source_block_id)},
+                    )
+                )
 
         # 3. Behavioural / typed candidates via regex.
         for span in _extract(block.text, _PREFERENCE_RE, secret_spans):
             if span in seen_spans:
                 continue
             seen_spans.add(span)
-            out.append(self._make(
-                block=block, span=span,
-                candidate_type=MemoryCandidateType.USER_PREFERENCE,
-                sensitivity=Sensitivity.PRIVATE,
-                source_authority=SourceAuthority.USER_EXPLICIT,
-                volatility=Volatility.STABLE,
-                importance=0.8, confidence=0.85,
-                entities=[e.text for e in entities],
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=span,
+                    candidate_type=MemoryCandidateType.USER_PREFERENCE,
+                    sensitivity=Sensitivity.PRIVATE,
+                    source_authority=SourceAuthority.USER_EXPLICIT,
+                    volatility=Volatility.STABLE,
+                    importance=0.8,
+                    confidence=0.85,
+                    entities=[e.text for e in entities],
+                )
+            )
 
         for span in _extract(block.text, _TASK_RE, secret_spans):
             if span in seen_spans:
                 continue
             seen_spans.add(span)
-            out.append(self._make(
-                block=block, span=span,
-                candidate_type=MemoryCandidateType.TASK,
-                urgency=Urgency.SOON,
-                volatility=Volatility.TEMPORARY,
-                source_authority=SourceAuthority.USER_EXPLICIT,
-                importance=0.7, confidence=0.8,
-                entities=[e.text for e in entities],
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=span,
+                    candidate_type=MemoryCandidateType.TASK,
+                    urgency=Urgency.SOON,
+                    volatility=Volatility.TEMPORARY,
+                    source_authority=SourceAuthority.USER_EXPLICIT,
+                    importance=0.7,
+                    confidence=0.8,
+                    entities=[e.text for e in entities],
+                )
+            )
 
         for span in _extract(block.text, _DECISION_RE, secret_spans):
             if span in seen_spans:
                 continue
             seen_spans.add(span)
-            out.append(self._make(
-                block=block, span=span,
-                candidate_type=MemoryCandidateType.DECISION,
-                source_authority=SourceAuthority.USER_EXPLICIT,
-                volatility=Volatility.HISTORICAL,
-                importance=0.85, confidence=0.85,
-                entities=[e.text for e in entities],
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=span,
+                    candidate_type=MemoryCandidateType.DECISION,
+                    source_authority=SourceAuthority.USER_EXPLICIT,
+                    volatility=Volatility.HISTORICAL,
+                    importance=0.85,
+                    confidence=0.85,
+                    entities=[e.text for e in entities],
+                )
+            )
 
         for span in _extract(block.text, _CORRECTION_RE, secret_spans):
             if span in seen_spans:
                 continue
             seen_spans.add(span)
-            out.append(self._make(
-                block=block, span=span,
-                candidate_type=MemoryCandidateType.CORRECTION,
-                source_authority=SourceAuthority.USER_EXPLICIT,
-                importance=0.75, confidence=0.8,
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=span,
+                    candidate_type=MemoryCandidateType.CORRECTION,
+                    source_authority=SourceAuthority.USER_EXPLICIT,
+                    importance=0.75,
+                    confidence=0.8,
+                )
+            )
 
         for span in _extract(block.text, _PROCEDURE_RE, secret_spans):
             if span in seen_spans:
                 continue
             seen_spans.add(span)
-            out.append(self._make(
-                block=block, span=span,
-                candidate_type=MemoryCandidateType.PROCEDURE,
-                source_authority=SourceAuthority.USER_EXPLICIT,
-                volatility=Volatility.STABLE,
-                importance=0.7, confidence=0.75,
-                entities=[e.text for e in entities],
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=span,
+                    candidate_type=MemoryCandidateType.PROCEDURE,
+                    source_authority=SourceAuthority.USER_EXPLICIT,
+                    volatility=Volatility.STABLE,
+                    importance=0.7,
+                    confidence=0.75,
+                    entities=[e.text for e in entities],
+                )
+            )
 
         # Meetings are a *whole-block* signal: tag the block once if any
         # meeting keyword appears, but only if no other typed candidate
@@ -247,13 +269,17 @@ class MemoryCandidateExtractor:
             )
             for c in out
         ):
-            out.append(self._make(
-                block=block, span=block.text[:200],
-                candidate_type=MemoryCandidateType.MEETING_EPISODE,
-                source_authority=SourceAuthority.CALENDAR,
-                importance=0.55, confidence=0.7,
-                entities=[e.text for e in entities],
-            ))
+            out.append(
+                self._make(
+                    block=block,
+                    span=block.text[:200],
+                    candidate_type=MemoryCandidateType.MEETING_EPISODE,
+                    source_authority=SourceAuthority.CALENDAR,
+                    importance=0.55,
+                    confidence=0.7,
+                    entities=[e.text for e in entities],
+                )
+            )
 
         return out
 
@@ -305,9 +331,7 @@ class MemoryCandidateExtractor:
         )
 
 
-def _extract(
-    text: str, pattern: re.Pattern[str], secret_spans: list[str]
-) -> list[str]:
+def _extract(text: str, pattern: re.Pattern[str], secret_spans: list[str]) -> list[str]:
     """Return de-duped match strings, skipping any that overlap a secret."""
     out: list[str] = []
     seen: set[str] = set()

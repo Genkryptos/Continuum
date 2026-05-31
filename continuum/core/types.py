@@ -515,6 +515,7 @@ class SummaryBlock:
 # LTM knowledge-graph edge
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Edge:
     """
@@ -533,19 +534,20 @@ class Edge:
     ``invalidated_at IS NULL`` are ever returned.
     """
 
-    source_id:  UUID
-    target_id:  UUID
-    id:         UUID = field(default_factory=uuid4)
-    predicate:  str | None = None
-    weight:     float | None = None
-    depth:      int = 1
+    source_id: UUID
+    target_id: UUID
+    id: UUID = field(default_factory=uuid4)
+    predicate: str | None = None
+    weight: float | None = None
+    depth: int = 1
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    target:     MemoryItem | None = None
+    target: MemoryItem | None = None
 
 
 # ---------------------------------------------------------------------------
 # Promotion scope
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PromotionScope:

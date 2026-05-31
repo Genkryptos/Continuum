@@ -33,6 +33,7 @@ Optimisation / robustness
 ``sentence-transformers``/``torch`` are imported lazily; ``model_factory``
 is injectable so unit tests need neither.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -133,13 +134,9 @@ class Reranker:
                 "sentence-transformers is required for Reranker.\n"
                 "Install it with:  pip install 'continuum-memory[embed]'"
             ) from exc
-        log.info(
-            "loading cross-encoder %s on %s", self.config.model_name, device
-        )
+        log.info("loading cross-encoder %s on %s", self.config.model_name, device)
         # sentence-transformers ships no stubs → CrossEncoder is Any.
-        return cast(
-            "CrossEncoderModel", CrossEncoder(self.config.model_name, device=device)
-        )
+        return cast("CrossEncoderModel", CrossEncoder(self.config.model_name, device=device))
 
     async def _get_model(self) -> CrossEncoderModel:
         if self._model is not None:
@@ -147,9 +144,7 @@ class Reranker:
         async with self._lock:
             if self._model is None:
                 self._device = self._resolve_device()
-                self._model = await asyncio.to_thread(
-                    self._build_model, self._device
-                )
+                self._model = await asyncio.to_thread(self._build_model, self._device)
         return self._model
 
     # ── RerankerProtocol ────────────────────────────────────────────────────
@@ -175,15 +170,12 @@ class Reranker:
         try:
             model = await self._get_model()
             raw = await asyncio.to_thread(
-                lambda: model.predict(
-                    pairs, batch_size=self.config.batch_size
-                )
+                lambda: model.predict(pairs, batch_size=self.config.batch_size)
             )
             logits = _to_floats(raw)
             if len(logits) != len(head):
                 raise ValueError(
-                    f"cross-encoder returned {len(logits)} scores for "
-                    f"{len(head)} pairs"
+                    f"cross-encoder returned {len(logits)} scores for {len(head)} pairs"
                 )
         except Exception:
             log.exception("rerank failed — returning recall order unchanged")

@@ -15,6 +15,7 @@ Acceptance scenarios from the spec:
 
 Plus per-shape unit coverage and the abstain-on-empty contract.
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.candidates import Candidate
@@ -26,9 +27,14 @@ from evals.longmemeval.evidence_packet import (
 
 
 def _verified(
-    *, value: str, subject: str, relation: str = "is",
-    answer_type: str = "value", session_id: str = "s1",
-    confidence: float = 0.85, claim: str = "",
+    *,
+    value: str,
+    subject: str,
+    relation: str = "is",
+    answer_type: str = "value",
+    session_id: str = "s1",
+    confidence: float = 0.85,
+    claim: str = "",
     source_span: str = "",
 ) -> Candidate:
     return Candidate(
@@ -58,16 +64,20 @@ def test_spotify_question_does_not_see_apple_finance_numbers():
     """
     apple_finance = [
         _verified(
-            value="$2 trillion", subject="Apple market cap",
-            relation="is_worth", answer_type="value",
+            value="$2 trillion",
+            subject="Apple market cap",
+            relation="is_worth",
+            answer_type="value",
             session_id="s_apple_news",
             claim="Apple market cap is around $2 trillion.",
             source_span="around $2 trillion",
             confidence=0.6,
         ),
         _verified(
-            value="$394B", subject="Apple revenue",
-            relation="is_worth", answer_type="value",
+            value="$394B",
+            subject="Apple revenue",
+            relation="is_worth",
+            answer_type="value",
             session_id="s_apple_news",
             claim="Apple FY24 revenue is $394B.",
             source_span="$394B",
@@ -76,11 +86,13 @@ def test_spotify_question_does_not_see_apple_finance_numbers():
     ]
     spotify_playlist = [
         _verified(
-            value="Summer Vibes", subject="Spotify playlist",
-            relation="named", answer_type="entity",
+            value="Summer Vibes",
+            subject="Spotify playlist",
+            relation="named",
+            answer_type="entity",
             session_id="s_spotify",
-            claim="My Spotify playlist is called \"Summer Vibes\".",
-            source_span="called \"Summer Vibes\"",
+            claim='My Spotify playlist is called "Summer Vibes".',
+            source_span='called "Summer Vibes"',
             confidence=0.95,
         ),
     ]
@@ -109,9 +121,7 @@ def test_spotify_question_does_not_see_apple_finance_numbers():
     # NOT be findable anywhere in the answerer's prompt.
     forbidden = ("Apple", "trillion", "$394B", "revenue", "market cap")
     for term in forbidden:
-        assert term not in prompt, (
-            f"Apple finance leakage: {term!r} appears in packet prompt"
-        )
+        assert term not in prompt, f"Apple finance leakage: {term!r} appears in packet prompt"
 
 
 # ─── ACCEPTANCE 2 — Token count drops ─────────────────────────────────────
@@ -133,7 +143,7 @@ def test_packet_prompt_token_count_drops_vs_raw_window():
         "met with the team, lunch was unremarkable, came home and "
         "watched a documentary on Apple's market cap, glanced at "
         "the Spotify charts, and then I asked my friend about music. "
-        "Anyway, my Spotify playlist is called \"Summer Vibes\".\n"
+        'Anyway, my Spotify playlist is called "Summer Vibes".\n'
         "## Nearby Context\n"
         "- (user): I love Apple stock — up 12% last quarter.\n"
         "- (assistant): That's a great gain.\n"
@@ -143,10 +153,12 @@ def test_packet_prompt_token_count_drops_vs_raw_window():
 
     verified = [
         _verified(
-            value="Summer Vibes", subject="Spotify playlist",
-            relation="named", session_id="s_spotify",
-            claim="My Spotify playlist is called \"Summer Vibes\".",
-            source_span="called \"Summer Vibes\"",
+            value="Summer Vibes",
+            subject="Spotify playlist",
+            relation="named",
+            session_id="s_spotify",
+            claim='My Spotify playlist is called "Summer Vibes".',
+            source_span='called "Summer Vibes"',
             confidence=0.95,
         ),
     ]
@@ -159,12 +171,11 @@ def test_packet_prompt_token_count_drops_vs_raw_window():
     raw_tokens = len(raw_window.split())
     packet_tokens = len(prompt.split())
     assert packet_tokens < raw_tokens, (
-        f"packet ({packet_tokens} tokens) is NOT smaller than "
-        f"raw window ({raw_tokens} tokens)"
+        f"packet ({packet_tokens} tokens) is NOT smaller than raw window ({raw_tokens} tokens)"
     )
     # And the compression should be meaningful — at least 3× smaller.
     assert raw_tokens / max(1, packet_tokens) >= 3.0, (
-        f"compression ratio {raw_tokens/packet_tokens:.2f}x below 3x"
+        f"compression ratio {raw_tokens / packet_tokens:.2f}x below 3x"
     )
 
 
@@ -241,7 +252,8 @@ def test_packet_claim_preserves_all_grounding_fields():
         confidence=0.92,
     )
     packet = build_evidence_packet(
-        "Where did I get my Bachelor's?", [c],
+        "Where did I get my Bachelor's?",
+        [c],
     )
     pc = packet.claims[0]
     assert pc.claim == "I got my Bachelor's at UCLA in 2018."
@@ -256,9 +268,14 @@ def test_packet_claim_preserves_all_grounding_fields():
 
 def test_packet_claim_to_dict_uses_object_not_underscored():
     pc = PacketClaim(
-        claim="x", source_span="x", source_session_id="s",
-        confidence=0.8, subject="subj", relation="is",
-        object_="UCLA", answer_type="location",
+        claim="x",
+        source_span="x",
+        source_session_id="s",
+        confidence=0.8,
+        subject="subj",
+        relation="is",
+        object_="UCLA",
+        answer_type="location",
     )
     d = pc.to_dict()
     assert d["object"] == "UCLA"
@@ -268,6 +285,7 @@ def test_packet_claim_to_dict_uses_object_not_underscored():
 def test_packet_serializes_cleanly_for_json():
     """Round-trippable to JSON via the to_dict() outputs."""
     import json
+
     packet = build_evidence_packet(
         "q?",
         [_verified(value="A", subject="x", confidence=0.9)],
@@ -297,10 +315,7 @@ def test_claims_sorted_by_confidence_descending():
 
 def test_max_claims_truncates_packet():
     """Cap at ``max_claims`` after sorting by confidence."""
-    verified = [
-        _verified(value=f"v{i}", subject="x", confidence=1.0 - i * 0.1)
-        for i in range(10)
-    ]
+    verified = [_verified(value=f"v{i}", subject="x", confidence=1.0 - i * 0.1) for i in range(10)]
     packet = build_evidence_packet("q?", verified, max_claims=3)
     assert packet.selected_evidence_count == 3
     assert [c.object_ for c in packet.claims] == ["v0", "v1", "v2"]
@@ -313,6 +328,7 @@ def test_evidence_packet_is_frozen():
     import dataclasses
 
     import pytest
+
     packet = build_evidence_packet("q?", [])
     with pytest.raises(dataclasses.FrozenInstanceError):
         packet.question = "different"  # type: ignore[misc]
@@ -322,6 +338,7 @@ def test_packet_claim_is_frozen():
     import dataclasses
 
     import pytest
+
     packet = build_evidence_packet(
         "q?",
         [_verified(value="A", subject="x", confidence=0.9)],
@@ -336,13 +353,16 @@ def test_packet_claim_is_frozen():
 def test_render_packet_includes_question_and_strict_instruction():
     packet = build_evidence_packet(
         "What is my Spotify playlist called?",
-        [_verified(
-            value="Summer Vibes", subject="playlist",
-            session_id="s1",
-            claim="My playlist is \"Summer Vibes\".",
-            source_span="\"Summer Vibes\"",
-            confidence=0.95,
-        )],
+        [
+            _verified(
+                value="Summer Vibes",
+                subject="playlist",
+                session_id="s1",
+                claim='My playlist is "Summer Vibes".',
+                source_span='"Summer Vibes"',
+                confidence=0.95,
+            )
+        ],
     )
     prompt = render_evidence_packet_prompt(packet)
     # Question echoed back

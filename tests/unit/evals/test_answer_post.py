@@ -9,6 +9,7 @@ Each test injects a fake span extractor + a fake SmallLLM so the regex
 tier decisions and the trigger-fires-or-not logic can be asserted
 without touching the real `_extract_fact_span` regexes or any network.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -37,7 +38,10 @@ class _FakeSmallLLM:
         self.calls: list[tuple[str, str, str | None]] = []
 
     def span_select(
-        self, question: str, passage: str, cache_key: str | None = None,
+        self,
+        question: str,
+        passage: str,
+        cache_key: str | None = None,
     ) -> str:
         self.calls.append((question, passage, cache_key))
         return self.reply
@@ -45,8 +49,10 @@ class _FakeSmallLLM:
 
 def _fixed_extractor(span: str) -> Callable[[str, str], str]:
     """Build a span_extractor that always returns ``span`` regardless of inputs."""
+
     def _extract(_question: str, _claim: str) -> str:
         return span
+
     return _extract
 
 
@@ -129,14 +135,24 @@ def test_fallback_fires_on_long_prose_nationality_span() -> None:
 
 
 def test_should_trigger_recognises_nationality_token() -> None:
-    assert _should_trigger_span_fallback(
-        "Italian", "Which cuisine?", "long enough claim here, with detail.",
-    ) == "nationality_adjective"
+    assert (
+        _should_trigger_span_fallback(
+            "Italian",
+            "Which cuisine?",
+            "long enough claim here, with detail.",
+        )
+        == "nationality_adjective"
+    )
     # Multi-word phrases containing the adjective are NOT triggers —
     # only single-token outputs.
-    assert _should_trigger_span_fallback(
-        "Italian food", "Which cuisine?", "long enough claim here, with detail.",
-    ) != "nationality_adjective"
+    assert (
+        _should_trigger_span_fallback(
+            "Italian food",
+            "Which cuisine?",
+            "long enough claim here, with detail.",
+        )
+        != "nationality_adjective"
+    )
 
 
 # ── trigger (b) — count-shape miss ────────────────────────────────────────
@@ -197,11 +213,14 @@ def test_fallback_fires_on_long_claim_with_commas_around_short_span() -> None:
 
 def test_should_trigger_long_claim_requires_comma_or_and() -> None:
     """A claim 2× the answer but without ',' / 'and' should NOT trigger."""
-    assert _should_trigger_span_fallback(
-        "Roscioli",
-        "Where to eat?",
-        "Roscioli is widely considered the single best option there.",
-    ) is None  # no comma, no 'and'
+    assert (
+        _should_trigger_span_fallback(
+            "Roscioli",
+            "Where to eat?",
+            "Roscioli is widely considered the single best option there.",
+        )
+        is None
+    )  # no comma, no 'and'
 
 
 # ── fallback honors regex output when LLM reply is empty ───────────────────
@@ -257,12 +276,16 @@ def test_cache_key_is_stable_across_calls_same_inputs() -> None:
     question = "Which restaurant was suggested?"
     llm = _FakeSmallLLM(reply="Roscioli")
     _pick_answer_from_assistant_claim(
-        claim, question,
-        span_extractor=_fixed_extractor("Italian"), small_llm=llm,
+        claim,
+        question,
+        span_extractor=_fixed_extractor("Italian"),
+        small_llm=llm,
     )
     _pick_answer_from_assistant_claim(
-        claim, question,
-        span_extractor=_fixed_extractor("Italian"), small_llm=llm,
+        claim,
+        question,
+        span_extractor=_fixed_extractor("Italian"),
+        small_llm=llm,
     )
     assert len(llm.calls) == 2
     # Same cache key both times — the real SmallLLM cache would have
@@ -276,12 +299,16 @@ def test_cache_key_differs_across_questions() -> None:
     claim = "When you're in Rome try a small trattoria off the tourist routes."
     llm = _FakeSmallLLM(reply="x")
     _pick_answer_from_assistant_claim(
-        claim, "Which restaurant?",
-        span_extractor=_fixed_extractor("Italian"), small_llm=llm,
+        claim,
+        "Which restaurant?",
+        span_extractor=_fixed_extractor("Italian"),
+        small_llm=llm,
     )
     _pick_answer_from_assistant_claim(
-        claim, "What cuisine?",
-        span_extractor=_fixed_extractor("Italian"), small_llm=llm,
+        claim,
+        "What cuisine?",
+        span_extractor=_fixed_extractor("Italian"),
+        small_llm=llm,
     )
     # Both calls only fire if a trigger matches — Italian + long enough
     # claim with comma should be tier-3 nationality. If the claim is
@@ -299,6 +326,7 @@ def test_default_llm_used_when_no_explicit_injection() -> None:
         get_default_span_fallback_llm,
         set_default_span_fallback_llm,
     )
+
     llm = _FakeSmallLLM(reply="DefaultLLMReply")
     try:
         set_default_span_fallback_llm(llm)  # type: ignore[arg-type]

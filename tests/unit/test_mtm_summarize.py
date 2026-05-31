@@ -16,6 +16,7 @@ Covers
 * LLM failure falls back to extractive
 * Tier breakdown / messages / debug_info rebuilt
 """
+
 from __future__ import annotations
 
 import uuid
@@ -44,8 +45,11 @@ _BASE = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8_000, stm_reserved=500, mtm_reserved=2_000,
-        ltm_reserved=2_000, response_reserved=500,
+        total=8_000,
+        stm_reserved=500,
+        mtm_reserved=2_000,
+        ltm_reserved=2_000,
+        response_reserved=500,
     )
 
 
@@ -186,14 +190,12 @@ async def test_keeps_recent_verbatim() -> None:
 async def test_older_blocks_collapsed_into_single_summary() -> None:
     items = [_mtm(t, offset_minutes=i) for i, t in enumerate(_BLOCK_TEXTS)]
     ctx = _bundle(items)
-    out = await MtmSummarize(keep_recent=2, max_summary_tokens=80).apply(
-        ctx, _budget()
-    )
+    out = await MtmSummarize(keep_recent=2, max_summary_tokens=80).apply(ctx, _budget())
 
     summaries = [
-        it for it in out.items
-        if it.tier == MemoryTier.MTM
-        and it.metadata.get("kind") == "mtm_summary"
+        it
+        for it in out.items
+        if it.tier == MemoryTier.MTM and it.metadata.get("kind") == "mtm_summary"
     ]
     assert len(summaries) == 1
     assert summaries[0].metadata["compacted_count"] == 3
@@ -206,15 +208,12 @@ async def test_token_reduction_at_least_30_percent() -> None:
     ctx = _bundle(items)
     before = sum(estimate_tokens_text(it.content) for it in ctx.items)
 
-    out = await MtmSummarize(keep_recent=1, max_summary_tokens=80).apply(
-        ctx, _budget()
-    )
+    out = await MtmSummarize(keep_recent=1, max_summary_tokens=80).apply(ctx, _budget())
     after = sum(estimate_tokens_text(it.content) for it in out.items)
 
     reduction = (before - after) / before
     assert reduction >= 0.30, (
-        f"only {reduction:.0%} reduction; expected ≥ 30 % on the "
-        "5-block fixture"
+        f"only {reduction:.0%} reduction; expected ≥ 30 % on the 5-block fixture"
     )
 
 
@@ -242,7 +241,8 @@ async def test_prompt_order_preserved() -> None:
 async def test_debug_info_records_stats() -> None:
     items = [_mtm(t, offset_minutes=i) for i, t in enumerate(_BLOCK_TEXTS)]
     out = await MtmSummarize(
-        keep_recent=2, max_summary_tokens=40,
+        keep_recent=2,
+        max_summary_tokens=40,
     ).apply(_bundle(items), _budget())
 
     dbg = out.debug_info["mtm_summarize"]
@@ -338,7 +338,8 @@ async def test_llm_path_uses_system_prompt_and_model() -> None:
     assert "200" in call["system_prompt"]  # max_tokens injected
     # The produced summary lands in the bundle.
     summary = next(
-        it for it in out.items
+        it
+        for it in out.items
         if it.tier == MemoryTier.MTM and it.metadata.get("kind") == "mtm_summary"
     )
     assert summary.content == "dense LLM summary"
@@ -356,7 +357,8 @@ async def test_llm_failure_falls_back_to_extractive() -> None:
     ).apply(_bundle(items), _budget())
 
     summary = next(
-        it for it in out.items
+        it
+        for it in out.items
         if it.tier == MemoryTier.MTM and it.metadata.get("kind") == "mtm_summary"
     )
     assert summary.content  # extractive fallback produced something
@@ -384,7 +386,8 @@ async def test_llm_path_handles_simple_signature() -> None:
 
     assert plain.calls == 1
     summary = next(
-        it for it in out.items
+        it
+        for it in out.items
         if it.tier == MemoryTier.MTM and it.metadata.get("kind") == "mtm_summary"
     )
     assert summary.content == "plain summariser output"
@@ -404,6 +407,7 @@ def test_cost_estimate_under_limit_returns_current() -> None:
 def test_cost_estimate_llm_reports_latency() -> None:
     items = [_mtm(t, offset_minutes=i) for i, t in enumerate(_BLOCK_TEXTS)]
     cost = MtmSummarize(
-        keep_recent=2, method="llm",
+        keep_recent=2,
+        method="llm",
     ).cost_estimate(_bundle(items))
     assert cost.latency_ms > 0

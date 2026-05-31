@@ -68,7 +68,119 @@ MTM_SYSTEM_PROMPT = (
 # Tiny English stopword set — enough to suppress noise in TF scoring
 # without dragging in NLTK. Don't expand without a benchmark.
 _STOPWORDS: frozenset[str] = frozenset(
-    ["a", "an", "the", "and", "or", "but", "if", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "them", "this", "that", "these", "those", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "me", "him", "us", "as"]
+    [
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "if",
+        "while",
+        "of",
+        "at",
+        "by",
+        "for",
+        "with",
+        "about",
+        "against",
+        "between",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "to",
+        "from",
+        "up",
+        "down",
+        "in",
+        "out",
+        "on",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "any",
+        "both",
+        "each",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "s",
+        "t",
+        "can",
+        "will",
+        "just",
+        "don",
+        "should",
+        "now",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "i",
+        "you",
+        "he",
+        "she",
+        "it",
+        "we",
+        "they",
+        "them",
+        "this",
+        "that",
+        "these",
+        "those",
+        "my",
+        "your",
+        "his",
+        "her",
+        "its",
+        "our",
+        "their",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "me",
+        "him",
+        "us",
+        "as",
+    ]
 )
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"\[])")
@@ -157,16 +269,10 @@ class MtmSummarize(BaseOptimizer):
         config: MtmSummarizeConfig | None = None,
     ) -> None:
         base = config or MtmSummarizeConfig()
-        self.keep_recent: int = (
-            keep_recent if keep_recent is not None else base.keep_recent
-        )
-        self.method: Literal["extractive", "llm"] = (
-            method if method is not None else base.method
-        )
+        self.keep_recent: int = keep_recent if keep_recent is not None else base.keep_recent
+        self.method: Literal["extractive", "llm"] = method if method is not None else base.method
         self.max_summary_tokens: int = (
-            max_summary_tokens
-            if max_summary_tokens is not None
-            else base.max_summary_tokens
+            max_summary_tokens if max_summary_tokens is not None else base.max_summary_tokens
         )
         self.position_bias: float = (
             position_bias if position_bias is not None else base.position_bias
@@ -176,9 +282,7 @@ class MtmSummarize(BaseOptimizer):
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         mtm_items = [it for it in ctx.items if it.tier == MemoryTier.MTM]
         if len(mtm_items) <= self.keep_recent:
             return ctx
@@ -194,9 +298,7 @@ class MtmSummarize(BaseOptimizer):
         try:
             summary_text = await self._summarise(joined)
         except Exception:
-            log.exception(
-                "MtmSummarize summariser failed — falling back to extractive"
-            )
+            log.exception("MtmSummarize summariser failed — falling back to extractive")
             summary_text = extractive_summary(
                 joined,
                 max_tokens=self.max_summary_tokens,
@@ -213,9 +315,7 @@ class MtmSummarize(BaseOptimizer):
             items=new_items,
             messages=new_messages,
             tier_breakdown=new_breakdown,
-            tokens_used=sum(
-                estimate_tokens_text(i.content) for i in new_items
-            ),
+            tokens_used=sum(estimate_tokens_text(i.content) for i in new_items),
             debug_info={
                 **ctx.debug_info,
                 "mtm_summarize": {
@@ -262,9 +362,7 @@ class MtmSummarize(BaseOptimizer):
     async def _llm_summary(self, text: str) -> str:
         """Delegate; tolerate summarizers with simpler signatures."""
         assert self.summarizer is not None  # checked by caller
-        system_prompt = MTM_SYSTEM_PROMPT.format(
-            max_tokens=self.max_summary_tokens
-        )
+        system_prompt = MTM_SYSTEM_PROMPT.format(max_tokens=self.max_summary_tokens)
         # Try the rich signature first, then degrade gracefully so a
         # plain ``async summarize(text) -> str`` collaborator still works.
         try:
@@ -279,9 +377,7 @@ class MtmSummarize(BaseOptimizer):
         except TypeError:
             try:
                 return str(
-                    await self.summarizer.summarize(
-                        text, max_tokens=self.max_summary_tokens
-                    )
+                    await self.summarizer.summarize(text, max_tokens=self.max_summary_tokens)
                 )
             except TypeError:
                 return str(await self.summarizer.summarize(text))
@@ -315,11 +411,7 @@ def extractive_summary(
 
     # Term frequencies (stopword-filtered, lowercased).
     tokens_per_sentence: list[list[str]] = [
-        [
-            w.lower()
-            for w in _WORD_RE.findall(s)
-            if w.lower() not in _STOPWORDS and len(w) > 2
-        ]
+        [w.lower() for w in _WORD_RE.findall(s) if w.lower() not in _STOPWORDS and len(w) > 2]
         for s in sentences
     ]
     flat = [w for sent in tokens_per_sentence for w in sent]
@@ -333,9 +425,7 @@ def extractive_summary(
 
     n_sent = len(sentences)
     scored: list[tuple[float, int, str]] = []
-    for idx, (sent, toks) in enumerate(
-        zip(sentences, tokens_per_sentence, strict=False)
-    ):
+    for idx, (sent, toks) in enumerate(zip(sentences, tokens_per_sentence, strict=False)):
         if not toks:
             score = 0.0
         else:
@@ -381,9 +471,7 @@ def _created_at_key(item: MemoryItem) -> Any:
     return (ts is None, ts)
 
 
-def _build_summary_item(
-    text: str, older: list[MemoryItem], method: str
-) -> MemoryItem:
+def _build_summary_item(text: str, older: list[MemoryItem], method: str) -> MemoryItem:
     return MemoryItem(
         id=str(uuid4()),
         content=text,
@@ -435,9 +523,7 @@ def _rebuild(
     return out
 
 
-def _rebuild_messages(
-    ctx: ContextBundle, items: list[MemoryItem]
-) -> list[dict[str, str]]:
+def _rebuild_messages(ctx: ContextBundle, items: list[MemoryItem]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     for it in items:
         if it.tier == MemoryTier.STM:
@@ -454,9 +540,7 @@ def _rebuild_messages(
 def _tier_breakdown(items: list[MemoryItem]) -> dict[str, int]:
     counts: dict[str, int] = {"stm": 0, "mtm": 0, "ltm": 0}
     for it in items:
-        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(
-            it.content
-        )
+        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(it.content)
     return counts
 
 

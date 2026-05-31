@@ -9,6 +9,7 @@ values (50–200 ms) so the suite finishes in well under a second.
 Time-sensitive assertions use a small slack buffer to stay green under
 CI scheduling jitter.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -68,8 +69,10 @@ def test_check_interval_floored_at_half_second() -> None:
 
 def test_explicit_check_interval_overrides_default() -> None:
     f = IdleStmFlush(
-        stm=_FakeSTM(), mtm=_FakeMTM(),
-        idle_seconds=4, check_interval_seconds=0.05,
+        stm=_FakeSTM(),
+        mtm=_FakeMTM(),
+        idle_seconds=4,
+        check_interval_seconds=0.05,
     )
     assert f.check_interval_seconds == 0.05
 
@@ -83,8 +86,10 @@ def test_explicit_check_interval_overrides_default() -> None:
 async def test_flushes_after_idle_gap() -> None:
     stm, mtm = _FakeSTM(), _FakeMTM()
     flush = IdleStmFlush(
-        stm=stm, mtm=mtm,
-        idle_seconds=0.1, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=mtm,
+        idle_seconds=0.1,
+        check_interval_seconds=0.04,
     )
     await flush.start("session-a")
     # Don't touch — let the idle watcher fire at least once.
@@ -100,8 +105,10 @@ async def test_touch_resets_idle_timer() -> None:
     """Continuous activity (touch every < idle gap) should suppress flushes."""
     stm, mtm = _FakeSTM(), _FakeMTM()
     flush = IdleStmFlush(
-        stm=stm, mtm=mtm,
-        idle_seconds=0.2, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=mtm,
+        idle_seconds=0.2,
+        check_interval_seconds=0.04,
     )
     await flush.start("hot-session")
     # Hammer touch() at 25 ms intervals for 250 ms — well below 200 ms idle
@@ -126,8 +133,10 @@ async def test_on_flush_callback_fires_after_non_zero_flush() -> None:
         calls.append(1)
 
     flush = IdleStmFlush(
-        stm=stm, mtm=mtm,
-        idle_seconds=0.1, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=mtm,
+        idle_seconds=0.1,
+        check_interval_seconds=0.04,
         on_flush=on_flush,
     )
     await flush.start("with-cb")
@@ -145,8 +154,10 @@ async def test_on_flush_skipped_when_nothing_to_flush() -> None:
         calls.append(1)
 
     flush = IdleStmFlush(
-        stm=stm, mtm=_FakeMTM(),
-        idle_seconds=0.1, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=_FakeMTM(),
+        idle_seconds=0.1,
+        check_interval_seconds=0.04,
         on_flush=on_flush,
     )
     await flush.start("empty")
@@ -166,8 +177,10 @@ async def test_stm_failure_is_swallowed() -> None:
     """A broken STM mustn't crash the watcher loop."""
     stm = _FakeSTM(raise_=True)
     flush = IdleStmFlush(
-        stm=stm, mtm=_FakeMTM(),
-        idle_seconds=0.1, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=_FakeMTM(),
+        idle_seconds=0.1,
+        check_interval_seconds=0.04,
     )
     await flush.start("bad-stm")
     await asyncio.sleep(0.25)
@@ -184,8 +197,10 @@ async def test_on_flush_callback_failure_swallowed() -> None:
         raise RuntimeError("cb broken")
 
     flush = IdleStmFlush(
-        stm=stm, mtm=_FakeMTM(),
-        idle_seconds=0.1, check_interval_seconds=0.04,
+        stm=stm,
+        mtm=_FakeMTM(),
+        idle_seconds=0.1,
+        check_interval_seconds=0.04,
         on_flush=boom,
     )
     await flush.start("cb-fails")

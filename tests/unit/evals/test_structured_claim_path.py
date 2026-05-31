@@ -24,6 +24,7 @@ Acceptance scenarios (from the spec):
 6. **Rejection** — headings / user-questions / transcript-timestamps
    never become claims and never become final answers.
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.query_intent import parse_intent
@@ -52,7 +53,9 @@ def test_bought_gift_for_extracts_recipient_and_occasion():
     """Indirect object recipient + trailing occasion."""
     claims = extract_structured_claims(
         "I bought my sister a yellow dress for her birthday last weekend.",
-        source_session_id="s_gift", source_role="user", source_turn_index=0,
+        source_session_id="s_gift",
+        source_role="user",
+        source_turn_index=0,
     )
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift, "no bought_gift_for claim extracted"
@@ -100,16 +103,17 @@ def test_finalize_yellow_dress_birthday_gift():
 
 def test_previous_occupation_extracts_title_with_company():
     claims = extract_structured_claims(
-        "I used to be a Marketing specialist at a small startup before "
-        "I joined the agency.",
+        "I used to be a Marketing specialist at a small startup before I joined the agency.",
         **_metadata(),
     )
     occ = [c for c in claims if c.relation == "previous_occupation"]
     assert occ
     assert "marketing specialist" in occ[0].object_.lower()
     # Company qualifier is captured separately when present.
-    assert "startup" in occ[0].object_.lower() or \
-           "startup" in occ[0].qualifiers.get("company", "").lower()
+    assert (
+        "startup" in occ[0].object_.lower()
+        or "startup" in occ[0].qualifiers.get("company", "").lower()
+    )
 
 
 def test_intent_parses_previous_occupation():
@@ -197,8 +201,7 @@ def test_value_vs_paid_extracts_comparative_phrase():
 
 def test_intent_parses_value_question():
     intent = parse_intent(
-        "How much is the painting of a sunset worth in terms of "
-        "the amount I paid for it?"
+        "How much is the painting of a sunset worth in terms of the amount I paid for it?"
     )
     assert intent.relation == "value_compared_to_paid"
     assert intent.answer_shape == "comparative_phrase"
@@ -206,8 +209,7 @@ def test_intent_parses_value_question():
 
 def test_finalize_value_vs_paid():
     intent = parse_intent(
-        "How much is the painting of a sunset worth in terms of "
-        "the amount I paid for it?"
+        "How much is the painting of a sunset worth in terms of the amount I paid for it?"
     )
     claims = extract_structured_claims(
         "I was thinking about my flea market find, and I realized "
@@ -237,18 +239,14 @@ def test_count_packed_extracts_count_and_destination():
 
 
 def test_intent_parses_count_packed_question():
-    intent = parse_intent(
-        "How many shirts did I pack for the trip to Costa Rica?"
-    )
+    intent = parse_intent("How many shirts did I pack for the trip to Costa Rica?")
     assert intent.relation == "count_packed"
     assert intent.answer_shape == "count_with_unit"
     assert intent.constraints.get("item") == "shirt"
 
 
 def test_finalize_count_packed():
-    intent = parse_intent(
-        "How many shirts did I pack for the trip to Costa Rica?"
-    )
+    intent = parse_intent("How many shirts did I pack for the trip to Costa Rica?")
     claims = extract_structured_claims(
         "I packed 7 shirts for the trip to Costa Rica last week.",
         **_metadata(),
@@ -266,7 +264,8 @@ def test_finalize_count_packed():
 def test_headings_do_not_become_claims():
     """``**Sister's Birthday**`` is a scaffold line — no claim emitted."""
     claims = extract_structured_claims(
-        "**Sister's Birthday**", **_metadata(),
+        "**Sister's Birthday**",
+        **_metadata(),
     )
     assert claims == []
 
@@ -274,7 +273,8 @@ def test_headings_do_not_become_claims():
 def test_label_lines_do_not_become_claims():
     """``Occasion: Sister's birthday`` is label metadata."""
     claims = extract_structured_claims(
-        "Occasion: Sister's birthday", **_metadata(),
+        "Occasion: Sister's birthday",
+        **_metadata(),
     )
     assert claims == []
 
@@ -318,12 +318,20 @@ def test_finalize_returns_none_when_intent_unmatched():
     assert not intent.matched
     result = finalize_fact_answer(
         intent,
-        [StructuredClaim(
-            text="anything", subject="user", relation="previous_occupation",
-            object_="something", qualifiers={},
-            source_session_id="s", source_role="user",
-            source_turn_index=0, source_span="anything", confidence=0.9,
-        )],
+        [
+            StructuredClaim(
+                text="anything",
+                subject="user",
+                relation="previous_occupation",
+                object_="something",
+                qualifiers={},
+                source_session_id="s",
+                source_role="user",
+                source_turn_index=0,
+                source_span="anything",
+                confidence=0.9,
+            )
+        ],
     )
     assert result is None
 
@@ -339,20 +347,31 @@ def test_relation_match_outweighs_topic_overlap():
     intent = parse_intent("What was my previous occupation?")
     relation_match = StructuredClaim(
         text="I used to be a Marketing specialist at a small startup.",
-        subject="user", relation="previous_occupation",
-        object_="Marketing specialist at a small startup", qualifiers={},
-        source_session_id="s_match", source_role="user", source_turn_index=0,
-        source_span="Marketing specialist at a small startup", confidence=0.5,
+        subject="user",
+        relation="previous_occupation",
+        object_="Marketing specialist at a small startup",
+        qualifiers={},
+        source_session_id="s_match",
+        source_role="user",
+        source_turn_index=0,
+        source_span="Marketing specialist at a small startup",
+        confidence=0.5,
     )
     relation_mismatch = StructuredClaim(
         text="My previous house was on Maple Street.",
-        subject="user", relation="home_location",
-        object_="Maple Street", qualifiers={},
-        source_session_id="s_mismatch", source_role="user", source_turn_index=0,
-        source_span="Maple Street", confidence=0.95,  # higher confidence!
+        subject="user",
+        relation="home_location",
+        object_="Maple Street",
+        qualifiers={},
+        source_session_id="s_mismatch",
+        source_role="user",
+        source_turn_index=0,
+        source_span="Maple Street",
+        confidence=0.95,  # higher confidence!
     )
     ranked = rank_structured_claims(
-        intent, [relation_mismatch, relation_match],
+        intent,
+        [relation_mismatch, relation_match],
     )
     # The relation_mismatch claim must be dropped (score ≤ 0); only
     # relation_match survives.
@@ -368,19 +387,27 @@ def test_constraint_match_breaks_relation_ties():
     intent = parse_intent("What did I buy for my sister's birthday gift?")
     sister_gift = StructuredClaim(
         text="I bought my sister a yellow dress for her birthday.",
-        subject="user", relation="bought_gift_for",
+        subject="user",
+        relation="bought_gift_for",
         object_="a yellow dress",
         qualifiers={"recipient": "sister", "occasion": "birthday"},
-        source_session_id="s1", source_role="user", source_turn_index=0,
-        source_span="a yellow dress", confidence=0.7,
+        source_session_id="s1",
+        source_role="user",
+        source_turn_index=0,
+        source_span="a yellow dress",
+        confidence=0.7,
     )
     brother_gift = StructuredClaim(
         text="I bought my brother a watch for his graduation.",
-        subject="user", relation="bought_gift_for",
+        subject="user",
+        relation="bought_gift_for",
         object_="a watch",
         qualifiers={"recipient": "brother", "occasion": "graduation"},
-        source_session_id="s2", source_role="user", source_turn_index=0,
-        source_span="a watch", confidence=0.9,
+        source_session_id="s2",
+        source_role="user",
+        source_turn_index=0,
+        source_span="a watch",
+        confidence=0.9,
     )
     ranked = rank_structured_claims(intent, [brother_gift, sister_gift])
     assert ranked[0].qualifiers.get("recipient") == "sister"
@@ -391,17 +418,27 @@ def test_user_role_boost_breaks_score_ties():
     intent = parse_intent("What was my previous occupation?")
     user_claim = StructuredClaim(
         text="I used to be a designer.",
-        subject="user", relation="previous_occupation",
-        object_="designer", qualifiers={},
-        source_session_id="s_user", source_role="user", source_turn_index=0,
-        source_span="designer", confidence=0.7,
+        subject="user",
+        relation="previous_occupation",
+        object_="designer",
+        qualifiers={},
+        source_session_id="s_user",
+        source_role="user",
+        source_turn_index=0,
+        source_span="designer",
+        confidence=0.7,
     )
     assistant_claim = StructuredClaim(
         text="You were a designer, right?",
-        subject="user", relation="previous_occupation",
-        object_="designer", qualifiers={},
-        source_session_id="s_asst", source_role="assistant", source_turn_index=0,
-        source_span="designer", confidence=0.7,
+        subject="user",
+        relation="previous_occupation",
+        object_="designer",
+        qualifiers={},
+        source_session_id="s_asst",
+        source_role="assistant",
+        source_turn_index=0,
+        source_span="designer",
+        confidence=0.7,
     )
     ranked = rank_structured_claims(intent, [assistant_claim, user_claim])
     assert ranked[0].source_role == "user"
@@ -413,10 +450,16 @@ def test_user_role_boost_breaks_score_ties():
 def test_structured_claim_to_dict_uses_object_not_underscored():
     """JSON shape uses ``object``, not ``object_``."""
     c = StructuredClaim(
-        text="x", subject="user", relation="r", object_="o",
+        text="x",
+        subject="user",
+        relation="r",
+        object_="o",
         qualifiers={"k": "v"},
-        source_session_id="s", source_role="user", source_turn_index=1,
-        source_span="o", confidence=0.5,
+        source_session_id="s",
+        source_role="user",
+        source_turn_index=1,
+        source_span="o",
+        confidence=0.5,
     )
     d = c.to_dict()
     assert d["object"] == "o"
@@ -460,8 +503,7 @@ def test_responsibility_sentence_is_rejected():
     )
     occ = [c for c in claims if c.relation == "previous_occupation"]
     assert occ == [], (
-        f"responsibility sentence wrongly produced occupation claim: "
-        f"{[c.object_ for c in occ]}"
+        f"responsibility sentence wrongly produced occupation claim: {[c.object_ for c in occ]}"
     )
 
 
@@ -600,10 +642,7 @@ def test_section_scoped_gift_under_bold_heading():
     purchase line emits a ``bought_gift_for`` claim with
     ``recipient=sister, occasion=birthday`` inherited from the heading.
     """
-    text = (
-        "**Sister's Birthday**\n"
-        "- I bought a yellow dress at the boutique downtown.\n"
-    )
+    text = "**Sister's Birthday**\n- I bought a yellow dress at the boutique downtown.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift
@@ -613,10 +652,7 @@ def test_section_scoped_gift_under_bold_heading():
 
 
 def test_section_scoped_gift_under_label_metadata():
-    text = (
-        "Occasion: Sister's birthday\n"
-        "I got her a yellow dress from a small shop.\n"
-    )
+    text = "Occasion: Sister's birthday\nI got her a yellow dress from a small shop.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift
@@ -670,10 +706,7 @@ def test_section_scoped_bare_item_under_heading():
     emits a ``bought_gift_for`` claim. This handles bundles where the
     user just listed gifts under a heading.
     """
-    text = (
-        "**Sister's Birthday**\n"
-        "- a yellow dress\n"
-    )
+    text = "**Sister's Birthday**\n- a yellow dress\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift
@@ -718,8 +751,7 @@ def test_section_scoped_real_66f24dbb_bundle_shape():
     # inherited qualifiers.
     dress = [c for c in gifts if "yellow dress" in c.object_.lower()]
     assert dress, (
-        f"yellow dress not extracted from sectioned bundle; got: "
-        f"{[c.object_ for c in gifts]}"
+        f"yellow dress not extracted from sectioned bundle; got: {[c.object_ for c in gifts]}"
     )
     c = dress[0]
     assert c.qualifiers.get("recipient") == "sister"
@@ -821,8 +853,9 @@ def test_section_scoped_plus_bullet_yellow_dress_live_wiki_shape():
     )
     claims = extract_structured_claims(text, **_metadata())
     gifts = [c for c in claims if c.relation == "bought_gift_for"]
-    assert any("yellow dress" in c.object_.lower() for c in gifts), \
+    assert any("yellow dress" in c.object_.lower() for c in gifts), (
         f"section walker missed '+ Yellow dress'; got {[c.object_ for c in gifts]}"
+    )
     # The surgery / groceries sentence must NOT bind a gift claim.
     assert not any("groceries" in c.object_.lower() for c in gifts)
     intent = parse_intent("What did I buy for my sister's birthday gift?")
@@ -855,8 +888,9 @@ def test_wiki_bundle_per_turn_role_tags_user_claim_as_user():
     )
     occ = [c for c in claims if c.relation == "previous_occupation"]
     assert occ, "no previous_occupation claim extracted"
-    assert occ[0].source_role == "user", \
+    assert occ[0].source_role == "user", (
         f"expected user role from per-line prefix; got {occ[0].source_role!r}"
+    )
 
 
 def test_wiki_bundle_per_turn_role_tags_assistant_claim_as_assistant():
@@ -876,6 +910,7 @@ def test_wiki_bundle_per_turn_role_tags_assistant_claim_as_assistant():
     # carry the assistant role. Use _sentences_of directly to assert
     # the role parsing is wired through.
     from evals.longmemeval.structured_claims import _sentences_of
+
     pairs = _sentences_of(text)
     # The header / blank lines drop out; the bullet line yields the
     # sentence with its parsed role.
@@ -898,7 +933,9 @@ def test_wiki_bundle_mixed_roles_preserve_per_line_attribution():
         "current role in?\n"
     )
     claims = extract_structured_claims(
-        text, source_session_id="s", source_role="system",
+        text,
+        source_session_id="s",
+        source_role="system",
     )
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     occ = [c for c in claims if c.relation == "previous_occupation"]
@@ -918,13 +955,14 @@ def test_inline_role_prefix_after_user_turn_tags_as_assistant():
         "assistant: I used to be a Marketing specialist at a startup.\n"
     )
     claims = extract_structured_claims(
-        text, source_session_id="s", source_role="user",
+        text,
+        source_session_id="s",
+        source_role="user",
     )
     occ = [c for c in claims if c.relation == "previous_occupation"]
     assert occ, "no previous_occupation claim extracted"
     assert occ[0].source_role == "assistant", (
-        f"inline 'assistant:' prefix should re-tag the sentence; "
-        f"got {occ[0].source_role!r}"
+        f"inline 'assistant:' prefix should re-tag the sentence; got {occ[0].source_role!r}"
     )
 
 
@@ -936,7 +974,9 @@ def test_default_role_preserved_when_no_role_prefix_present():
     """
     text = "I used to be a Marketing specialist at a startup."
     claims = extract_structured_claims(
-        text, source_session_id="s", source_role="user",
+        text,
+        source_session_id="s",
+        source_role="user",
     )
     occ = [c for c in claims if c.relation == "previous_occupation"]
     assert occ
@@ -964,10 +1004,7 @@ def test_section_scoped_went_with_verb():
     Less-common purchase verbs (``went with`` / ``settled on`` /
     ``ended up with``) now fire under a section context.
     """
-    text = (
-        "**Sister's Birthday**\n"
-        "- I went with a yellow dress in the end.\n"
-    )
+    text = "**Sister's Birthday**\n- I went with a yellow dress in the end.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift
@@ -976,20 +1013,14 @@ def test_section_scoped_went_with_verb():
 
 def test_section_scoped_extraction_rejects_groceries_line():
     """A line about groceries under the birthday section is not a gift."""
-    text = (
-        "**Sister's Birthday**\n"
-        "- I picked up some groceries for the party prep.\n"
-    )
+    text = "**Sister's Birthday**\n- I picked up some groceries for the party prep.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift == []
 
 
 def test_section_scoped_extraction_rejects_surgery_line():
-    text = (
-        "**Sister's Birthday**\n"
-        "- I bought some painkillers after my surgery.\n"
-    )
+    text = "**Sister's Birthday**\n- I bought some painkillers after my surgery.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     assert gift == []
@@ -998,10 +1029,7 @@ def test_section_scoped_extraction_rejects_surgery_line():
 def test_section_scoped_extraction_rejects_store_name_as_item():
     """``I went to Best Buy`` under the birthday section — the *store*
     is not the gift."""
-    text = (
-        "**Sister's Birthday**\n"
-        "- I bought the gift at Best Buy.\n"
-    )
+    text = "**Sister's Birthday**\n- I bought the gift at Best Buy.\n"
     claims = extract_structured_claims(text, **_metadata())
     gift = [c for c in claims if c.relation == "bought_gift_for"]
     # Either no claim, or the item isn't Best Buy.
@@ -1021,8 +1049,7 @@ def test_section_context_clears_after_distance():
     )
     claims = extract_structured_claims(text, **_metadata())
     # No section-scoped claim should carry through to the watch line.
-    gift = [c for c in claims if c.relation == "bought_gift_for"
-            and "watch" in c.object_.lower()]
+    gift = [c for c in claims if c.relation == "bought_gift_for" and "watch" in c.object_.lower()]
     assert gift == []
 
 
@@ -1032,6 +1059,7 @@ def test_section_context_clears_after_distance():
 def test_answerability_gate_rejects_store_for_purchased_item():
     """A ``purchased_item`` answer can't be a store name."""
     from evals.longmemeval.structured_finalizer import _answer_shape_ok
+
     assert not _answer_shape_ok("Best Buy", "purchased_item")
     assert not _answer_shape_ok("Amazon", "purchased_item")
     assert _answer_shape_ok("a yellow dress", "purchased_item")
@@ -1039,6 +1067,7 @@ def test_answerability_gate_rejects_store_for_purchased_item():
 
 def test_answerability_gate_rejects_heading_for_purchased_item():
     from evals.longmemeval.structured_finalizer import _answer_shape_ok
+
     assert not _answer_shape_ok("**Sister's Birthday**", "purchased_item")
     assert not _answer_shape_ok("Occasion: Sister's birthday", "purchased_item")
 
@@ -1046,6 +1075,7 @@ def test_answerability_gate_rejects_heading_for_purchased_item():
 def test_answerability_gate_requires_title_head_noun_for_occupation():
     """``responsible for X`` is not an occupation_title."""
     from evals.longmemeval.structured_finalizer import _answer_shape_ok
+
     assert _answer_shape_ok("Marketing specialist at a small startup", "occupation_title")
     assert _answer_shape_ok("software engineer", "occupation_title")
     assert not _answer_shape_ok("responsible for marketing", "occupation_title")
@@ -1061,28 +1091,34 @@ def test_finalizer_walks_past_shape_mismatched_claim():
     intent = parse_intent("What was my previous occupation?")
     bad = StructuredClaim(
         text="**My Old Job**",
-        subject="user", relation="previous_occupation",
-        object_="**My Old Job**", qualifiers={},
-        source_session_id="s1", source_role="user",
-        source_turn_index=0, source_span="**My Old Job**", confidence=0.95,
+        subject="user",
+        relation="previous_occupation",
+        object_="**My Old Job**",
+        qualifiers={},
+        source_session_id="s1",
+        source_role="user",
+        source_turn_index=0,
+        source_span="**My Old Job**",
+        confidence=0.95,
     )
     good = StructuredClaim(
         text="I was a Marketing specialist at a small startup.",
-        subject="user", relation="previous_occupation",
-        object_="Marketing specialist at a small startup", qualifiers={},
-        source_session_id="s1", source_role="user",
+        subject="user",
+        relation="previous_occupation",
+        object_="Marketing specialist at a small startup",
+        qualifiers={},
+        source_session_id="s1",
+        source_role="user",
         source_turn_index=1,
-        source_span="Marketing specialist at a small startup", confidence=0.85,
+        source_span="Marketing specialist at a small startup",
+        confidence=0.85,
     )
     result = finalize_fact_answer(intent, [bad, good])
     assert result is not None
     answer, diag = result
     assert "Marketing specialist" in answer
     # And the diagnostic surfaces what was rejected.
-    assert any(
-        "shape_mismatch" in r["reason"]
-        for r in diag["rejected_by_answerability_gate"]
-    )
+    assert any("shape_mismatch" in r["reason"] for r in diag["rejected_by_answerability_gate"])
 
 
 def test_query_intent_to_dict_includes_matched_flag():

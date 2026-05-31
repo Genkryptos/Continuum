@@ -20,6 +20,7 @@ Three spec scenarios + supporting unit tests:
 The remaining tests pin each individual check so a regression in one
 of the 5 stages surfaces immediately.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -82,8 +83,9 @@ def test_painting_count_candidate_rejected_for_worth_question():
     )
     by_value = {r.candidate.value: r for r in results}
     assert by_value["1 made"].verdict == "FAIL"
-    assert "answer_type" in by_value["1 made"].reason or \
-           "wrong_relation" in by_value["1 made"].reason
+    assert (
+        "answer_type" in by_value["1 made"].reason or "wrong_relation" in by_value["1 made"].reason
+    )
     assert by_value["triple what I paid"].verdict == "PASS"
 
 
@@ -150,10 +152,13 @@ def test_ikea_bookshelf_duration_accepted():
     # both because the resulting verdict is correct either way.
     table_result = by_object["2 hours"]
     assert table_result.verdict == "FAIL"
-    assert any(token in table_result.reason for token in (
-        "subject_mismatch",
-        "weaker_question_overlap",
-    )), f"unexpected reason: {table_result.reason}"
+    assert any(
+        token in table_result.reason
+        for token in (
+            "subject_mismatch",
+            "weaker_question_overlap",
+        )
+    ), f"unexpected reason: {table_result.reason}"
 
 
 # ─── Individual check coverage ─────────────────────────────────────────────
@@ -162,9 +167,14 @@ def test_ikea_bookshelf_duration_accepted():
 def test_check1_span_no_overlap_rejected():
     """Source span sharing no content words with the question fails check 1."""
     c = Candidate(
-        value="42", normalized_value="42", candidate_type="count",
-        answer_type="count", unit="apples", subject="apples",
-        relation="count_of", object_="42",
+        value="42",
+        normalized_value="42",
+        candidate_type="count",
+        answer_type="count",
+        unit="apples",
+        subject="apples",
+        relation="count_of",
+        object_="42",
         claim="I have 42 apples in the basket.",
         source_span="42 apples in the basket",
         confidence=0.9,
@@ -175,8 +185,7 @@ def test_check1_span_no_overlap_rejected():
         question_type=QuestionType.COUNT,
     )
     assert result.verdict == "FAIL"
-    assert "span_no_overlap" in result.reason or \
-           "subject_mismatch" in result.reason
+    assert "span_no_overlap" in result.reason or "subject_mismatch" in result.reason
 
 
 def test_check2_subject_mismatch_rejected():
@@ -189,10 +198,13 @@ def test_check2_subject_mismatch_rejected():
     ``subject_mismatch`` rather than letting check 1 catch it.
     """
     c = Candidate(
-        value="Berkeley", normalized_value="Berkeley",
-        candidate_type="location", answer_type="location",
+        value="Berkeley",
+        normalized_value="Berkeley",
+        candidate_type="location",
+        answer_type="location",
         subject="Master's program",
-        relation="located_at", object_="Berkeley",
+        relation="located_at",
+        object_="Berkeley",
         # Note: the *claim* mentions Bachelor's so check 1 passes;
         # the *subject* is "Master's program" so check 2 must fire.
         claim="My Bachelor's was elsewhere; my Master's program is at Berkeley.",
@@ -211,10 +223,13 @@ def test_check2_subject_mismatch_rejected():
 def test_check3_answer_type_mismatch_rejected():
     """Wrong answer_type for the question type fails check 3."""
     c = Candidate(
-        value="March 14, 2024", normalized_value="march 14 2024",
-        candidate_type="date", answer_type="date",
+        value="March 14, 2024",
+        normalized_value="march 14 2024",
+        candidate_type="date",
+        answer_type="date",
         subject="job",
-        relation="located_at", object_="March 14, 2024",
+        relation="located_at",
+        object_="March 14, 2024",
         claim="I started the job on March 14, 2024.",
         source_span="March 14, 2024",
         confidence=0.85,
@@ -232,10 +247,13 @@ def test_check3_answer_type_mismatch_rejected():
 def test_check3_wrong_relation_for_keyword_rejected():
     """``paid`` candidate fails for a ``worth`` question."""
     c = Candidate(
-        value="200 dollars", normalized_value="200",
-        candidate_type="value", answer_type="amount",
+        value="200 dollars",
+        normalized_value="200",
+        candidate_type="value",
+        answer_type="amount",
         subject="painting",
-        relation="paid", object_="200 dollars",
+        relation="paid",
+        object_="200 dollars",
         claim="I paid 200 dollars for the painting.",
         source_span="paid 200 dollars for the painting",
         confidence=0.7,
@@ -252,10 +270,13 @@ def test_check3_wrong_relation_for_keyword_rejected():
 def test_check4_hypothetical_rejected_for_completed_question():
     """``looking_at`` relation fails for a "did I" / "got" question."""
     c = Candidate(
-        value="Stanford", normalized_value="Stanford",
-        candidate_type="location", answer_type="location",
+        value="Stanford",
+        normalized_value="Stanford",
+        candidate_type="location",
+        answer_type="location",
         subject="Master's",
-        relation="looking_at", object_="Stanford",
+        relation="looking_at",
+        object_="Stanford",
         claim="I'm looking at Stanford for Master's programs.",
         source_span="looking at Stanford",
         confidence=0.4,
@@ -274,20 +295,26 @@ def test_check5_no_stronger_conflict_drops_hypothetical():
     hypothetical relation is dropped in favour of the factual one.
     """
     ucla = Candidate(
-        value="UCLA", normalized_value="UCLA",
-        candidate_type="location", answer_type="location",
+        value="UCLA",
+        normalized_value="UCLA",
+        candidate_type="location",
+        answer_type="location",
         subject="Bachelor's degree",
-        relation="got_at", object_="UCLA",
+        relation="got_at",
+        object_="UCLA",
         claim="I got my Bachelor's degree at UCLA.",
         source_span="at UCLA",
         confidence=0.9,
     )
     stanford = Candidate(
-        value="Stanford", normalized_value="Stanford",
-        candidate_type="location", answer_type="location",
+        value="Stanford",
+        normalized_value="Stanford",
+        candidate_type="location",
+        answer_type="location",
         # SAME subject as ucla to trigger check 5
         subject="Bachelor's degree",
-        relation="looking_at", object_="Stanford",
+        relation="looking_at",
+        object_="Stanford",
         claim="I'm looking at Stanford for the Bachelor's program too.",
         source_span="looking at Stanford",
         confidence=0.4,
@@ -305,9 +332,16 @@ def test_check5_no_stronger_conflict_drops_hypothetical():
 def test_no_question_tokens_passes_trivially():
     """When the question has no content words, every check is a pass-through."""
     c = Candidate(
-        value="x", normalized_value="x", candidate_type="entity",
-        answer_type="entity", subject="thing", relation="is",
-        object_="x", claim="It is x.", source_span="x", confidence=0.5,
+        value="x",
+        normalized_value="x",
+        candidate_type="entity",
+        answer_type="entity",
+        subject="thing",
+        relation="is",
+        object_="x",
+        claim="It is x.",
+        source_span="x",
+        confidence=0.5,
     )
     # Question is all stopwords / unparseable
     result = verify_claim("the", c)
@@ -320,15 +354,26 @@ def test_no_question_tokens_passes_trivially():
 def test_filter_passing_preserves_order_and_drops_fails():
     candidates = [
         Candidate(
-            value="A", normalized_value="a", candidate_type="count",
-            answer_type="count", subject="apples", relation="count_of",
-            object_="42", source_span="42 apples", confidence=0.9,
+            value="A",
+            normalized_value="a",
+            candidate_type="count",
+            answer_type="count",
+            subject="apples",
+            relation="count_of",
+            object_="42",
+            source_span="42 apples",
+            confidence=0.9,
         ),
         Candidate(
-            value="B", normalized_value="b", candidate_type="location",
-            answer_type="location", subject="oranges",
-            relation="located_at", object_="Berkeley",
-            source_span="at Berkeley", confidence=0.9,
+            value="B",
+            normalized_value="b",
+            candidate_type="location",
+            answer_type="location",
+            subject="oranges",
+            relation="located_at",
+            object_="Berkeley",
+            source_span="at Berkeley",
+            confidence=0.9,
         ),
     ]
     results = verify_claims(
@@ -358,7 +403,9 @@ class _StubLLMVerifier:
         self.calls = 0
 
     async def verify(
-        self, question: str, candidate: Candidate,
+        self,
+        question: str,
+        candidate: Candidate,
     ) -> tuple[str, str]:
         self.calls += 1
         if candidate.value in self.reject_values:
@@ -370,18 +417,28 @@ class _StubLLMVerifier:
 async def test_llm_verifier_only_called_on_deterministic_passes():
     """A candidate that already failed deterministic checks isn't re-checked."""
     ucla = Candidate(
-        value="UCLA", normalized_value="UCLA",
-        candidate_type="location", answer_type="location",
-        subject="Bachelor's degree", relation="got_at", object_="UCLA",
+        value="UCLA",
+        normalized_value="UCLA",
+        candidate_type="location",
+        answer_type="location",
+        subject="Bachelor's degree",
+        relation="got_at",
+        object_="UCLA",
         claim="I got my Bachelor's degree at UCLA in 2018.",
-        source_span="at UCLA", confidence=0.9,
+        source_span="at UCLA",
+        confidence=0.9,
     )
     stanford = Candidate(
-        value="Stanford", normalized_value="Stanford",
-        candidate_type="location", answer_type="location",
-        subject="Master's", relation="looking_at", object_="Stanford",
+        value="Stanford",
+        normalized_value="Stanford",
+        candidate_type="location",
+        answer_type="location",
+        subject="Master's",
+        relation="looking_at",
+        object_="Stanford",
         claim="I'm looking at Stanford for my Master's.",
-        source_span="looking at Stanford", confidence=0.4,
+        source_span="looking at Stanford",
+        confidence=0.4,
     )
     stub = _StubLLMVerifier(reject_values={"UCLA"})
     results = await verify_with_llm(
@@ -410,11 +467,16 @@ async def test_llm_verifier_error_falls_back_to_deterministic_pass():
             raise RuntimeError("provider down")
 
     ucla = Candidate(
-        value="UCLA", normalized_value="UCLA",
-        candidate_type="location", answer_type="location",
-        subject="Bachelor's degree", relation="got_at", object_="UCLA",
+        value="UCLA",
+        normalized_value="UCLA",
+        candidate_type="location",
+        answer_type="location",
+        subject="Bachelor's degree",
+        relation="got_at",
+        object_="UCLA",
         claim="I got my Bachelor's degree at UCLA in 2018.",
-        source_span="at UCLA", confidence=0.9,
+        source_span="at UCLA",
+        confidence=0.9,
     )
     results = await verify_with_llm(
         "Where did I get my Bachelor's degree?",
@@ -432,9 +494,15 @@ async def test_llm_verifier_error_falls_back_to_deterministic_pass():
 
 def test_verifier_result_serializes_cleanly():
     c = Candidate(
-        value="UCLA", normalized_value="UCLA", candidate_type="location",
-        answer_type="location", subject="Bachelor's", relation="got_at",
-        object_="UCLA", source_span="at UCLA", confidence=0.9,
+        value="UCLA",
+        normalized_value="UCLA",
+        candidate_type="location",
+        answer_type="location",
+        subject="Bachelor's",
+        relation="got_at",
+        object_="UCLA",
+        source_span="at UCLA",
+        confidence=0.9,
     )
     r = VerifierResult(c, "PASS", "ok")
     d = r.to_dict()

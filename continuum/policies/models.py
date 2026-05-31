@@ -209,9 +209,7 @@ class RetentionPolicy(BaseModel):
 
     ttl_seconds: int | None = Field(default=None, ge=0)
     expire_at: datetime | None = None
-    on_expiry: Literal["delete", "archive", "compact", "mark_expired"] = (
-        "mark_expired"
-    )
+    on_expiry: Literal["delete", "archive", "compact", "mark_expired"] = "mark_expired"
     retain_raw_evidence: bool = True
 
 

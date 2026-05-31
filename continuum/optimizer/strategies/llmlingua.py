@@ -162,18 +162,12 @@ class LLMLinguaCompress(BaseOptimizer):
         base = config or LLMLinguaConfig()
         self.ratio: float = ratio if ratio is not None else base.ratio
         self.min_input_tokens: int = (
-            min_input_tokens
-            if min_input_tokens is not None
-            else base.min_input_tokens
+            min_input_tokens if min_input_tokens is not None else base.min_input_tokens
         )
         self.quality_threshold: float = (
-            quality_threshold
-            if quality_threshold is not None
-            else base.quality_threshold
+            quality_threshold if quality_threshold is not None else base.quality_threshold
         )
-        self.cache_size: int = (
-            cache_size if cache_size is not None else base.cache_size
-        )
+        self.cache_size: int = cache_size if cache_size is not None else base.cache_size
         self.model_name = model_name
         self._compressor = compressor
         self._embedder = embedder
@@ -181,9 +175,7 @@ class LLMLinguaCompress(BaseOptimizer):
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         ltm_items = [it for it in ctx.items if it.tier == MemoryTier.LTM]
         if len(ltm_items) < 1:
             return ctx
@@ -198,9 +190,7 @@ class LLMLinguaCompress(BaseOptimizer):
         except Exception:
             # Lib missing, model load failed, runtime error … swallow so
             # the chain keeps going (it'll be logged loudly).
-            log.exception(
-                "LLMLingua compression failed — returning bundle unchanged"
-            )
+            log.exception("LLMLingua compression failed — returning bundle unchanged")
             return ctx
 
         if not compressed_text:
@@ -213,30 +203,22 @@ class LLMLinguaCompress(BaseOptimizer):
             )
             return ctx
 
-        new_ltm_items = _split_back(
-            compressed_text, ltm_items, separator=_ITEM_SEP
-        )
+        new_ltm_items = _split_back(compressed_text, ltm_items, separator=_ITEM_SEP)
         new_items = _splice(ctx.items, ltm_items, new_ltm_items)
         new_messages = _rebuild_messages(ctx, new_items)
-        output_tokens = sum(
-            estimate_tokens_text(i.content) for i in new_ltm_items
-        )
+        output_tokens = sum(estimate_tokens_text(i.content) for i in new_ltm_items)
         return replace(
             ctx,
             items=new_items,
             messages=new_messages,
             tier_breakdown=_tier_breakdown(new_items),
-            tokens_used=sum(
-                estimate_tokens_text(i.content) for i in new_items
-            ),
+            tokens_used=sum(estimate_tokens_text(i.content) for i in new_items),
             debug_info={
                 **ctx.debug_info,
                 "llmlingua": {
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "ratio": (
-                        output_tokens / input_tokens if input_tokens else 0
-                    ),
+                    "ratio": (output_tokens / input_tokens if input_tokens else 0),
                     "target_ratio": self.ratio,
                     "cache_hit": self._last_was_cache_hit,
                 },
@@ -280,9 +262,7 @@ class LLMLinguaCompress(BaseOptimizer):
         if compressor is None:
             raise RuntimeError("LLMLingua compressor unavailable")
 
-        result = await asyncio.to_thread(
-            _call_compressor, compressor, text, self.ratio
-        )
+        result = await asyncio.to_thread(_call_compressor, compressor, text, self.ratio)
         compressed = _extract_compressed_text(result)
         if compressed:
             self._cache[key] = compressed
@@ -430,9 +410,7 @@ def _splice(
     return out
 
 
-def _rebuild_messages(
-    ctx: ContextBundle, items: list[MemoryItem]
-) -> list[dict[str, str]]:
+def _rebuild_messages(ctx: ContextBundle, items: list[MemoryItem]) -> list[dict[str, str]]:
     """One message per item, role inferred from tier."""
     messages: list[dict[str, str]] = []
     for it in items:
@@ -450,9 +428,7 @@ def _rebuild_messages(
 def _tier_breakdown(items: list[MemoryItem]) -> dict[str, int]:
     counts: dict[str, int] = {"stm": 0, "mtm": 0, "ltm": 0}
     for it in items:
-        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(
-            it.content
-        )
+        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(it.content)
     return counts
 
 

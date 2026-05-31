@@ -5,6 +5,7 @@ Unit tests for ``continuum.promotion.triggers.TriggerManager`` and its
 optional ``ContinuumSession`` integration. All collaborators are fakes —
 no DB / LLM / network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,8 +36,7 @@ pytestmark = pytest.mark.unit
 
 
 def _ent(text: str) -> Entity:
-    return Entity(text=text, type="PERSON", start=0, end=len(text),
-                  confidence=0.9)
+    return Entity(text=text, type="PERSON", start=0, end=len(text), confidence=0.9)
 
 
 class FakeLTM:
@@ -48,9 +48,7 @@ class FakeLTM:
     from the query (to exercise the cosine-threshold path).
     """
 
-    def __init__(
-        self, known: dict[str, float | tuple[str, float]] | None = None
-    ) -> None:
+    def __init__(self, known: dict[str, float | tuple[str, float]] | None = None) -> None:
         self.known = known or {}
         self.raises = False
 
@@ -60,16 +58,13 @@ class FakeLTM:
         spec = self.known.get(q.text)
         if spec is None:
             return []
-        content, cos = (
-            (q.text, spec) if isinstance(spec, int | float) else spec
-        )
+        content, cos = (q.text, spec) if isinstance(spec, int | float) else spec
         return [
             ScoredItem(
-                item=MemoryItem(id=str(uuid.uuid4()), content=content,
-                                tier=MemoryTier.LTM),
-                scores=ScoreBreakdown(relevance=cos, importance=0.0,
-                                      recency=0.0, confidence=1.0,
-                                      composite=cos),
+                item=MemoryItem(id=str(uuid.uuid4()), content=content, tier=MemoryTier.LTM),
+                scores=ScoreBreakdown(
+                    relevance=cos, importance=0.0, recency=0.0, confidence=1.0, composite=cos
+                ),
             )
         ]
 
@@ -114,7 +109,11 @@ class FakeBG:
         return True
 
     async def schedule_periodic(
-        self, factory: Any, *, interval_seconds: int, name: str = "",
+        self,
+        factory: Any,
+        *,
+        interval_seconds: int,
+        name: str = "",
         **_k: Any,
     ) -> Any:
         self.periodic.append((factory, interval_seconds, name))
@@ -165,9 +164,7 @@ class TestNewEntity:
         assert await tm.check_new_entity([_ent("Alicia")]) is True
 
     async def test_disabled_by_config(self) -> None:
-        tm, _, _ = _tm(
-            config=TriggerConfig(on_new_entity=False), ltm=FakeLTM()
-        )
+        tm, _, _ = _tm(config=TriggerConfig(on_new_entity=False), ltm=FakeLTM())
         assert await tm.check_new_entity([_ent("Whoever")]) is False
 
     async def test_lookup_error_assumes_present(self) -> None:
@@ -198,8 +195,7 @@ class TestBlockAccumulation:
         assert mtm.scanned == 20  # early-exit — never scans all 100
 
     async def test_below_threshold_no_trigger(self) -> None:
-        tm, _, _ = _tm(config=TriggerConfig(block_threshold=20),
-                       mtm=FakeMTM(19))
+        tm, _, _ = _tm(config=TriggerConfig(block_threshold=20), mtm=FakeMTM(19))
         assert await tm.check_block_accumulation() is False
 
     async def test_scan_error_no_trigger(self) -> None:
@@ -214,9 +210,7 @@ class TestBlockAccumulation:
 
 class TestPeriodic:
     async def test_schedules_with_config_interval(self) -> None:
-        tm, bg, prom = _tm(
-            config=TriggerConfig(periodic_interval_seconds=21600)
-        )
+        tm, bg, prom = _tm(config=TriggerConfig(periodic_interval_seconds=21600))
         await tm.schedule_periodic()
         assert len(bg.periodic) == 1
         factory, interval, name = bg.periodic[0]
@@ -237,13 +231,16 @@ class TestPeriodic:
         bg = BackgroundQueue(backoff_initial=0.0, backoff_max=0.0)
         prom = FakePromoter()
         tm = TriggerManager(
-            None, mtm=FakeMTM(0), ltm=FakeLTM(),
-            promoter=prom, background=bg,
+            None,
+            mtm=FakeMTM(0),
+            ltm=FakeLTM(),
+            promoter=prom,
+            background=bg,
         )
         async with bg:
             await tm.schedule_periodic(interval_seconds=0.02)
-            await asyncio.sleep(0.09)          # ~4 intervals
-        assert prom.calls >= 2                  # actually fired on schedule
+            await asyncio.sleep(0.09)  # ~4 intervals
+        assert prom.calls >= 2  # actually fired on schedule
 
 
 # ---------------------------------------------------------------------------
@@ -279,15 +276,15 @@ class TestAfterTurnAndFire:
 
     async def test_inflight_guard_dedups(self) -> None:
         tm, bg, _ = _tm()
-        assert tm.fire("a") is True             # queued
-        assert tm.fire("b") is False            # already in flight
+        assert tm.fire("a") is True  # queued
+        assert tm.fire("b") is False  # already in flight
         assert len(bg.jobs) == 1
-        await bg.run()                          # job finishes → re-arm
-        assert tm.fire("c") is True             # can queue again
+        await bg.run()  # job finishes → re-arm
+        assert tm.fire("c") is True  # can queue again
 
     async def test_fire_requeues_if_queue_rejected(self) -> None:
         tm, _, _ = _tm(bg=FakeBG(nowait_ok=False))
-        assert tm.fire() is False               # queue closed/full
+        assert tm.fire() is False  # queue closed/full
         # guard was released so a later attempt can still arm
         tm2, _, _ = _tm()
         assert tm2.fire() is True
@@ -298,12 +295,12 @@ class TestAfterTurnAndFire:
         assert prom.calls == 1
         assert prom.scopes == ["session:abc"]
         assert rep.promoted_count == 1
-        assert bg.jobs == []                     # bypassed the queue
+        assert bg.jobs == []  # bypassed the queue
 
     async def test_force_now_ignores_inflight_guard(self) -> None:
         tm, _, prom = _tm()
-        tm.fire("queued")                        # sets in-flight
-        await tm.force_now()                     # still runs
+        tm.fire("queued")  # sets in-flight
+        await tm.force_now()  # still runs
         assert prom.calls == 1
 
 
@@ -326,11 +323,9 @@ class TestSessionIntegration:
                 seen.set()
                 return False
 
-        async with ContinuumSession(
-            ContinuumConfig(), trigger_manager=SpyTM()
-        ) as s:
+        async with ContinuumSession(ContinuumConfig(), trigger_manager=SpyTM()) as s:
             reply = await asyncio.wait_for(s.process_turn("hi"), timeout=2.0)
-            assert "hi" in reply                 # response returned…
+            assert "hi" in reply  # response returned…
             await asyncio.wait_for(seen.wait(), timeout=2.0)  # …then trigger
             await s.drain()
         assert SpyTM.calls >= 1
@@ -340,4 +335,4 @@ class TestSessionIntegration:
 
         async with ContinuumSession(ContinuumConfig()) as s:
             assert s.trigger_manager is None
-            assert "x" in await s.process_turn("x")   # unchanged behaviour
+            assert "x" in await s.process_turn("x")  # unchanged behaviour

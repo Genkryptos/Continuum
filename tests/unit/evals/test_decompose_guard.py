@@ -14,6 +14,7 @@ Acceptance scenarios from the spec:
 
 Plus per-check unit coverage and a telemetry round-trip test.
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.decompose_guard import (
@@ -37,12 +38,15 @@ def test_painting_worth_does_not_become_paid():
     # Every rejected sub-question must carry an explanation
     assert result.rejected
     reason = result.rejected[0].reason
-    assert any(token in reason for token in (
-        "relation_changed",
-        "object_dropped",
-        "object_anchor_dropped",
-        "answer_type_changed",
-    )), f"unexpected reason: {reason}"
+    assert any(
+        token in reason
+        for token in (
+            "relation_changed",
+            "object_dropped",
+            "object_anchor_dropped",
+            "answer_type_changed",
+        )
+    ), f"unexpected reason: {reason}"
     # The fallback list is the original question — not the dropped sub.
     assert result.kept == [original]
 
@@ -71,12 +75,15 @@ def test_bachelors_question_does_not_become_generic_university():
     # "Bachelor's" / "degree" dropped → object_anchor_dropped, OR the
     # decomposition lost the personal LOCATION flavour entirely (a
     # different_fact rejection is also valid here).
-    assert any(token in reason for token in (
-        "object_dropped",
-        "object_anchor_dropped",
-        "different_fact",
-        "answer_type_changed",
-    )), f"unexpected reason: {reason}"
+    assert any(
+        token in reason
+        for token in (
+            "object_dropped",
+            "object_anchor_dropped",
+            "different_fact",
+            "answer_type_changed",
+        )
+    ), f"unexpected reason: {reason}"
     assert result.kept == [original]
 
 
@@ -103,7 +110,7 @@ def test_bachelors_question_accepts_split_into_components():
 def test_answer_type_change_rejected():
     """Question-type drift is a reject path."""
     original = "How many shirts did I buy?"  # COUNT
-    subs = ["When did I buy shirts?"]         # DATE_TIME
+    subs = ["When did I buy shirts?"]  # DATE_TIME
     result = guard_decomposition(original, subs)
     assert result.fallback_to_original
     assert "answer_type_changed" in result.rejected[0].reason
@@ -121,9 +128,14 @@ def test_relation_change_rejected():
     result = guard_decomposition(original, subs)
     assert result.fallback_to_original
     reason = result.rejected[0].reason
-    assert any(token in reason for token in (
-        "relation_changed", "different_fact", "temporal_dropped",
-    )), f"unexpected reason: {reason}"
+    assert any(
+        token in reason
+        for token in (
+            "relation_changed",
+            "different_fact",
+            "temporal_dropped",
+        )
+    ), f"unexpected reason: {reason}"
 
 
 def test_relation_change_isolated():
@@ -146,9 +158,7 @@ def test_object_change_rejected():
     # This might pass or fail depending on tokenisation — the test
     # exists to lock the behaviour. If anchor is dropped, expect fail.
     if result.fallback_to_original:
-        assert any(
-            "object" in r.reason for r in result.rejected
-        ), result.rejected[0].reason
+        assert any("object" in r.reason for r in result.rejected), result.rejected[0].reason
 
 
 def test_temporal_scope_added_rejected():
@@ -157,9 +167,7 @@ def test_temporal_scope_added_rejected():
     subs = ["When did I start the new job in 2020?"]
     result = guard_decomposition(original, subs)
     if result.fallback_to_original:
-        assert any(
-            "temporal" in r.reason for r in result.rejected
-        )
+        assert any("temporal" in r.reason for r in result.rejected)
 
 
 def test_temporal_scope_dropped_rejected():
@@ -220,8 +228,8 @@ def test_mixed_pass_and_reject():
     """Some sub-questions pass, some fail — kept list reflects passes."""
     original = "What is my favorite restaurant?"
     subs = [
-        "What is my favorite restaurant?",   # PASS — identical
-        "What's the weather like?",           # FAIL — different_fact
+        "What is my favorite restaurant?",  # PASS — identical
+        "What's the weather like?",  # FAIL — different_fact
     ]
     result = guard_decomposition(original, subs)
     assert original in result.kept
@@ -230,9 +238,14 @@ def test_mixed_pass_and_reject():
     # "weather" question drifts on multiple axes (answer_type +
     # different_fact + object_dropped) — accept any of them.
     reason = result.rejected[0].reason
-    assert any(token in reason for token in (
-        "different_fact", "object_dropped", "answer_type_changed",
-    )), f"unexpected reason: {reason}"
+    assert any(
+        token in reason
+        for token in (
+            "different_fact",
+            "object_dropped",
+            "answer_type_changed",
+        )
+    ), f"unexpected reason: {reason}"
 
 
 # ─── Telemetry surface ────────────────────────────────────────────────────
@@ -267,7 +280,9 @@ def test_dataclass_is_immutable():
     import dataclasses
 
     result = DecompositionGuardResult(
-        kept=["x"], rejected=[], fallback_to_original=False,
+        kept=["x"],
+        rejected=[],
+        fallback_to_original=False,
     )
     try:
         dataclasses.replace(result, kept=["y"])  # this is fine — returns new
@@ -275,5 +290,6 @@ def test_dataclass_is_immutable():
         raise AssertionError(f"dataclass.replace failed: {exc!r}") from exc
     # But direct attribute mutation should not be allowed.
     import pytest
+
     with pytest.raises(dataclasses.FrozenInstanceError):
         result.kept = ["y"]  # type: ignore[misc]

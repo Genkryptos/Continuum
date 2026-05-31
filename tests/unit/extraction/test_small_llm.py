@@ -7,6 +7,7 @@ Unit tests for :class:`continuum.extraction.small_llm.SmallLLM`.
 Each test uses a per-test sqlite cache under ``tmp_path`` so cache state
 never leaks across cases.
 """
+
 from __future__ import annotations
 
 import json
@@ -180,9 +181,7 @@ def test_verify_claim_clamps_confidence(llm, monkeypatch):
     monkeypatch.setattr(
         "continuum.extraction.small_llm.requests.post",
         MagicMock(
-            return_value=_resp(
-                {"response": json.dumps({"supported": True, "confidence": 5.0})}
-            )
+            return_value=_resp({"response": json.dumps({"supported": True, "confidence": 5.0})})
         ),
     )
     ok, conf = llm.verify_claim("c", "e")
@@ -267,7 +266,8 @@ def test_openai_chat_returns_assistant_content(cache_path, monkeypatch) -> None:
     post = MagicMock(return_value=_openai_resp("Boston"))
     monkeypatch.setattr("continuum.extraction.small_llm.requests.post", post)
     llm = SmallLLM(
-        model="qwen3-14b", url="http://localhost:1234/v1",
+        model="qwen3-14b",
+        url="http://localhost:1234/v1",
         cache_path=cache_path,
     )
     out = llm.span_select("where?", "I live in Boston.")
@@ -304,16 +304,16 @@ def test_openai_chat_non_200_surfaces_error_body(cache_path, monkeypatch, caplog
     )
     llm = SmallLLM(url="http://localhost:1234/v1", cache_path=cache_path)
     assert llm.span_select("q", "p") == ""
-    assert any(
-        "Compute error." in r.message for r in caplog.records
-    )
+    assert any("Compute error." in r.message for r in caplog.records)
 
 
 # Helper for the assertion above — any non-empty str.
 class _AnyStr:
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, str) and bool(other)
-    def __repr__(self) -> str: return "<any str>"
+
+    def __repr__(self) -> str:
+        return "<any str>"
 
 
 ANY_STR = _AnyStr()

@@ -22,6 +22,7 @@ Install the real backend with::
 
     pip install gliner
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -191,12 +192,9 @@ class EntityExtractor:
             from gliner import GLiNER
         except ImportError as exc:  # pragma: no cover - exercised via factory
             raise ImportError(
-                "gliner is required for EntityExtractor.\n"
-                "Install it with:  pip install gliner"
+                "gliner is required for EntityExtractor.\nInstall it with:  pip install gliner"
             ) from exc
-        log.info(
-            "loading GLiNER model %s on %s", self.config.gliner_model, device
-        )
+        log.info("loading GLiNER model %s on %s", self.config.gliner_model, device)
         model = GLiNER.from_pretrained(self.config.gliner_model)
         try:
             model = model.to(device)
@@ -210,16 +208,12 @@ class EntityExtractor:
         async with self._lock:
             if self._model is None:
                 self._device = self._resolve_device()
-                self._model = await asyncio.to_thread(
-                    self._build_model, self._device
-                )
+                self._model = await asyncio.to_thread(self._build_model, self._device)
         return self._model
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def extract(
-        self, text: str
-    ) -> tuple[list[Entity], list[Relation]]:
+    async def extract(self, text: str) -> tuple[list[Entity], list[Relation]]:
         """
         Extract ``(entities, relations)`` from *text*.
 

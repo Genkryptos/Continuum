@@ -5,6 +5,7 @@ Unit tests for ``continuum.extraction.fact_extractor.FactExtractor``.
 
 A fake litellm-shaped ``completion_fn`` is injected — no litellm, no network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,9 +36,7 @@ ENTITIES = [
 
 
 def _resp(content: str) -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-    )
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
 def _facts_payload(facts: list[dict]) -> str:
@@ -89,12 +88,17 @@ def test_config_defaults() -> None:
 
 class TestExtraction:
     async def test_extracts_atomic_facts(self) -> None:
-        payload = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 0.95,
-             "entities": ["Alice", "Acme Corp"], "type": "employment"},
-            {"text": "Bob works at Globex", "confidence": 0.9,
-             "entities": ["Bob", "Globex"]},
-        ])
+        payload = _facts_payload(
+            [
+                {
+                    "text": "Alice works at Acme Corp",
+                    "confidence": 0.95,
+                    "entities": ["Alice", "Acme Corp"],
+                    "type": "employment",
+                },
+                {"text": "Bob works at Globex", "confidence": 0.9, "entities": ["Bob", "Globex"]},
+            ]
+        )
         fx = _fx(FakeLLM([payload]))
         facts = await fx.extract_facts(BLOCK, ENTITIES)
 
@@ -119,10 +123,12 @@ class TestExtraction:
         assert fake.kwargs[0]["response_format"] == {"type": "json_object"}
 
     async def test_dedup_identical_facts(self) -> None:
-        payload = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 0.9},
-            {"text": "alice works at acme corp", "confidence": 0.8},  # dup
-        ])
+        payload = _facts_payload(
+            [
+                {"text": "Alice works at Acme Corp", "confidence": 0.9},
+                {"text": "alice works at acme corp", "confidence": 0.8},  # dup
+            ]
+        )
         facts = await _fx(FakeLLM([payload])).extract_facts(BLOCK, [])
         assert len(facts) == 1
 
@@ -134,27 +140,31 @@ class TestExtraction:
 
 class TestQualityFilters:
     async def test_confidence_threshold(self) -> None:
-        payload = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 0.9},   # keep
-            {"text": "Bob might know Carol somehow", "confidence": 0.4},  # drop
-        ])
+        payload = _facts_payload(
+            [
+                {"text": "Alice works at Acme Corp", "confidence": 0.9},  # keep
+                {"text": "Bob might know Carol somehow", "confidence": 0.4},  # drop
+            ]
+        )
         facts = await _fx(FakeLLM([payload])).extract_facts(BLOCK, [])
         assert [f.text for f in facts] == ["Alice works at Acme Corp"]
 
     async def test_custom_confidence_threshold(self) -> None:
-        payload = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 0.7},
-        ])
-        facts = await _fx(
-            FakeLLM([payload]), min_confidence=0.9
-        ).extract_facts(BLOCK, [])
-        assert facts == []                       # 0.7 < 0.9
+        payload = _facts_payload(
+            [
+                {"text": "Alice works at Acme Corp", "confidence": 0.7},
+            ]
+        )
+        facts = await _fx(FakeLLM([payload]), min_confidence=0.9).extract_facts(BLOCK, [])
+        assert facts == []  # 0.7 < 0.9
 
     async def test_min_length_filter(self) -> None:
-        payload = _facts_payload([
-            {"text": "Hi.", "confidence": 0.99},                  # < 10 chars
-            {"text": "Alice works at Acme Corp", "confidence": 0.9},
-        ])
+        payload = _facts_payload(
+            [
+                {"text": "Hi.", "confidence": 0.99},  # < 10 chars
+                {"text": "Alice works at Acme Corp", "confidence": 0.9},
+            ]
+        )
         facts = await _fx(FakeLLM([payload])).extract_facts(BLOCK, [])
         assert [f.text for f in facts] == ["Alice works at Acme Corp"]
 
@@ -163,17 +173,21 @@ class TestQualityFilters:
             "Alice works at Acme Corp and " * 30
         ).strip()  # > 500 chars, clearly multi-proposition
         assert len(long_non_atomic) > 500
-        payload = _facts_payload([
-            {"text": long_non_atomic, "confidence": 0.99},
-            {"text": "Bob works at Globex", "confidence": 0.9},
-        ])
+        payload = _facts_payload(
+            [
+                {"text": long_non_atomic, "confidence": 0.99},
+                {"text": "Bob works at Globex", "confidence": 0.9},
+            ]
+        )
         facts = await _fx(FakeLLM([payload])).extract_facts(BLOCK, [])
         assert [f.text for f in facts] == ["Bob works at Globex"]
 
     async def test_confidence_clamped(self) -> None:
-        payload = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 5},  # → 1.0
-        ])
+        payload = _facts_payload(
+            [
+                {"text": "Alice works at Acme Corp", "confidence": 5},  # → 1.0
+            ]
+        )
         facts = await _fx(FakeLLM([payload])).extract_facts(BLOCK, [])
         assert facts[0].confidence == 1.0
 
@@ -186,9 +200,7 @@ class TestQualityFilters:
 class TestGracefulDegradation:
     async def test_empty_block_no_call(self) -> None:
         fake = FakeLLM([_facts_payload([])])
-        facts = await _fx(fake).extract_facts(
-            SummaryBlock(text="   ", id=BLOCK_ID), ENTITIES
-        )
+        facts = await _fx(fake).extract_facts(SummaryBlock(text="   ", id=BLOCK_ID), ENTITIES)
         assert facts == []
         assert fake.calls == 0
 
@@ -196,24 +208,19 @@ class TestGracefulDegradation:
         fake = FakeLLM([RuntimeError("boom")] * 3)
         facts = await _fx(fake).extract_facts(BLOCK, ENTITIES)
         assert facts == []
-        assert fake.calls == 3                    # retried to exhaustion
+        assert fake.calls == 3  # retried to exhaustion
 
     async def test_bad_json_returns_empty(self) -> None:
         facts = await _fx(FakeLLM(["not json {{"])).extract_facts(BLOCK, [])
         assert facts == []
 
     async def test_non_object_json_returns_empty(self) -> None:
-        facts = await _fx(
-            FakeLLM([json.dumps(["a", "list"])])
-        ).extract_facts(BLOCK, [])
+        facts = await _fx(FakeLLM([json.dumps(["a", "list"])])).extract_facts(BLOCK, [])
         assert facts == []
 
     async def test_transient_then_success(self) -> None:
-        good = _facts_payload([
-            {"text": "Alice works at Acme Corp", "confidence": 0.9}
-        ])
-        fake = FakeLLM([ConnectionError("rate limit"),
-                        ConnectionError("rate limit"), good])
+        good = _facts_payload([{"text": "Alice works at Acme Corp", "confidence": 0.9}])
+        fake = FakeLLM([ConnectionError("rate limit"), ConnectionError("rate limit"), good])
         facts = await _fx(fake).extract_facts(BLOCK, [])
         assert fake.calls == 3
         assert len(facts) == 1
@@ -236,4 +243,4 @@ class TestTimeout:
 
         assert facts == []
         assert elapsed < 0.25
-        assert fake.calls == 1                     # timeout not retried
+        assert fake.calls == 1  # timeout not retried

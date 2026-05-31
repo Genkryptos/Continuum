@@ -24,6 +24,7 @@ checkpoint) is the one path that awaits promotion synchronously.
 All collaborators are injected / duck-typed (mtm, ltm, promoter,
 background), so unit tests need no DB / LLM / network.
 """
+
 from __future__ import annotations
 
 import logging
@@ -101,8 +102,7 @@ class TriggerManager:
             try:
                 present = await self._entity_in_ltm(text)
             except Exception:
-                log.debug("entity lookup failed for %r — assuming present",
-                          text, exc_info=True)
+                log.debug("entity lookup failed for %r — assuming present", text, exc_info=True)
                 present = True
             if not present:
                 log.debug("new entity %r → promotion trigger", text)
@@ -135,8 +135,7 @@ class TriggerManager:
             async for _ in self._mtm.scan_unprocessed():
                 count += 1
                 if count >= threshold:
-                    log.debug("block accumulation %d ≥ %d → trigger",
-                              count, threshold)
+                    log.debug("block accumulation %d ≥ %d → trigger", count, threshold)
                     return True
         except Exception:
             log.exception("block-accumulation check failed")
@@ -170,9 +169,7 @@ class TriggerManager:
 
     # ── integration: after-turn hook ────────────────────────────────────────
 
-    async def after_turn(
-        self, entities: Sequence[Entity] | None = None
-    ) -> bool:
+    async def after_turn(self, entities: Sequence[Entity] | None = None) -> bool:
         """
         Called once per turn (off the response path). Queues a promotion if
         the new-entity or block-accumulation trigger fires. Returns whether a
@@ -223,7 +220,8 @@ class TriggerManager:
             report = await promoter.promote()
             log.info(
                 "triggered promotion done (%s): promoted=%s",
-                reason, getattr(report, "promoted_count", "?"),
+                reason,
+                getattr(report, "promoted_count", "?"),
             )
         except Exception:
             log.exception("triggered promotion (%s) failed", reason)

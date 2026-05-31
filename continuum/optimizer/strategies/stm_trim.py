@@ -105,26 +105,18 @@ class StmTrim(BaseOptimizer):
         config: StmTrimConfig | None = None,
     ) -> None:
         base = config or StmTrimConfig()
-        self.keep_last: int = (
-            keep_last if keep_last is not None else base.keep_last
-        )
+        self.keep_last: int = keep_last if keep_last is not None else base.keep_last
         self.summarization_method: Literal["concat", "llm"] = (
-            summarization_method
-            if summarization_method is not None
-            else base.summarization_method
+            summarization_method if summarization_method is not None else base.summarization_method
         )
         self.max_summary_chars: int = (
-            max_summary_chars
-            if max_summary_chars is not None
-            else base.max_summary_chars
+            max_summary_chars if max_summary_chars is not None else base.max_summary_chars
         )
         self.summarizer = summarizer
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         stm_items, other_items = _partition_by_tier(ctx.items, MemoryTier.STM)
         if len(stm_items) <= self.keep_last:
             return ctx  # nothing to trim
@@ -141,9 +133,7 @@ class StmTrim(BaseOptimizer):
             # The summarizer is the only place this method can raise; the
             # OptimizerChain would swallow it, but we'd rather degrade
             # cleanly than skip the trim altogether.
-            log.exception(
-                "StmTrim summariser failed — falling back to concat"
-            )
+            log.exception("StmTrim summariser failed — falling back to concat")
             summary_text = _concat_summary(older, self.max_summary_chars)
 
         summary_item = _build_summary_item(summary_text, older)
@@ -160,9 +150,7 @@ class StmTrim(BaseOptimizer):
             items=new_items,
             messages=new_messages,
             tier_breakdown=new_breakdown,
-            tokens_used=sum(
-                estimate_tokens_text(i.content) for i in new_items
-            ),
+            tokens_used=sum(estimate_tokens_text(i.content) for i in new_items),
             debug_info={
                 **ctx.debug_info,
                 "stm_trim": {
@@ -183,18 +171,12 @@ class StmTrim(BaseOptimizer):
         stm_items = [it for it in ctx.items if it.tier == MemoryTier.STM]
         if len(stm_items) <= self.keep_last:
             return Cost(
-                tokens=sum(
-                    estimate_tokens_text(it.content) for it in ctx.items
-                ),
+                tokens=sum(estimate_tokens_text(it.content) for it in ctx.items),
                 latency_ms=0.0,
             )
-        kept_tokens = sum(
-            estimate_tokens_text(it.content) for it in stm_items[-self.keep_last:]
-        )
+        kept_tokens = sum(estimate_tokens_text(it.content) for it in stm_items[-self.keep_last :])
         non_stm_tokens = sum(
-            estimate_tokens_text(it.content)
-            for it in ctx.items
-            if it.tier != MemoryTier.STM
+            estimate_tokens_text(it.content) for it in ctx.items if it.tier != MemoryTier.STM
         )
         # ~20 tokens per dropped turn is a generous upper bound for the
         # summary's contribution.
@@ -304,9 +286,7 @@ def _splice(
     return out
 
 
-def _rebuild_messages(
-    ctx: ContextBundle, items: list[MemoryItem]
-) -> list[dict[str, str]]:
+def _rebuild_messages(ctx: ContextBundle, items: list[MemoryItem]) -> list[dict[str, str]]:
     """
     Reflect the new items order in ``messages``. Non-STM items use the
     ``"system"`` role (matching the Retriever's convention); STM items
