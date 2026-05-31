@@ -188,7 +188,9 @@ class Mem0LocomoAnswerer:
             except Exception:
                 log.warning(
                     "mem0 add() failed for chunk %d-%d (skipped)",
-                    i, i + chunk, exc_info=True,
+                    i,
+                    i + chunk,
+                    exc_info=True,
                 )
         self._memory = memory
         return memory
