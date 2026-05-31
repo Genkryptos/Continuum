@@ -46,14 +46,32 @@ _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 def _build_memory() -> Any:
     """
-    Construct a Mem0 ``Memory`` configured to use OpenRouter for its
-    internal LLM. Embedder is left to Mem0's default unless overridden;
-    if the default needs an OpenAI key you don't have, set
-    ``MEM0_EMBED_*`` env vars or adjust here.
+    Construct a Mem0 ``Memory`` that runs without an OpenAI key:
+
+    * **LLM** (fact extraction) → OpenRouter, OpenAI-compatible. Uses
+      ``gpt-oss-120b`` by default (``MEM0_LLM_MODEL`` to override).
+    * **Embedder** → a LOCAL HuggingFace sentence-transformer
+      (``all-MiniLM-L6-v2`` by default, ``MEM0_EMBED_MODEL`` to
+      override). Mem0's *default* embedder is OpenAI, which needs an
+      OPENAI_API_KEY you don't have — and OpenRouter doesn't serve
+      embeddings. The local embedder is also the *fair* choice: it's
+      the same model Continuum uses, so both systems share an embedder
+      and only the memory layer differs.
+
+    This is "standard Mem0" minus the OpenAI dependency, not a handicap.
+
+    Version note: mem0ai's config schema shifts between releases. If
+    ``from_config`` rejects these keys on your version, adjust the
+    config dict here (LLM ``openai_base_url`` / embedder ``model`` are
+    the version-sensitive bits). Requires ``sentence-transformers``
+    (already a Continuum dep) for the local embedder.
     """
-    from mem0 import Memory  # imported lazily so the module loads without mem0ai
+    from mem0 import Memory  # lazy so the module loads without mem0ai
 
     llm_model = os.environ.get("MEM0_LLM_MODEL", "openai/gpt-oss-120b")
+    embed_model = os.environ.get(
+        "MEM0_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+    )
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     config: dict[str, Any] = {
         "llm": {
@@ -64,26 +82,12 @@ def _build_memory() -> Any:
                 "api_key": api_key,
             },
         },
+        "embedder": {
+            "provider": "huggingface",
+            "config": {"model": embed_model},
+        },
     }
-    # Optional embedder override (Mem0's default embedder may want an
-    # OpenAI key; point it at OpenRouter or a local model if set).
-    embed_model = os.environ.get("MEM0_EMBED_MODEL")
-    if embed_model:
-        config["embedder"] = {
-            "provider": "openai",
-            "config": {
-                "model": embed_model,
-                "openai_base_url": _OPENROUTER_BASE,
-                "api_key": api_key,
-            },
-        }
-    try:
-        return Memory.from_config(config)
-    except Exception:
-        # Fall back to Mem0's pure default (needs whatever Mem0 defaults
-        # to, typically OPENAI_API_KEY). Surfaced to the caller if it
-        # also fails.
-        return Memory()
+    return Memory.from_config(config)
 
 
 def _extract_memories(search_result: Any) -> list[str]:
