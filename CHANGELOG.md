@@ -5,7 +5,7 @@ format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
 
-## [1.0.0] — 2026-06-XX
+## [1.0.0] — 2026-05-31
 
 v1 — broke the LongMemEval-S 32% ceiling to **60.8% judged**, and learned the
 ceiling was never a reasoning-architecture problem.
