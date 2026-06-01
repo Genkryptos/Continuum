@@ -2817,20 +2817,23 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         )
         aggregate = qt == "multi-session" or is_aggregate_question(question)
         if preference:
-            # Reminder-style conditioning (PrefEval's best prompting method),
-            # with the over-personalization guard baked into the wording:
-            # apply ONLY a relevant stated preference, never invent one,
-            # preserve factual accuracy.
+            # Reminder-style conditioning (PrefEval's best prompting method).
+            # v2: the first A/B was net-neutral (+4/-4) — it rescued
+            # abstentions but ALSO turned specific correct answers into generic
+            # menus the rubric judge penalised. So demand a CONCRETE pick, not
+            # a list. Over-personalization guard stays: apply ONLY a relevant
+            # stated preference, never invent one, preserve factual accuracy.
             prompt = (
-                "The retrieved conversation may contain preferences this user "
-                "has stated — tools they use, brands they like, topics they "
-                "care about, or things they dislike. Identify any preference "
-                "that is directly relevant to the request below and tailor "
-                "your answer to honour it: favour options aligned with the "
-                "preference and avoid ones that contradict it. If no stated "
-                "preference is relevant, answer normally — never invent a "
-                "preference, and never sacrifice factual accuracy. Reply with "
-                "just the answer.\n\n"
+                "The retrieved conversation may contain a preference this user "
+                "has stated — a tool they use, a brand they like, a topic they "
+                "care about, or something they dislike. If a stated preference "
+                "is directly relevant to the request below, give a SPECIFIC, "
+                "CONCRETE recommendation that honours it — a definite pick or "
+                "direct answer, NOT a long generic menu of options — and make "
+                "the link to their preference explicit. If no stated "
+                "preference is relevant, just answer the question directly. "
+                "Never invent a preference and never sacrifice factual "
+                "accuracy. Reply with just the answer.\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )

@@ -29,7 +29,7 @@ from evals.longmemeval.bootstrap_ollama import (
 pytestmark = pytest.mark.unit
 
 # A sentinel only the preference prompt contains, so we can detect the branch.
-_PREF_MARKER = "preferences this user"
+_PREF_MARKER = "preference this user has stated"
 
 
 def _item(text: str) -> MemoryItem:
