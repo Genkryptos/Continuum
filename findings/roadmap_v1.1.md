@@ -209,9 +209,13 @@ explicit scoped date calculation.
 | A/A noise floor (2 identical baselines) | 0.8pp |
 
 Signal beats noise ~40×. Gated to temporal questions → other categories
-provably untouched → **~+8.8pp overall (60.8% → ~69.6%, projected)**. Confirm
-with one full-500 judged run for the published headline. Recommend making
-`--temporal-conditioning` **default-on** for v1.1 (gated, no downside).
+provably untouched.
+
+**CONFIRMED on the full 500 (judged):** overall **60.8% → 71.6% (+10.8pp)**,
+temporal **41.4% → 73.7%**. The attributable driver is temporal (+32pp ≈
++8.6pp overall); non-temporal categories moved only within cross-run noise
+(WS-1 doesn't touch them). `--temporal-conditioning` is now **default-on** for
+v1.1.
 
 ### Next levers (by expected value)
 - **WS-2 aggregation** (multi-session, n=133, ~55%) — cheap prompt branch, next.

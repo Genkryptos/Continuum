@@ -125,7 +125,7 @@ def _render_table(overall: dict, per_cat: dict[str, dict]) -> str:
         f"{'cost_$':>10}"
     )
     sep = "-" * len(head)
-    lines = ["v1 IterativeReasoner — full LongMemEval-S sweep", "=" * len(head), head, sep]
+    lines = ["Continuum — full LongMemEval-S sweep (direct retrieval)", "=" * len(head), head, sep]
     # Overall first
     lines.append(_row("OVERALL", overall))
     # Per-category, sorted alphabetically for stable diffs across runs.

@@ -26,14 +26,24 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 | benchmark | Continuum | baseline | delta |
 |---|---|---|---|
-| **LongMemEval-S** (500 Q, judged) | **60.8 %** | 34.4 % (May 2026 ceiling) | **+26 pp** |
-| ↳ knowledge-update (supersession) | 51.3 % | — | 98.7 % recall |
+| **LongMemEval-S** (500 Q, judged) — **v1.1** | **71.6 %** | 60.8 % (v1.0) · 34.4 % (May ceiling) | **+10.8 pp** over v1.0 |
+| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **73.7 %** | 41.4 % (v1.0) | **+32 pp** (n=133 A/B; noise 0.8 pp) |
+| ↳ knowledge-update (supersession) | 60.3 % | — | high recall |
 | **Supersession correctness** (50 scripted updates) | **100 %** | 38 % | **+62 pp** |
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % | **+25 pp** |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) | framework overhead |
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
+
+> **v1.1 (in progress)** — **60.8% → 71.6% judged.** The driver is a single
+> scoped fix: temporal-reasoning questions were being answered with the turn
+> *dates stripped from the prompt* (the model literally replied "no dates
+> available"). Surfacing each turn's date + the reference "now" lifted
+> temporal **41.4% → 73.7% (+32pp)** — confirmed by an n=133 A/B (signal +33pp
+> vs a 0.8pp A/A noise floor). It's gated to temporal questions, so nothing
+> else regressed. No reasoning loop, no new model — just showing the model
+> data it already had. See [`findings/roadmap_v1.1.md`](findings/roadmap_v1.1.md).
 
 > **v1.0.0** — Continuum broke the [May 2026 ~34% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
 
