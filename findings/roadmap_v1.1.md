@@ -153,3 +153,45 @@ it lost to direct retrieval everywhere).
 
 Each lands as its own branch + PR with a before/after full-500 judged table in
 the description, so the pp contribution of every lever is on the record.
+
+---
+
+## 5 · Outcomes log (what actually happened)
+
+### WS-5 — DONE
+`findings/charts/ablate.py` (per-category A/B + regression guard) + OpenRouter
+cost wiring shipped. The harness immediately earned its keep — see below.
+
+### Measurement reality (discovered via WS-5) — **the gating constraint**
+- **Answerer nondeterminism**: `openai/gpt-oss-120b` on OpenRouter varies
+  ~44% of answers run-to-run even at temperature 0 (multi-provider routing +
+  MoE). Mitigated with `--openrouter-provider <pin> --seed 0` (added to
+  `OpenRouterLLM`): cuts cross-provider swing, but **~5% correctness flips
+  remain** (seed not honoured at the token level on the pinned backend).
+- **Noise floor**: ~±5pp per category at n=20; ~±2-5pp overall at n=120.
+  **A lever is only cleanly measurable if its expected lift exceeds ~5pp.**
+- **Judge nondeterminism**: the LLM judge is *also* unstable on soft-rubric
+  categories (and isn't provider-pinned). On single-session-preference the
+  judge verdict count swung 13–18/30 across identical runs.
+
+### WS-4 reranker — wired, but a NO-OP in the v1 config
+The reranker now fires in `_DirectAnswerAdapter` (keeps `rerank_to`), but the
+session-aware retriever returns only ~4-8 candidates (`max_items` cap), so
+there's nothing to rerank. **Needs a retriever over-fetch fix before it can
+help.** First A/B was pure nondeterminism (reranker never engaged).
+
+### WS-7 preference conditioning — built, tested, **SHELVED (unmeasurable)**
+Added `--pref-conditioning` (gated to preference questions; provably can't
+touch other categories). It fires and changes answers (rescues abstentions:
+"I don't know" → tailored pick). But on the n=30 preference category the
+**A/A noise floor is ±16.7pp** — two *identical* runs disagreed 60.0% vs
+43.3%. Both v1 (+4/−4) and v2 ("concrete pick, not a menu") A/B signals are
+far inside that noise. Preference compounds answer-nondeterminism × soft-rubric
+judge-nondeterminism → worst-case to measure, on 6% of the dataset. Flag stays
+(off by default, documented); not shipped as a win. *Lesson: this category is
+not where measurable wins live — go where the metric is crisp.*
+
+### Next: WS-1 temporal
+n=133 (4× preference), dates/counts are far more exact-matchable (crisper
+metric, less judge noise), +5-8pp expected — the lever most likely to clear
+the noise floor.
