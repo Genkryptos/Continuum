@@ -45,9 +45,7 @@ class Cost:
 class Optimizer(Protocol):
     """The contract every optimisation strategy fulfils."""
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         """Apply optimisation to reduce *ctx* under *budget*."""
         ...
 

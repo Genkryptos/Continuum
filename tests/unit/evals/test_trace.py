@@ -12,6 +12,7 @@ Covers:
   :class:`RowResult` and copies telemetry / decomposition fields.
 * :func:`validate_trace_row` accepts valid payloads and rejects bad ones.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,14 +59,24 @@ def test_trace_writer_writes_one_line_per_row(tmp_path: Path):
     assert tw.path.name.endswith("_abc123.jsonl")
 
     with tw:
-        tw.write(TraceRow(
-            run_id="abc123", timestamp="t1",
-            dataset="ds", question_id="q1", question="?",
-        ))
-        tw.write({
-            "run_id": "abc123", "timestamp": "t2",
-            "dataset": "ds", "question_id": "q2", "question": "?",
-        })
+        tw.write(
+            TraceRow(
+                run_id="abc123",
+                timestamp="t1",
+                dataset="ds",
+                question_id="q1",
+                question="?",
+            )
+        )
+        tw.write(
+            {
+                "run_id": "abc123",
+                "timestamp": "t2",
+                "dataset": "ds",
+                "question_id": "q2",
+                "question": "?",
+            }
+        )
 
     lines = tw.path.read_text().strip().splitlines()
     assert len(lines) == 2
@@ -77,10 +88,15 @@ def test_trace_writer_disabled_is_noop(tmp_path: Path):
     tw = TraceWriter.from_run(tmp_path / "logs", enabled=False)
     assert tw.path is None
     with tw:
-        tw.write(TraceRow(
-            run_id="r", timestamp="t", dataset="d",
-            question_id="q", question="?",
-        ))
+        tw.write(
+            TraceRow(
+                run_id="r",
+                timestamp="t",
+                dataset="d",
+                question_id="q",
+                question="?",
+            )
+        )
     # No file should have been created.
     assert not (tmp_path / "logs").exists()
 
@@ -131,7 +147,10 @@ def test_trace_row_from_result_copies_telemetry():
         },
     )
     tr = trace_row_from_result(
-        rr, run_id="run-1", dataset="longmemeval-s", question_text="how many shirts?",
+        rr,
+        run_id="run-1",
+        dataset="longmemeval-s",
+        question_text="how many shirts?",
     )
     assert tr.run_id == "run-1"
     assert tr.dataset == "longmemeval-s"
@@ -159,8 +178,11 @@ def test_trace_row_from_result_copies_telemetry():
 
 def test_validate_trace_row_accepts_minimal_payload():
     payload = {
-        "run_id": "r", "timestamp": "t", "dataset": "d",
-        "question_id": "q", "question": "?",
+        "run_id": "r",
+        "timestamp": "t",
+        "dataset": "d",
+        "question_id": "q",
+        "question": "?",
     }
     ok, reason = validate_trace_row(payload)
     assert ok, reason
@@ -173,12 +195,17 @@ def test_validate_trace_row_rejects_missing_required():
 
 
 def test_validate_trace_row_rejects_bad_type():
-    ok, reason = validate_trace_row({
-        "run_id": "r", "timestamp": "t", "dataset": "d",
-        "question_id": "q", "question": "?",
-        "retrieved_session_ids": "not-a-list",  # should be list[str]
-        "candidate_count": "not-an-int",
-    })
+    ok, reason = validate_trace_row(
+        {
+            "run_id": "r",
+            "timestamp": "t",
+            "dataset": "d",
+            "question_id": "q",
+            "question": "?",
+            "retrieved_session_ids": "not-a-list",  # should be list[str]
+            "candidate_count": "not-an-int",
+        }
+    )
     # The dataclass constructor tolerates wrong-typed values until they
     # break a downstream operation — for our purposes, validating it doesn't
     # raise is enough. The strict check kicks in on truly unknown shapes

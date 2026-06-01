@@ -134,39 +134,27 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
         *,
         preserve_stm: bool | None = None,
         preserve_mtm_count: int | None = None,
-        too_large_stm_strategy: (
-            Literal["keep", "truncate", "summarise"] | None
-        ) = None,
+        too_large_stm_strategy: (Literal["keep", "truncate", "summarise"] | None) = None,
         score_key: Callable[[MemoryItem], float] | None = None,
         summarizer: Any | None = None,
         config: ScorePruneConfig | None = None,
     ) -> None:
         base = config or ScorePruneConfig()
-        self.preserve_stm: bool = (
-            preserve_stm if preserve_stm is not None else base.preserve_stm
-        )
+        self.preserve_stm: bool = preserve_stm if preserve_stm is not None else base.preserve_stm
         self.preserve_mtm_count: int = (
-            preserve_mtm_count
-            if preserve_mtm_count is not None
-            else base.preserve_mtm_count
+            preserve_mtm_count if preserve_mtm_count is not None else base.preserve_mtm_count
         )
-        self.too_large_stm_strategy: Literal[
-            "keep", "truncate", "summarise"
-        ] = (
+        self.too_large_stm_strategy: Literal["keep", "truncate", "summarise"] = (
             too_large_stm_strategy
             if too_large_stm_strategy is not None
             else base.too_large_stm_strategy
         )
-        self.score_key: Callable[[MemoryItem], float] = (
-            score_key or _default_score
-        )
+        self.score_key: Callable[[MemoryItem], float] = score_key or _default_score
         self.summarizer = summarizer
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         limit = budget.context_available
         current = sum(estimate_tokens_text(it.content) for it in ctx.items)
         if current <= limit:
@@ -174,9 +162,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
 
         # Per-item token cost is computed once; we use it both for the
         # greedy budget arithmetic and the final breakdown.
-        token_cost: dict[str, int] = {
-            it.id: estimate_tokens_text(it.content) for it in ctx.items
-        }
+        token_cost: dict[str, int] = {it.id: estimate_tokens_text(it.content) for it in ctx.items}
 
         removable_ids = self._pruning_order(ctx.items)
         survivors_set = {it.id for it in ctx.items}
@@ -193,9 +179,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
         # If we're still over budget the only remaining lever is STM —
         # either truncate, summarise, or accept the over-budget bundle.
         if current > limit:
-            new_items, current = await self._handle_remaining_overage(
-                new_items, current, limit
-            )
+            new_items, current = await self._handle_remaining_overage(new_items, current, limit)
 
         new_messages = _rebuild_messages(ctx, new_items)
         return replace(
@@ -235,9 +219,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
         stm = [it for it in items if it.tier == MemoryTier.STM]
 
         # LTM: ascending by score, then by created_at (older loses on ties).
-        ltm_sorted = sorted(
-            ltm, key=lambda it: (self.score_key(it), _ts_key(it))
-        )
+        ltm_sorted = sorted(ltm, key=lambda it: (self.score_key(it), _ts_key(it)))
 
         # MTM: keep the freshest ``preserve_mtm_count``; everything older
         # is eligible, oldest-first.
@@ -248,9 +230,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
             mtm_removable = mtm_sorted
 
         # STM: only if explicitly opted in.
-        stm_removable: list[MemoryItem] = (
-            [] if self.preserve_stm else sorted(stm, key=_ts_key)
-        )
+        stm_removable: list[MemoryItem] = [] if self.preserve_stm else sorted(stm, key=_ts_key)
 
         return [it.id for it in (*ltm_sorted, *mtm_removable, *stm_removable)]
 
@@ -284,9 +264,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
                 new_items.append(it)
         return new_items, current
 
-    async def _shrink(
-        self, item: MemoryItem, target_tokens: int
-    ) -> MemoryItem:
+    async def _shrink(self, item: MemoryItem, target_tokens: int) -> MemoryItem:
         """Apply truncate or summarise according to strategy."""
         if target_tokens <= 0:
             return replace(item, content="")
@@ -295,9 +273,7 @@ class ScoreAwareBudgetPrune(BaseOptimizer):
                 summary = await self.summarizer.summarize(item.content)
                 return replace(item, content=str(summary))
             except Exception:
-                log.exception(
-                    "ScoreAwareBudgetPrune summariser failed; truncating"
-                )
+                log.exception("ScoreAwareBudgetPrune summariser failed; truncating")
         return replace(item, content=_truncate(item.content, target_tokens))
 
 
@@ -320,9 +296,7 @@ def _truncate(text: str, target_tokens: int) -> str:
     return text[: target_tokens * 4].rstrip() + "…"
 
 
-def _rebuild_messages(
-    ctx: ContextBundle, items: list[MemoryItem]
-) -> list[dict[str, str]]:
+def _rebuild_messages(ctx: ContextBundle, items: list[MemoryItem]) -> list[dict[str, str]]:
     survivors = {it.id for it in items}
     out: list[dict[str, str]] = []
     n_items_orig = len(ctx.items)
@@ -344,9 +318,7 @@ def _rebuild_messages(
 def _tier_breakdown(items: list[MemoryItem]) -> dict[str, int]:
     counts: dict[str, int] = {"stm": 0, "mtm": 0, "ltm": 0}
     for it in items:
-        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(
-            it.content
-        )
+        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(it.content)
     return counts
 
 

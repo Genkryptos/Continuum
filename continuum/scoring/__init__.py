@@ -11,6 +11,7 @@ Scorer  — ``ScorerProtocol`` implementation: weighted relevance / importance
 
 Dependency-free (stdlib + core types); safe to import anywhere.
 """
+
 from __future__ import annotations
 
 from continuum.scoring.scorer import Scorer

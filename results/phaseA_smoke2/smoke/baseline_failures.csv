@@ -1,2 +1,0 @@
-question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,partial_recall,missing_expected_session_ids,error,latency_ms
-0a995998,wrong_retrieval,3,5 items of clothing,answer_afa9873b_2;answer_afa9873b_3;answer_afa9873b_1,answer_afa9873b_1;answer_afa9873b_2;answer_afa9873b_3;ultrachat_331531;fa46a10e;85846900_2;25091584_1,1.000,,,16270.8

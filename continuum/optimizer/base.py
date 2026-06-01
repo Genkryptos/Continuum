@@ -70,14 +70,11 @@ def estimate_tokens_text(text: str, *, encoding: str = _DEFAULT_ENCODING) -> int
     try:
         return len(enc.encode(text))
     except Exception:  # pragma: no cover - encoder edge cases
-        log.debug("tiktoken encode failed; using whitespace fallback",
-                  exc_info=True)
+        log.debug("tiktoken encode failed; using whitespace fallback", exc_info=True)
         return len(text.split())
 
 
-def estimate_tokens(
-    ctx: ContextBundle, *, encoding: str = _DEFAULT_ENCODING
-) -> int:
+def estimate_tokens(ctx: ContextBundle, *, encoding: str = _DEFAULT_ENCODING) -> int:
     """
     Sum :func:`estimate_tokens_text` over every item in *ctx*.
 
@@ -87,8 +84,7 @@ def estimate_tokens(
     because that field reflects whatever counter the Retriever used (often
     a whitespace estimate); the optimizer needs the real token count.
     """
-    return sum(estimate_tokens_text(it.content, encoding=encoding)
-               for it in ctx.items)
+    return sum(estimate_tokens_text(it.content, encoding=encoding) for it in ctx.items)
 
 
 class BaseOptimizer(ABC):
@@ -102,9 +98,7 @@ class BaseOptimizer(ABC):
     """
 
     @abstractmethod
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         """Apply the strategy. Concrete subclasses implement."""
 
     def cost_estimate(self, ctx: ContextBundle) -> Cost:

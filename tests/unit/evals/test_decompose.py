@@ -6,6 +6,7 @@ decomposition retriever (the multi-session / temporal lever).
 
 All LLM + base-retriever calls are stubbed; tests run offline.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -23,7 +24,8 @@ from evals.longmemeval.decompose import (
 
 def test_parse_plain_lines() -> None:
     out = parse_subquestions(
-        "When did X start?\nWhen did Y start?", original="orig",
+        "When did X start?\nWhen did Y start?",
+        original="orig",
     )
     assert out == ["When did X start?", "When did Y start?"]
 
@@ -32,13 +34,17 @@ def test_parse_strips_numbering_and_bullets() -> None:
     reply = "1. First question?\n2) Second question?\n- Third?\n* Fourth?"
     out = parse_subquestions(reply, original="orig")
     assert out == [
-        "First question?", "Second question?", "Third?", "Fourth?",
+        "First question?",
+        "Second question?",
+        "Third?",
+        "Fourth?",
     ]
 
 
 def test_parse_dedupes_case_insensitively() -> None:
     out = parse_subquestions(
-        "What is X?\nwhat is x?\nWhat is Y?", original="orig",
+        "What is X?\nwhat is x?\nWhat is Y?",
+        original="orig",
     )
     assert out == ["What is X?", "What is Y?"]
 
@@ -88,25 +94,31 @@ class _FakeBaseRetriever:
         self.queries.append(query.text)
         ids = self.table.get(query.text, [])
         items = [
-            MemoryItem(id=i, content=f"content-{i}", tier=MemoryTier.STM,
-                       metadata={"role": "user"})
+            MemoryItem(id=i, content=f"content-{i}", tier=MemoryTier.STM, metadata={"role": "user"})
             for i in ids
         ]
         return ContextBundle(
-            items=items, messages=[], tokens_used=0,
-            budget=budget, tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
+            items=items,
+            messages=[],
+            tokens_used=0,
+            budget=budget,
+            tier_breakdown={"stm": 0, "mtm": 0, "ltm": 0},
         )
 
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8000, stm_reserved=500, mtm_reserved=500,
-        ltm_reserved=2000, response_reserved=500,
+        total=8000,
+        stm_reserved=500,
+        mtm_reserved=500,
+        ltm_reserved=2000,
+        response_reserved=500,
     )
 
 
 def _q(text: str):
     from continuum.core.types import Query
+
     return Query(text=text)
 
 
@@ -117,10 +129,12 @@ def _q(text: str):
 
 @pytest.mark.asyncio
 async def test_retrieves_once_per_subquestion_and_merges() -> None:
-    base = _FakeBaseRetriever({
-        "When did X start?": ["a", "b"],
-        "When did Y start?": ["c", "d"],
-    })
+    base = _FakeBaseRetriever(
+        {
+            "When did X start?": ["a", "b"],
+            "When did Y start?": ["c", "d"],
+        }
+    )
     llm = _FakeLLM(reply="When did X start?\nWhen did Y start?")
     r = DecompositionRetriever(base=base, llm=llm)
 
@@ -138,15 +152,17 @@ async def test_retrieves_once_per_subquestion_and_merges() -> None:
 @pytest.mark.asyncio
 async def test_merge_dedupes_overlapping_hits() -> None:
     # Both sub-questions retrieve item "shared".
-    base = _FakeBaseRetriever({
-        "Q1?": ["shared", "x"],
-        "Q2?": ["shared", "y"],
-    })
+    base = _FakeBaseRetriever(
+        {
+            "Q1?": ["shared", "x"],
+            "Q2?": ["shared", "y"],
+        }
+    )
     llm = _FakeLLM(reply="Q1?\nQ2?")
     r = DecompositionRetriever(base=base, llm=llm)
     ctx = await r.retrieve(_q("compound"), _budget())
     ids = [it.id for it in ctx.items]
-    assert ids.count("shared") == 1          # deduped
+    assert ids.count("shared") == 1  # deduped
     assert set(ids) == {"shared", "x", "y"}
 
 
@@ -157,7 +173,7 @@ async def test_simple_question_single_subquestion() -> None:
     llm = _FakeLLM(reply="What is my name?")
     r = DecompositionRetriever(base=base, llm=llm)
     ctx = await r.retrieve(_q("What is my name?"), _budget())
-    assert base.queries == ["What is my name?"]   # retrieved once
+    assert base.queries == ["What is my name?"]  # retrieved once
     assert ctx.debug_info["n_sub_questions"] == 1
 
 
@@ -174,19 +190,22 @@ async def test_llm_failure_falls_back_to_plain_retrieval() -> None:
 
 @pytest.mark.asyncio
 async def test_max_items_caps_merged_context() -> None:
-    base = _FakeBaseRetriever({
-        "Q1?": [f"a{i}" for i in range(10)],
-        "Q2?": [f"b{i}" for i in range(10)],
-    })
+    base = _FakeBaseRetriever(
+        {
+            "Q1?": [f"a{i}" for i in range(10)],
+            "Q2?": [f"b{i}" for i in range(10)],
+        }
+    )
     llm = _FakeLLM(reply="Q1?\nQ2?")
     r = DecompositionRetriever(base=base, llm=llm, max_items=12)
     ctx = await r.retrieve(_q("big compound"), _budget())
-    assert len(ctx.items) == 12        # 20 unique → capped at 12
+    assert len(ctx.items) == 12  # 20 unique → capped at 12
 
 
 @pytest.mark.asyncio
 async def test_base_retrieve_error_is_isolated() -> None:
     """One sub-question's retrieval failing shouldn't sink the others."""
+
     class _PartlyBroken(_FakeBaseRetriever):
         async def retrieve(self, query, budget):
             if query.text == "BOOM?":

@@ -157,9 +157,7 @@ class _SeparatorPreservingCompressor:
     def __init__(self, sep: str = " ⟦SEP⟧ ") -> None:
         self.sep = sep
 
-    def compress_prompt(
-        self, text: str, *, rate: float, force_tokens: list[str]
-    ) -> dict[str, str]:
+    def compress_prompt(self, text: str, *, rate: float, force_tokens: list[str]) -> dict[str, str]:
         out_pieces = []
         for piece in text.split(self.sep):
             words = piece.split()
@@ -188,17 +186,19 @@ async def test_optimizer_reduces_context_under_budget() -> None:
     original_tokens = estimate_tokens(ctx)
     original_full_text = "\n".join(it.content for it in ctx.items)
 
-    chain = OptimizerChain([
-        StmTrim(keep_last=10),
-        MtmSummarize(keep_recent=3, max_summary_tokens=150),
-        SemanticDedupe(threshold=0.92, skip_if_fewer_than=10),
-        LLMLinguaCompress(
-            compressor=_SeparatorPreservingCompressor(),
-            ratio=0.5,
-            min_input_tokens=200,
-        ),
-        ScoreAwareBudgetPrune(preserve_mtm_count=3),
-    ])
+    chain = OptimizerChain(
+        [
+            StmTrim(keep_last=10),
+            MtmSummarize(keep_recent=3, max_summary_tokens=150),
+            SemanticDedupe(threshold=0.92, skip_if_fewer_than=10),
+            LLMLinguaCompress(
+                compressor=_SeparatorPreservingCompressor(),
+                ratio=0.5,
+                min_input_tokens=200,
+            ),
+            ScoreAwareBudgetPrune(preserve_mtm_count=3),
+        ]
+    )
 
     out = await chain.apply(ctx, budget)
 
@@ -218,34 +218,25 @@ async def test_optimizer_reduces_context_under_budget() -> None:
     # ── 3. STM kept its recent 10 turns verbatim ────────────────────────────
     stm_after = [it for it in out.items if it.tier == MemoryTier.STM]
     assert len(stm_after) == 10
-    surviving_stm_offsets = sorted(
-        (it.created_at - _BASE).total_seconds() / 60 for it in stm_after
-    )
+    surviving_stm_offsets = sorted((it.created_at - _BASE).total_seconds() / 60 for it in stm_after)
     # Newest 10 are offsets 40..49.
     assert surviving_stm_offsets == [float(i) for i in range(40, 50)]
 
     # ── 4. MTM has ≥ 3 rows (recent + at least one summary) ────────────────
     mtm_after = [it for it in out.items if it.tier == MemoryTier.MTM]
     assert len(mtm_after) >= 3
-    assert any(
-        it.metadata.get("kind") == "mtm_summary" for it in mtm_after
-    ), "expected MtmSummarize to have produced an mtm_summary row"
+    assert any(it.metadata.get("kind") == "mtm_summary" for it in mtm_after), (
+        "expected MtmSummarize to have produced an mtm_summary row"
+    )
 
     # ── 5. No remaining LTM duplicates above the threshold ─────────────────
-    ltm_after = [
-        it for it in out.items
-        if it.tier == MemoryTier.LTM and it.embedding is not None
-    ]
+    ltm_after = [it for it in out.items if it.tier == MemoryTier.LTM and it.embedding is not None]
     if len(ltm_after) >= 2:
-        matrix = np.asarray(
-            [it.embedding for it in ltm_after], dtype=np.float32
-        )
+        matrix = np.asarray([it.embedding for it in ltm_after], dtype=np.float32)
         sim = cosine_similarity_matrix(matrix)
         np.fill_diagonal(sim, 0.0)
         max_offdiag = float(sim.max()) if sim.size else 0.0
-        assert max_offdiag < 0.92, (
-            f"residual duplicate cosine {max_offdiag:.3f} ≥ 0.92"
-        )
+        assert max_offdiag < 0.92, f"residual duplicate cosine {max_offdiag:.3f} ≥ 0.92"
 
     # ── 6. Semantic similarity (lexical proxy) preserved ≥ 0.80 ─────────────
     # We don't have a real embedder in the chain, so use a tf-style
@@ -254,10 +245,7 @@ async def test_optimizer_reduces_context_under_budget() -> None:
     # ≥ 0.80 floor remains a meaningful "no catastrophic drift" guard.
     surviving_full_text = "\n".join(it.content for it in out.items)
     overlap = _lexical_cosine(original_full_text, surviving_full_text)
-    assert overlap >= 0.80, (
-        f"context lexical similarity dropped to {overlap:.2f}; "
-        "expected ≥ 0.80"
-    )
+    assert overlap >= 0.80, f"context lexical similarity dropped to {overlap:.2f}; expected ≥ 0.80"
 
     # ── 7. Chain debug telemetry surfaced ──────────────────────────────────
     assert "stm_trim" in out.debug_info

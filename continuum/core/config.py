@@ -254,9 +254,7 @@ class ExtractionConfig(BaseSettings):
         default=0.7,
         ge=0.0,
         le=1.0,
-        validation_alias=AliasChoices(
-            "confidence_threshold", "CONTINUUM_EXTRACT_THRESHOLD"
-        ),
+        validation_alias=AliasChoices("confidence_threshold", "CONTINUUM_EXTRACT_THRESHOLD"),
         description="Minimum GLiNER span score to keep an entity (0–1).",
     )
     device: Literal["auto", "cuda", "cpu"] = Field(
@@ -418,17 +416,13 @@ class TriggerConfig(BaseSettings):
 
     on_new_entity: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "on_new_entity", "CONTINUUM_TRIGGER_ON_NEW_ENTITY"
-        ),
+        validation_alias=AliasChoices("on_new_entity", "CONTINUUM_TRIGGER_ON_NEW_ENTITY"),
         description="Promote eagerly when a turn mentions an entity not in LTM.",
     )
     block_threshold: int = Field(
         default=20,
         ge=1,
-        validation_alias=AliasChoices(
-            "block_threshold", "CONTINUUM_TRIGGER_BLOCK_THRESHOLD"
-        ),
+        validation_alias=AliasChoices("block_threshold", "CONTINUUM_TRIGGER_BLOCK_THRESHOLD"),
         description="Promote once this many unprocessed MTM blocks accumulate.",
     )
     periodic_interval_seconds: int = Field(
@@ -474,9 +468,7 @@ class RerankerConfig(BaseSettings):
         default=32,
         ge=1,
         le=512,
-        validation_alias=AliasChoices(
-            "batch_size", "CONTINUUM_RERANK_BATCH_SIZE"
-        ),
+        validation_alias=AliasChoices("batch_size", "CONTINUUM_RERANK_BATCH_SIZE"),
         description="(query, doc) pairs scored per cross-encoder forward pass.",
     )
     device: Literal["auto", "cuda", "cpu"] = Field(
@@ -496,9 +488,7 @@ class RerankerConfig(BaseSettings):
     skip_if_fewer_than: int = Field(
         default=10,
         ge=0,
-        validation_alias=AliasChoices(
-            "skip_if_fewer_than", "CONTINUUM_RERANK_SKIP_BELOW"
-        ),
+        validation_alias=AliasChoices("skip_if_fewer_than", "CONTINUUM_RERANK_SKIP_BELOW"),
         description=(
             "Below this many items, skip reranking entirely — the cross-"
             "encoder latency is not worth it for a tiny set."
@@ -533,9 +523,7 @@ class PolicyEngineConfig(BaseSettings):
 
     enabled: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "enabled", "CONTINUUM_POLICY_ENABLED"
-        ),
+        validation_alias=AliasChoices("enabled", "CONTINUUM_POLICY_ENABLED"),
         description=(
             "Master switch. When False (or no PolicyEngine is wired), the "
             "Promoter falls back to the legacy Mem0 ADD/UPDATE/DELETE/NOOP "
@@ -544,9 +532,7 @@ class PolicyEngineConfig(BaseSettings):
     )
     strict_sensitivity: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "strict_sensitivity", "CONTINUUM_POLICY_STRICT_SENSITIVITY"
-        ),
+        validation_alias=AliasChoices("strict_sensitivity", "CONTINUUM_POLICY_STRICT_SENSITIVITY"),
         description=(
             "When True, the SensitivityPolicy always wins on conflict — "
             "never merge a redact/encrypt requirement away."
@@ -615,9 +601,7 @@ class PolicyEngineConfig(BaseSettings):
     )
     enable_code_policy: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "enable_code_policy", "CONTINUUM_POLICY_ENABLE_CODE"
-        ),
+        validation_alias=AliasChoices("enable_code_policy", "CONTINUUM_POLICY_ENABLE_CODE"),
     )
     enable_procedural_policy: bool = Field(
         default=True,
@@ -832,9 +816,7 @@ class RetrieverConfig(BaseSettings):
     graph_expand_n: int = Field(
         default=10,
         ge=0,
-        validation_alias=AliasChoices(
-            "graph_expand_n", "CONTINUUM_RETRIEVER_GRAPH_EXPAND_N"
-        ),
+        validation_alias=AliasChoices("graph_expand_n", "CONTINUUM_RETRIEVER_GRAPH_EXPAND_N"),
         description=(
             "How many top entity-kind hits to expand via 1-hop LTM graph "
             "neighbours (0 disables graph expansion). Distinct from "
@@ -843,9 +825,7 @@ class RetrieverConfig(BaseSettings):
     )
     hyde_enabled: bool = Field(
         default=False,
-        validation_alias=AliasChoices(
-            "hyde_enabled", "CONTINUUM_RETRIEVER_HYDE_ENABLED"
-        ),
+        validation_alias=AliasChoices("hyde_enabled", "CONTINUUM_RETRIEVER_HYDE_ENABLED"),
         description=(
             "Enable HyDE query rewriting (a hypothetical answer is generated "
             "and used as the search query). Off by default — needs an "
@@ -926,9 +906,7 @@ class PromoterConfig(BaseSettings):
         default=10,
         ge=1,
         le=100,
-        validation_alias=AliasChoices(
-            "max_neighbors", "CONTINUUM_PROMOTER_MAX_NEIGHBORS"
-        ),
+        validation_alias=AliasChoices("max_neighbors", "CONTINUUM_PROMOTER_MAX_NEIGHBORS"),
         description=(
             "Top-K similar LTM facts retrieved per candidate to ground the "
             "ADD/UPDATE/DELETE/NOOP decision."
@@ -938,18 +916,14 @@ class PromoterConfig(BaseSettings):
         default=0.0,
         ge=0.0,
         le=2.0,
-        validation_alias=AliasChoices(
-            "temperature", "CONTINUUM_PROMOTER_TEMPERATURE"
-        ),
+        validation_alias=AliasChoices("temperature", "CONTINUUM_PROMOTER_TEMPERATURE"),
         description="0.0 keeps ADD/UPDATE/DELETE/NOOP decisions deterministic.",
     )
     max_tokens: int = Field(
         default=1024,
         ge=1,
         le=8192,
-        validation_alias=AliasChoices(
-            "max_tokens", "CONTINUUM_PROMOTER_MAX_TOKENS"
-        ),
+        validation_alias=AliasChoices("max_tokens", "CONTINUUM_PROMOTER_MAX_TOKENS"),
         description="Completion-token cap for the decision call (cost control).",
     )
     timeout: int = Field(
@@ -962,9 +936,7 @@ class PromoterConfig(BaseSettings):
         default=0.5,
         ge=0.0,
         le=1.0,
-        validation_alias=AliasChoices(
-            "add_threshold", "CONTINUUM_PROMOTER_ADD_THRESHOLD"
-        ),
+        validation_alias=AliasChoices("add_threshold", "CONTINUUM_PROMOTER_ADD_THRESHOLD"),
         description=(
             "Short-circuit: if the best neighbour's cosine is below this, "
             "the candidate is definitely new → ADD without calling the LLM."
@@ -974,9 +946,7 @@ class PromoterConfig(BaseSettings):
         default=0.97,
         ge=0.0,
         le=1.0,
-        validation_alias=AliasChoices(
-            "noop_threshold", "CONTINUUM_PROMOTER_NOOP_THRESHOLD"
-        ),
+        validation_alias=AliasChoices("noop_threshold", "CONTINUUM_PROMOTER_NOOP_THRESHOLD"),
         description=(
             "Short-circuit: if the best neighbour's cosine exceeds this, the "
             "candidate is a near-duplicate → NOOP without calling the LLM."
@@ -1183,12 +1153,8 @@ class ContinuumConfig(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
-    llm_extraction: LLMExtractionConfig = Field(
-        default_factory=LLMExtractionConfig
-    )
-    fact_extraction: FactExtractionConfig = Field(
-        default_factory=FactExtractionConfig
-    )
+    llm_extraction: LLMExtractionConfig = Field(default_factory=LLMExtractionConfig)
+    fact_extraction: FactExtractionConfig = Field(default_factory=FactExtractionConfig)
     trigger: TriggerConfig = Field(default_factory=TriggerConfig)
     policy_engine: PolicyEngineConfig = Field(default_factory=PolicyEngineConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
@@ -1307,7 +1273,9 @@ class ContinuumConfig(BaseSettings):
         settings used for a run are reproducible.
         """
         data = self.model_dump(mode="json")
-        return yaml.dump(data, default_flow_style=False, sort_keys=True)
+        # yaml.dump is untyped (mypy sees Any); pin to str for no-any-return.
+        out: str = yaml.dump(data, default_flow_style=False, sort_keys=True)
+        return out
 
     @classmethod
     def yaml_schema(cls) -> str:

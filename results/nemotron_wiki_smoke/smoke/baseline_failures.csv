@@ -1,3 +1,0 @@
-question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
-0a995998,missing_fact,3,I don't know,answer_afa9873b_2;answer_afa9873b_3;answer_afa9873b_1,ultrachat_331531,,170576.4
-gpt4_59c863d7,llm_error,"I have worked on or bought five model kits. The scales of the models are: Revell F-15 Eagle (scale not mentioned), Tamiya 1/48 scale Spitfire Mk.V, 1/16 scale German Tiger I tank, 1/72 scale B-29 bomber, and 1/24 scale '69 Camaro.","[error: RuntimeError(""lmstudio: ConnectError('All connection attempts failed')"")]",answer_593bdffd_4;answer_593bdffd_1;answer_593bdffd_3;answer_593bdffd_2,,,46540.8

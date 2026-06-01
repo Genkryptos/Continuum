@@ -4,6 +4,7 @@ tests/unit/test_scorer.py
 Unit tests for ``continuum.scoring.scorer.Scorer`` — the composite
 memory-scoring formula. Pure / deterministic (fixed ``now``).
 """
+
 from __future__ import annotations
 
 import math
@@ -73,9 +74,7 @@ def test_satisfies_scorer_protocol() -> None:
 class TestRelevance:
     def test_identical_embeddings_relevance_one(self) -> None:
         s = Scorer()
-        b = s.breakdown(
-            _item(embedding=[1.0, 2.0, 3.0]), _q([1.0, 2.0, 3.0]), NOW
-        )
+        b = s.breakdown(_item(embedding=[1.0, 2.0, 3.0]), _q([1.0, 2.0, 3.0]), NOW)
         assert b.relevance == pytest.approx(1.0)
 
     def test_orthogonal_embeddings_relevance_zero(self) -> None:
@@ -86,7 +85,7 @@ class TestRelevance:
     def test_opposite_embeddings_clamped_to_zero(self) -> None:
         s = Scorer()
         b = s.breakdown(_item(embedding=[1.0, 0.0]), _q([-1.0, 0.0]), NOW)
-        assert b.relevance == 0.0           # cosine -1 clamped to [0,1]
+        assert b.relevance == 0.0  # cosine -1 clamped to [0,1]
 
     def test_missing_embedding_relevance_zero(self) -> None:
         s = Scorer()
@@ -109,25 +108,22 @@ class TestRecency:
     def test_decays_with_age(self) -> None:
         s = Scorer()  # tau = 168 h
         fresh = s.breakdown(_item(created_at=NOW), _q(), NOW).recency
-        week = s.breakdown(
-            _item(created_at=NOW - timedelta(hours=168)), _q(), NOW
-        ).recency
-        month = s.breakdown(
-            _item(created_at=NOW - timedelta(hours=720)), _q(), NOW
-        ).recency
-        assert fresh == pytest.approx(1.0)            # exp(0)
+        week = s.breakdown(_item(created_at=NOW - timedelta(hours=168)), _q(), NOW).recency
+        month = s.breakdown(_item(created_at=NOW - timedelta(hours=720)), _q(), NOW).recency
+        assert fresh == pytest.approx(1.0)  # exp(0)
         assert week == pytest.approx(math.exp(-1.0))  # age == tau
-        assert fresh > week > month                   # monotone decay
+        assert fresh > week > month  # monotone decay
 
     def test_access_count_reinforces(self) -> None:
         s = Scorer()
-        old = _item(created_at=NOW - timedelta(hours=504))   # 3·tau
+        old = _item(created_at=NOW - timedelta(hours=504))  # 3·tau
         cold = s.breakdown(old, _q(), NOW).recency
         warm = s.breakdown(
             _item(created_at=NOW - timedelta(hours=504), access_count=5),
-            _q(), NOW,
+            _q(),
+            NOW,
         ).recency
-        assert warm > cold                            # recall strengthens it
+        assert warm > cold  # recall strengthens it
         # exact: base=exp(-3); strength=1+log1p(5)
         base = math.exp(-3.0)
         assert warm == pytest.approx(base * (1.0 + math.log1p(5)))
@@ -137,15 +133,16 @@ class TestRecency:
         # Recent + heavily accessed → base·strength > 1 → clamps to 1.0.
         r = s.breakdown(
             _item(created_at=NOW - timedelta(hours=24), access_count=50),
-            _q(), NOW,
+            _q(),
+            NOW,
         ).recency
         assert r == 1.0
 
     def test_last_access_overrides_created_at(self) -> None:
         s = Scorer()
         it = _item(
-            created_at=NOW - timedelta(hours=720),     # old…
-            last_access=NOW,                            # …but just re-read
+            created_at=NOW - timedelta(hours=720),  # old…
+            last_access=NOW,  # …but just re-read
         )
         assert s.breakdown(it, _q(), NOW).recency == pytest.approx(1.0)
 
@@ -164,7 +161,9 @@ class TestRecency:
 class TestWeights:
     def test_weights_are_used(self) -> None:
         item = _item(
-            embedding=[1.0, 1.0], importance=0.2, confidence=0.4,
+            embedding=[1.0, 1.0],
+            importance=0.2,
+            confidence=0.4,
             created_at=NOW,
         )
         q = _q([1.0, 1.0])  # relevance = 1.0; recency = 1.0 (fresh)
@@ -215,7 +214,7 @@ class TestLayerBoost:
 
         assert stm == pytest.approx(1.05)
         assert mtm == pytest.approx(1.00)
-        assert ltm == pytest.approx(1.10)   # LTM may exceed 1.0 by design
+        assert ltm == pytest.approx(1.10)  # LTM may exceed 1.0 by design
         assert ltm > stm > mtm
 
     def test_breakdown_is_unboosted(self) -> None:
@@ -259,11 +258,8 @@ def test_full_formula_matches_spec() -> None:
     q = _q([1.0, 0.0, 0.0])  # relevance = 1.0
 
     relevance, importance = 1.0, 0.8
-    recency = math.exp(-1.0)               # base, strength 1 (no accesses)
+    recency = math.exp(-1.0)  # base, strength 1 (no accesses)
     confidence = 0.9
-    composite = (
-        0.45 * relevance + 0.25 * importance
-        + 0.20 * recency + 0.10 * confidence
-    )
+    composite = 0.45 * relevance + 0.25 * importance + 0.20 * recency + 0.10 * confidence
     assert s.breakdown(item, q, NOW).composite == pytest.approx(composite)
     assert s.score(item, q, NOW) == pytest.approx(composite * 1.1)

@@ -13,6 +13,7 @@ The pipeline is the bottleneck identified in the 500-row analysis —
 these tests pin the deterministic contracts that every adapter run
 relies on so regressions surface in CI, not on the next eval spend.
 """
+
 from __future__ import annotations
 
 from evals.longmemeval.answer_post import (
@@ -58,9 +59,12 @@ def test_classify_date_time():
 def test_classify_knowledge_update_beats_temporal():
     # The KU rules run BEFORE the temporal rules; "changed" wins over
     # "before/after".
-    assert classify(
-        "What did I use to drink before I changed my preference?",
-    ) == QuestionType.KNOWLEDGE_UPDATE
+    assert (
+        classify(
+            "What did I use to drink before I changed my preference?",
+        )
+        == QuestionType.KNOWLEDGE_UPDATE
+    )
 
 
 def test_classify_preference():
@@ -187,11 +191,7 @@ def test_clean_final_answer_keeps_plain_answer():
 
 
 def test_clean_final_answer_handles_bullet_evidence():
-    txt = (
-        "- evidence one\n"
-        "- evidence two\n"
-        "The answer is 45 minutes."
-    )
+    txt = "- evidence one\n- evidence two\nThe answer is 45 minutes."
     out = clean_final_answer(txt)
     assert out.endswith("45 minutes")
 
@@ -237,7 +237,8 @@ def test_validate_person_requires_name_shape():
 
 def test_validate_preference_rejects_generic_advice():
     ok, reason = validate_answer_shape(
-        "you should try iced tea", QuestionType.PREFERENCE,
+        "you should try iced tea",
+        QuestionType.PREFERENCE,
     )
     assert not ok and "preference_is_generic_advice" in reason
     ok, _ = validate_answer_shape("iced tea", QuestionType.PREFERENCE)
@@ -246,7 +247,8 @@ def test_validate_preference_rejects_generic_advice():
 
 def test_validate_rejects_idk():
     ok, reason = validate_answer_shape(
-        "I don't know based on the conversation.", QuestionType.COUNT,
+        "I don't know based on the conversation.",
+        QuestionType.COUNT,
     )
     assert not ok and reason == "answer_is_idk"
 

@@ -17,6 +17,7 @@ make_postgres_audit_sink— default audit sink writing to memory_promotions.
 litellm / psycopg3 are imported lazily; unit tests inject ``completion_fn``
 and ``audit_sink`` and need neither.
 """
+
 from __future__ import annotations
 
 from continuum.promotion.mem0_promoter import (

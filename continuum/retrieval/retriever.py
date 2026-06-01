@@ -26,6 +26,7 @@ prompt-ready ``messages`` + ``tier_breakdown`` token map). The spec's
 (LTM facts → MTM summaries → STM recent). Token accounting uses an
 injectable counter (whitespace split by default; pass tiktoken in prod).
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,9 +52,7 @@ TokenCounter = Callable[[str], int]
 HydeFn = Callable[[Query], Awaitable[str]]
 ClockFn = Callable[[], datetime]
 
-_ZERO = ScoreBreakdown(
-    relevance=0.0, importance=0.0, recency=0.0, confidence=0.0, composite=0.0
-)
+_ZERO = ScoreBreakdown(relevance=0.0, importance=0.0, recency=0.0, confidence=0.0, composite=0.0)
 
 
 class Retriever:
@@ -115,9 +114,7 @@ class Retriever:
 
     # ── RetrieverProtocol ───────────────────────────────────────────────────
 
-    async def retrieve(
-        self, query: Query, budget: TokenBudget
-    ) -> ContextBundle:
+    async def retrieve(self, query: Query, budget: TokenBudget) -> ContextBundle:
         """Run the full pipeline; never raises (best-effort context)."""
         debug: dict[str, Any] = {}
         try:
@@ -128,14 +125,16 @@ class Retriever:
             ltm_items = await self._rerank(query, scored, debug)
             stm_items = await self._stm_recent(query)
             mtm_items = await self._mtm_recent(query, budget)
-            return self._assemble(
-                budget, ltm_items, mtm_items, stm_items, debug
-            )
+            return self._assemble(budget, ltm_items, mtm_items, stm_items, debug)
         except Exception as exc:  # pragma: no cover - stages already guarded
             log.exception("retrieval pipeline aborted")
             return ContextBundle(
-                items=[], messages=[], tokens_used=0, budget=budget,
-                tier_breakdown={}, debug_info={"error": repr(exc), **debug},
+                items=[],
+                messages=[],
+                tokens_used=0,
+                budget=budget,
+                tier_breakdown={},
+                debug_info={"error": repr(exc), **debug},
             )
 
     # ── 1. HyDE (optional) ──────────────────────────────────────────────────
@@ -154,17 +153,13 @@ class Retriever:
 
     # ── 2. LTM hybrid search ────────────────────────────────────────────────
 
-    async def _ltm_hybrid(
-        self, query: Query, debug: dict[str, Any]
-    ) -> dict[str, ScoredItem]:
+    async def _ltm_hybrid(self, query: Query, debug: dict[str, Any]) -> dict[str, ScoredItem]:
         pool: dict[str, ScoredItem] = {}
         if self._ltm is None:
             debug["ltm_hybrid"] = 0
             return pool
         try:
-            hits: Sequence[ScoredItem] = await self._ltm.search_hybrid(
-                query, self.config.k1
-            )
+            hits: Sequence[ScoredItem] = await self._ltm.search_hybrid(query, self.config.k1)
         except Exception:
             log.exception("LTM hybrid search failed")
             debug["ltm_hybrid"] = "failed"
@@ -176,9 +171,7 @@ class Retriever:
 
     # ── 3. Graph expansion ──────────────────────────────────────────────────
 
-    async def _graph_expand(
-        self, pool: dict[str, ScoredItem], debug: dict[str, Any]
-    ) -> None:
+    async def _graph_expand(self, pool: dict[str, ScoredItem], debug: dict[str, Any]) -> None:
         n = self.config.graph_expand_n
         if n <= 0 or self._ltm is None or not hasattr(self._ltm, "neighbors"):
             debug["graph_added"] = 0
@@ -315,9 +308,7 @@ class Retriever:
         ranked = scored
         if self._reranker is not None and scored:
             try:
-                ranked = list(
-                    await self._reranker.rerank(query.text, scored)
-                )
+                ranked = list(await self._reranker.rerank(query.text, scored))
                 debug["reranked"] = True
             except Exception:
                 log.exception("rerank failed — keeping scored order")
@@ -339,15 +330,11 @@ class Retriever:
             log.exception("STM retrieval failed")
             return []
 
-    async def _mtm_recent(
-        self, query: Query, budget: TokenBudget
-    ) -> list[MemoryItem]:
+    async def _mtm_recent(self, query: Query, budget: TokenBudget) -> list[MemoryItem]:
         if self._mtm is None:
             return []
         try:
-            blocks = await self._mtm.recent(
-                budget.mtm_reserved, session_id=query.session_id
-            )
+            blocks = await self._mtm.recent(budget.mtm_reserved, session_id=query.session_id)
         except Exception:
             log.exception("MTM retrieval failed")
             return []
@@ -376,20 +363,14 @@ class Retriever:
         for it in mtm_items:
             messages.append({"role": "system", "content": it.content})
         for it in stm_items:
-            messages.append(
-                {"role": str(it.metadata.get("role", "user")),
-                 "content": it.content}
-            )
+            messages.append({"role": str(it.metadata.get("role", "user")), "content": it.content})
 
         t_ltm = sum(self._count(i.content) for i in ltm)
         t_mtm = sum(self._count(i.content) for i in mtm_items)
         t_stm = sum(self._count(i.content) for i in stm_items)
         breakdown = {"stm": t_stm, "mtm": t_mtm, "ltm": t_ltm}
 
-        debug.update(
-            {"ltm_final": len(ltm), "mtm": len(mtm_items),
-             "stm": len(stm_items)}
-        )
+        debug.update({"ltm_final": len(ltm), "mtm": len(mtm_items), "stm": len(stm_items)})
         return ContextBundle(
             items=items,
             messages=messages,

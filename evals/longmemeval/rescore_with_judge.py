@@ -214,23 +214,36 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--provider", default="groq",
-        choices=["groq", "openai"],
+        choices=["groq", "openai", "openrouter"],
         help=(
             "Which LLM provider hosts the judge. 'groq' needs "
-            "GROQ_API_KEY; 'openai' needs OPENAI_API_KEY. Pick the "
-            "one whose key you've already got loaded."
+            "GROQ_API_KEY; 'openai' needs OPENAI_API_KEY; 'openrouter' "
+            "needs OPENROUTER_API_KEY. Pick the one whose key you've "
+            "already got loaded."
         ),
     )
     p.add_argument(
         "--judge-model", default=None,
         help=(
             "Model used for judging. Defaults: 'llama-3.1-8b-instant' "
-            "on groq, 'gpt-4o-mini' on openai. Cheap is fine — the "
-            "judge just needs to compare strings semantically."
+            "on groq, 'gpt-4o-mini' on openai, 'openai/gpt-oss-120b' on "
+            "openrouter. Cheap is fine — the judge just compares strings "
+            "semantically."
         ),
     )
     p.add_argument("--rpm", type=int, default=28,
                    help="Client-side RPM cap for judge calls.")
+    p.add_argument(
+        "--judge-max-tokens", type=int, default=8,
+        help=(
+            "Token cap on the judge's yes/no reply. 8 is plenty for a "
+            "NON-reasoning model. REASONING judges (gpt-oss-120b, "
+            "deepseek-r1, o-series) burn this thinking and emit no "
+            "verdict — the parser then falls back to 'wrong' and marks "
+            "EVERYTHING incorrect. Set 1024-2048 if you must judge with "
+            "a reasoning model; better, judge with a non-reasoning one."
+        ),
+    )
     p.add_argument(
         "--limit", type=int, default=None,
         help="Re-grade only the first N rows (handy for validation).",
@@ -245,9 +258,11 @@ async def main_async(args: argparse.Namespace) -> int:
     if not args.input.exists():
         raise SystemExit(f"input file not found: {args.input}")
 
-    judge_model = args.judge_model or (
-        "gpt-4o-mini" if args.provider == "openai" else "llama-3.1-8b-instant"
-    )
+    judge_model = args.judge_model or {
+        "openai": "gpt-4o-mini",
+        "openrouter": "openai/gpt-oss-120b",
+        "groq": "llama-3.1-8b-instant",
+    }.get(args.provider, "llama-3.1-8b-instant")
     log.info(
         "loading judge provider=%s model=%s @ %d RPM",
         args.provider, judge_model, args.rpm,
@@ -255,9 +270,12 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.provider == "openai":
         from evals.longmemeval.bootstrap_ollama import OpenAILLM
         llm = OpenAILLM(model=judge_model, rpm=args.rpm)
+    elif args.provider == "openrouter":
+        from evals.longmemeval.bootstrap_ollama import OpenRouterLLM
+        llm = OpenRouterLLM(model=judge_model, rpm=args.rpm)
     else:
         llm = GroqLLM(model=judge_model, rpm=args.rpm)
-    judge = LLMJudgeScorer(llm=llm)
+    judge = LLMJudgeScorer(llm=llm, max_tokens=args.judge_max_tokens)
 
     log.info("re-scoring %s …", args.input)
     results, flipped = await _rescore(

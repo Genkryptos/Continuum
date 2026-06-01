@@ -13,6 +13,7 @@ Reranker  — ``RerankerProtocol`` cross-encoder (BGE-reranker-v2-m3) second
 ``sentence-transformers`` / ``torch`` are imported lazily, so importing this
 package is cheap and unit tests inject a fake model without those packages.
 """
+
 from __future__ import annotations
 
 from continuum.retrieval.reranker import Reranker

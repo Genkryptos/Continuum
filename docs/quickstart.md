@@ -144,6 +144,34 @@ production scale (millions of facts) and is documented separately in
 | Embedder hangs at "loading model" | First call downloads ~90MB to `~/.cache/huggingface/`. Disconnected? Set `TRANSFORMERS_OFFLINE=1` after the first successful run. |
 | `make demo-chat` says `python3: not found` | Mac-specific: install Python 3.12 framework or override with `BENCH_PYTHON=$(which python3) make demo-chat`. |
 
+## Small LLM helper
+
+Some Continuum modules (span selection, claim verification, intent
+classification) delegate to a tiny local instruct model through
+`continuum.extraction.small_llm.SmallLLM`. The default model is
+`qwen2.5:1.5b-instruct` served by Ollama.
+
+```bash
+# 1. install Ollama (mac):
+brew install ollama
+ollama serve &
+
+# 2. pull the default small model (~1 GB):
+ollama pull qwen2.5:1.5b-instruct
+```
+
+Override the model or endpoint with env vars (constructor args take
+precedence):
+
+```bash
+export CONTINUUM_SMALL_LLM_MODEL=qwen2.5:1.5b-instruct
+export CONTINUUM_SMALL_LLM_URL=http://localhost:11434
+```
+
+Responses are cached on disk at `~/.cache/continuum/small_llm.db` keyed
+on `(method, model, cache_key)`, so repeated passes over the same input
+don't re-hit the model.
+
 ## Where to next
 
 * You want to understand what just happened → [Architecture](architecture.md).

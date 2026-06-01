@@ -64,9 +64,7 @@ class StorageRouter:
         approvals_table: str = "memory_pending_approvals",
     ) -> None:
         if dsn is None and conn_factory is None and ltm is None:
-            raise ValueError(
-                "StorageRouter needs one of dsn, conn_factory, or ltm."
-            )
+            raise ValueError("StorageRouter needs one of dsn, conn_factory, or ltm.")
         self._dsn = dsn
         self._conn_factory = conn_factory
         self._ltm = ltm
@@ -82,8 +80,7 @@ class StorageRouter:
     ) -> list[UUID]:
         """Run all projections in *plan*; return the ids written."""
         if plan.action == MemoryAction.IGNORE:
-            log.debug("plan IGNORE for %s — no projection written",
-                      candidate.id)
+            log.debug("plan IGNORE for %s — no projection written", candidate.id)
             return []
         if plan.action == MemoryAction.ASK_USER:
             await self._write_pending_approval(candidate, plan)
@@ -92,15 +89,14 @@ class StorageRouter:
         written: list[UUID] = []
         for projection in plan.storage_projections:
             try:
-                new_id = await self._run_projection(
-                    projection, candidate, plan
-                )
+                new_id = await self._run_projection(projection, candidate, plan)
                 if new_id is not None and new_id not in written:
                     written.append(new_id)
             except Exception:
                 log.exception(
                     "projection %s failed for candidate %s — continuing",
-                    projection.value, candidate.id,
+                    projection.value,
+                    candidate.id,
                 )
         return written
 
@@ -114,22 +110,16 @@ class StorageRouter:
     ) -> UUID | None:
         if projection in (
             StorageProjection.POSTGRES_CANONICAL,
-            StorageProjection.VECTOR_INDEX,        # absorbed by canonical
-            StorageProjection.TEMPORAL_INDEX,      # absorbed by canonical
+            StorageProjection.VECTOR_INDEX,  # absorbed by canonical
+            StorageProjection.TEMPORAL_INDEX,  # absorbed by canonical
         ):
             return await self._write_canonical(candidate, plan)
         if projection == StorageProjection.TASK_QUEUE:
-            return await self._tag_projection(
-                candidate, plan, tag="task_queue", value=True
-            )
+            return await self._tag_projection(candidate, plan, tag="task_queue", value=True)
         if projection == StorageProjection.CODE_SYMBOL_INDEX:
-            return await self._tag_projection(
-                candidate, plan, tag="code_symbol_index", value=True
-            )
+            return await self._tag_projection(candidate, plan, tag="code_symbol_index", value=True)
         if projection == StorageProjection.RAW_EVIDENCE_STORE:
-            return await self._tag_projection(
-                candidate, plan, tag="evidence_store", value=True
-            )
+            return await self._tag_projection(candidate, plan, tag="evidence_store", value=True)
         if projection == StorageProjection.GRAPH_INDEX:
             # v1: nothing to do — edges are written by domain code that
             # actually knows the relationships; this projection is a
@@ -182,9 +172,7 @@ class StorageRouter:
             "source_span": candidate.source_span,
             "speaker": candidate.speaker,
             "expires_at": plan.retention.expire_at,
-            "status": "pending_approval"
-            if plan.privacy.requires_user_approval
-            else "active",
+            "status": "pending_approval" if plan.privacy.requires_user_approval else "active",
             "valid_from": candidate.valid_from,
             "valid_to": candidate.valid_until,
         }
@@ -196,7 +184,7 @@ class StorageRouter:
     def _canonical_upsert_sql(self) -> str:
         return (
             f"INSERT INTO {self._nodes} ("
-            "  id, layer, \"text\", kind, confidence, importance, tags,"
+            '  id, layer, "text", kind, confidence, importance, tags,'
             "  candidate_type, urgency, volatility, sensitivity,"
             "  source_authority, policy_ids,"
             "  retention, retrieval_policy, privacy_policy, update_policy,"
@@ -213,7 +201,7 @@ class StorageRouter:
             "  %(expires_at)s, %(status)s,"
             "  %(valid_from)s, %(valid_to)s, now(), now()"
             ") ON CONFLICT (id) DO UPDATE SET"
-            "  \"text\"           = EXCLUDED.\"text\","
+            '  "text"           = EXCLUDED."text",'
             "  kind             = EXCLUDED.kind,"
             "  confidence       = EXCLUDED.confidence,"
             "  importance       = EXCLUDED.importance,"
@@ -320,9 +308,7 @@ class StorageRouter:
                 "Install it with:  pip install 'psycopg[binary]>=3.1'"
             ) from exc
         assert self._dsn is not None
-        conn = await psycopg.AsyncConnection.connect(
-            self._dsn, autocommit=True
-        )
+        conn = await psycopg.AsyncConnection.connect(self._dsn, autocommit=True)
         try:
             yield conn
         finally:

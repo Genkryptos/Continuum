@@ -15,6 +15,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from continuum.core.types import ContextBundle
+from evals.longmemeval.evidence_packet import (
+    EvidencePacket,
+    render_evidence_packet_prompt,
+)
 from evals.longmemeval.evidence_spans import (
     EvidenceSpan,
     render_spans_for_prompt,
@@ -179,7 +183,46 @@ def build_subanswer_prompt(
 def build_final_synthesis_prompt(
     question: str,
     subanswers: list[SubAnswer],
+    *,
+    evidence_packet: EvidencePacket | None = None,
 ) -> str:
+    """
+    Build the final-answer synthesis prompt.
+
+    When ``evidence_packet`` is provided, the prompt switches to the
+    minimal-packet shape — the model receives only the verified
+    claims and their exact source spans, NOT the raw evidence blocks.
+    This is the "noisy memory window → minimal evidence packet"
+    change from the spec. Sub-answers are still included as
+    intermediate notes (they're cheap and sometimes carry
+    decomposition reasoning the model needs), but the heavyweight
+    evidence text is replaced.
+
+    When ``evidence_packet`` is None, the legacy shape is preserved
+    (full ``evidence_text`` per sub-answer) so callers that haven't
+    opted in keep their current behaviour.
+    """
+    if evidence_packet is not None:
+        # Packet-driven path. The packet renderer carries the strict
+        # "use only this evidence" instructions and the abstain
+        # contract — we just append a compact summary of the
+        # sub-answers as intermediate notes so the model can see the
+        # decomposition's intermediate conclusions.
+        packet_block = render_evidence_packet_prompt(evidence_packet)
+        if subanswers:
+            sub_notes = "\n".join(
+                f"  - sub-Q {i}: {sub.subquestion} → {sub.answer}"
+                for i, sub in enumerate(subanswers, start=1)
+            )
+            return (
+                packet_block.rstrip("Answer:").rstrip()
+                + "\n\nSub-answer notes (intermediate, may be incomplete; "
+                "the verified evidence above is authoritative):\n"
+                + sub_notes
+                + "\n\nFinal answer:"
+            )
+        return packet_block
+
     blocks: list[str] = []
     for idx, sub in enumerate(subanswers, start=1):
         sessions = ", ".join(sub.evidence_session_ids) or "none"

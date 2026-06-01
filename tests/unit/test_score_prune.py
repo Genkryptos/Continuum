@@ -19,6 +19,7 @@ Covers
 * debug_info + tier_breakdown rebuilt
 * Custom score_key honoured
 """
+
 from __future__ import annotations
 
 import uuid
@@ -53,9 +54,7 @@ def _budget(total: int = 100, response: int = 10) -> TokenBudget:
     )
 
 
-def _ltm(
-    text: str, *, importance: float, confidence: float = 1.0, offset: int = 0
-) -> MemoryItem:
+def _ltm(text: str, *, importance: float, confidence: float = 1.0, offset: int = 0) -> MemoryItem:
     return MemoryItem(
         id=str(uuid.uuid4()),
         content=text,
@@ -153,10 +152,7 @@ async def test_drops_lowest_scored_ltm_first() -> None:
 @pytest.mark.asyncio
 async def test_stops_once_under_budget() -> None:
     """Only as many items as needed are removed."""
-    items = [
-        _ltm(f"fact-{i} " * 10, importance=0.1 + 0.05 * i, offset=i)
-        for i in range(8)
-    ]
+    items = [_ltm(f"fact-{i} " * 10, importance=0.1 + 0.05 * i, offset=i) for i in range(8)]
     # Total ≈ 8 × 12 = 96 tokens; budget 50 means we should keep ~4 items.
     budget = _budget(total=55, response=5)
     ctx = _bundle(items, budget)
@@ -226,16 +222,13 @@ async def test_preserve_stm_false_allows_dropping() -> None:
     # Oldest STM dropped first.
     survivors = list(out.items)
     assert len(survivors) < len(stm)
-    surviving_offsets = [
-        (it.created_at - _BASE).total_seconds() for it in survivors
-    ]
+    surviving_offsets = [(it.created_at - _BASE).total_seconds() for it in survivors]
     # All remaining offsets are larger than the dropped ones.
     if survivors:
         dropped_offsets = [
-            i for i in range(5)
-            if not any(
-                (s.created_at - _BASE).total_seconds() == i for s in survivors
-            )
+            i
+            for i in range(5)
+            if not any((s.created_at - _BASE).total_seconds() == i for s in survivors)
         ]
         assert all(d < min(surviving_offsets) for d in dropped_offsets)
 
@@ -257,9 +250,7 @@ async def test_mtm_preserve_count_honoured() -> None:
     mtm_after = [it for it in out.items if it.tier == MemoryTier.MTM]
     # At least 2 MTM survived (the 2 newest).
     assert len(mtm_after) >= 2
-    surviving_offsets = sorted(
-        (it.created_at - _BASE).total_seconds() for it in mtm_after
-    )
+    surviving_offsets = sorted((it.created_at - _BASE).total_seconds() for it in mtm_after)
     # The freshest 2 (offsets 3, 4) are in.
     assert 4.0 in surviving_offsets
     assert 3.0 in surviving_offsets
@@ -341,10 +332,7 @@ async def test_summarise_strategy_delegates_then_truncates_on_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_debug_info_and_breakdown() -> None:
-    items = [
-        _ltm(f"ltm-{i} " * 5, importance=0.1 + 0.1 * i, offset=i)
-        for i in range(6)
-    ]
+    items = [_ltm(f"ltm-{i} " * 5, importance=0.1 + 0.1 * i, offset=i) for i in range(6)]
     budget = _budget(total=30, response=5)
     ctx = _bundle(items, budget)
     out = await ScoreAwareBudgetPrune().apply(ctx, budget)

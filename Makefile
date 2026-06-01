@@ -17,8 +17,8 @@
 .PHONY: test test-fast test-integration test-cov benchmark \
         lint typecheck format check \
         install install-dev clean help \
-        repro-longmemeval bench-ingest bench-retrieval bench-supersession \
-        bench-bitemporal bench-all bench-gate demo-chat build build-verify
+        repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
+        bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
 
@@ -108,6 +108,30 @@ clean: ## Remove caches, coverage artefacts, and build output
 repro-longmemeval: ## Reproduce the LongMemEval-S headline numbers from findings/longmemeval_2026-05.md
 	@bash findings/longmemeval/repro/run_repro.sh
 
+repro-everything: ## Reproduce the v1 headline: full LongMemEval-S (direct mode) + judged rescore + LOCOMO smoke (needs OPENROUTER_API_KEY; ~<2h, <$5)
+	@test -n "$$OPENROUTER_API_KEY" || ( echo "ERROR: export OPENROUTER_API_KEY first" && exit 1 )
+	@echo "==> [1/3] LongMemEval-S v1 full run (direct mode)…"
+	@$(BENCH_PYTHON) -m evals.longmemeval.bootstrap_ollama \
+		--provider openrouter --model openai/gpt-oss-120b \
+		--reasoner direct --use-ltm --no-llm-promoter --retriever hybrid \
+		--session-aware-retrieval --session-top-k 12 --turns-per-session 6 \
+		--top-k 80 --max-context-chars 64000 --answer-max-tokens 2048 \
+		--full --yes --no-smoke --output results/v1_final
+	@echo "==> [2/3] judged rescore (non-reasoning judge)…"
+	@$(BENCH_PYTHON) -m evals.longmemeval.rescore_with_judge \
+		--input $$(ls -t results/v1_final/baseline_*.json | head -1) \
+		--output results/v1_final/judged.json \
+		--provider openrouter --judge-model meta-llama/llama-3.3-70b-instruct
+	@$(BENCH_PYTHON) findings/charts/v1_summary.py results/v1_final/judged.json
+	@echo "==> [3/3] LOCOMO smoke (continuum side, 50 q)…"
+	@test -f evals/locomo/data/locomo10.json || ( mkdir -p evals/locomo/data && \
+		curl -L -o evals/locomo/data/locomo10.json \
+		  https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json )
+	@$(BENCH_PYTHON) -m evals.locomo.run --system continuum \
+		--provider openrouter --model openai/gpt-oss-120b \
+		--judge-provider openrouter --judge-model meta-llama/llama-3.3-70b-instruct \
+		--rpm 30 --judge-rpm 15 --limit 50 --output results/locomo_smoke
+
 # ── Memory-operation benchmarks (Phase 3B, Prompt 43+) ───────────────────────
 
 bench-ingest: ## Run the ingest-throughput benchmark (Continuum vs raw vs mem0)
@@ -121,6 +145,16 @@ bench-supersession: ## Run the supersession-correctness benchmark (Continuum's k
 
 bench-bitemporal: ## Run the bi-temporal "as of date Y" benchmark (Continuum-only feature)
 	@$(BENCH_PYTHON) -m bench.bi_temporal --scenarios 20
+
+bench-locomo: ## Run the LOCOMO benchmark — Continuum vs Mem0 head-to-head (needs OPENROUTER_API_KEY + GROQ_API_KEY; downloads dataset if absent)
+	@test -f evals/locomo/data/locomo10.json || ( \
+		echo "downloading LOCOMO dataset…" && mkdir -p evals/locomo/data && \
+		curl -L -o evals/locomo/data/locomo10.json \
+		  https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json )
+	@$(BENCH_PYTHON) -m evals.locomo.run \
+		--system both --provider openrouter --model openai/gpt-oss-120b \
+		--judge-provider groq --judge-model llama-3.3-70b-versatile \
+		--output results/locomo_v1
 
 bench-all: bench-ingest bench-retrieval bench-supersession bench-bitemporal ## Run every Phase-3B memory-operation benchmark in sequence
 

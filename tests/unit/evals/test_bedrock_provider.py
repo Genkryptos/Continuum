@@ -7,6 +7,7 @@ The tests avoid real network calls and real credentials; they verify the
 provider is accepted by argparse and BedrockLLM uses the native Boto3
 Converse API shape shown in AWS's examples.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -48,10 +49,14 @@ class _FakeOpenAIResponse:
 
 
 def test_parse_args_accepts_bedrock_provider() -> None:
-    args = boot._parse_args([
-        "--provider", "bedrock",
-        "--model", "anthropic.claude-3-haiku-20240307-v1:0",
-    ])
+    args = boot._parse_args(
+        [
+            "--provider",
+            "bedrock",
+            "--model",
+            "anthropic.claude-3-haiku-20240307-v1:0",
+        ]
+    )
 
     assert args.provider == "bedrock"
     assert args.model == "anthropic.claude-3-haiku-20240307-v1:0"
@@ -60,17 +65,19 @@ def test_parse_args_accepts_bedrock_provider() -> None:
 async def test_bedrock_llm_uses_boto3_converse_api(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_client = _FakeConverseClient({
-        "output": {
-            "message": {
-                "content": [{"text": "bedrock hello"}],
+    fake_client = _FakeConverseClient(
+        {
+            "output": {
+                "message": {
+                    "content": [{"text": "bedrock hello"}],
+                },
             },
-        },
-        "usage": {
-            "inputTokens": 7,
-            "outputTokens": 2,
-        },
-    })
+            "usage": {
+                "inputTokens": 7,
+                "outputTokens": 2,
+            },
+        }
+    )
     created: dict[str, Any] = {}
 
     def fake_boto3_client(
@@ -101,32 +108,36 @@ async def test_bedrock_llm_uses_boto3_converse_api(
 
     assert reply == "bedrock hello"
     assert created == {"region": "us-east-1", "endpoint_url": None}
-    assert fake_client.calls == [{
-        "modelId": "anthropic.claude-3-haiku-20240307-v1:0",
-        "messages": [
-            {
-                "role": "user",
-                "content": [{"text": "hello"}],
+    assert fake_client.calls == [
+        {
+            "modelId": "anthropic.claude-3-haiku-20240307-v1:0",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"text": "hello"}],
+                },
+            ],
+            "inferenceConfig": {
+                "maxTokens": 12,
+                "temperature": 0.25,
             },
-        ],
-        "inferenceConfig": {
-            "maxTokens": 12,
-            "temperature": 0.25,
-        },
-    }]
+        }
+    ]
     assert llm._throttle.interval == pytest.approx(60.0 / 17.0)
 
 
 async def test_bedrock_llm_uses_optional_endpoint_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_client = _FakeConverseClient({
-        "output": {
-            "message": {
-                "content": [{"text": "ok"}],
+    fake_client = _FakeConverseClient(
+        {
+            "output": {
+                "message": {
+                    "content": [{"text": "ok"}],
+                },
             },
-        },
-    })
+        }
+    )
     created: dict[str, Any] = {}
 
     def fake_boto3_client(
@@ -205,10 +216,12 @@ async def test_bedrock_gpt_oss_uses_openai_responses_api(
         "base_url": None,
         "api_key": None,
     }
-    assert fake_client.responses.calls == [{
-        "model": "openai.gpt-oss-120b",
-        "input": [{"role": "user", "content": "hello"}],
-        "max_output_tokens": 12,
-        "temperature": 0.2,
-    }]
+    assert fake_client.responses.calls == [
+        {
+            "model": "openai.gpt-oss-120b",
+            "input": [{"role": "user", "content": "hello"}],
+            "max_output_tokens": 12,
+            "temperature": 0.2,
+        }
+    ]
     assert llm._throttle.interval == pytest.approx(60.0 / 17.0)

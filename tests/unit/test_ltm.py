@@ -8,6 +8,7 @@ Covers: upsert (insert + by-id update), partial update, bi-temporal
 invalidate (no DELETE), single-SQL dense⊕sparse⊕RRF search_hybrid, and the
 recursive-CTE neighbors walk.
 """
+
 from __future__ import annotations
 
 import json
@@ -127,8 +128,9 @@ class TestUpsert:
     async def test_insert_new_returns_uuid_and_sets_ltm(self) -> None:
         conn = MockConnection()
         ltm = _ltm(conn)
-        item = MemoryItem(id=str(N1), content="a durable fact",
-                          tier=MemoryTier.MTM, metadata={"kind": "fact"})
+        item = MemoryItem(
+            id=str(N1), content="a durable fact", tier=MemoryTier.MTM, metadata={"kind": "fact"}
+        )
 
         rid = await ltm.upsert(item)
 
@@ -167,8 +169,7 @@ class TestUpsert:
         conn = MockConnection()
         vf = datetime(2025, 3, 1, tzinfo=UTC)
         await _ltm(conn).upsert(
-            MemoryItem(content="bitemporal",
-                       valid_range=BiTemporalRange(valid_from=vf))
+            MemoryItem(content="bitemporal", valid_range=BiTemporalRange(valid_from=vf))
         )
         _, params = conn.executed[0]
         assert params["valid_from"] == vf
@@ -190,16 +191,14 @@ class TestUpsert:
 class TestUpdate:
     async def test_only_allowlisted_fields_and_touches_updated_at(self) -> None:
         conn = MockConnection()
-        await _ltm(conn).update(
-            N1, {"importance": 0.95, "bogus": 1, "content": "new text"}
-        )
+        await _ltm(conn).update(N1, {"importance": 0.95, "bogus": 1, "content": "new text"})
         sql, params = conn.executed[0]
         assert sql.startswith("UPDATE memory_nodes SET ")
         assert "importance = %(v_importance)s" in sql
         assert '"text" = %(v_content)s' in sql
         assert "updated_at = now()" in sql
         assert "WHERE id = %(id)s AND invalidated_at IS NULL" in sql
-        assert "bogus" not in sql           # non-updatable ignored
+        assert "bogus" not in sql  # non-updatable ignored
         assert params["v_importance"] == 0.95
         assert params["v_content"] == "new text"
 
@@ -251,14 +250,13 @@ class TestSearchHybrid:
         rows = [_search_row(N1, "best", 0.033), _search_row(N2, "next", 0.016)]
         conn = MockConnection(search_rows=rows)
         ltm = _ltm(conn)
-        q = Query(text="db pooling", embedding=[0.1, 0.2],
-                  tiers=[MemoryTier.LTM])
+        q = Query(text="db pooling", embedding=[0.1, 0.2], tiers=[MemoryTier.LTM])
 
         out = await ltm.search_hybrid(q, k=5)
 
         assert [type(s) for s in out] == [ScoredItem, ScoredItem]
         assert out[0].item.content == "best"
-        assert out[0].score == pytest.approx(0.033)          # composite == rrf
+        assert out[0].score == pytest.approx(0.033)  # composite == rrf
         assert out[0].item.metadata["retrieval"]["rrf_score"] == pytest.approx(0.033)
         # Inspect the SQL the store built.
         hybrid_sql = next(s for s, _ in conn.executed if "ORDER  BY rrf DESC" in s)
@@ -269,8 +267,7 @@ class TestSearchHybrid:
         assert "n.invalidated_at IS NULL" in hybrid_sql
         assert "n.layer = ANY(%(layers)s)" in hybrid_sql
         # pg_trgm threshold set before the sparse query; query prepared.
-        assert any(s.startswith("SET pg_trgm.similarity_threshold")
-                   for s, _ in conn.executed)
+        assert any(s.startswith("SET pg_trgm.similarity_threshold") for s, _ in conn.executed)
         assert conn.prepared[-1] is True
 
     async def test_dense_only_when_no_text(self) -> None:
@@ -297,12 +294,9 @@ class TestSearchHybrid:
     async def test_metadata_filter_and_as_of(self) -> None:
         conn = MockConnection(search_rows=[])
         as_of = datetime(2025, 1, 1, tzinfo=UTC)
-        q = Query(text="hi", embedding=[0.1],
-                  metadata_filter={"lang": "py"}, as_of=as_of)
+        q = Query(text="hi", embedding=[0.1], metadata_filter={"lang": "py"}, as_of=as_of)
         await _ltm(conn).search_hybrid(q, k=2)
-        sql, params = next(
-            (s, p) for s, p in conn.executed if "ORDER  BY rrf DESC" in s
-        )
+        sql, params = next((s, p) for s, p in conn.executed if "ORDER  BY rrf DESC" in s)
         assert "n.tags @> %(filt)s::jsonb" in sql
         assert "valid_from" in sql and "valid_to" in sql
         assert json.loads(params["filt"]) == {"lang": "py"}
@@ -310,13 +304,9 @@ class TestSearchHybrid:
 
     async def test_layers_mapping(self) -> None:
         conn = MockConnection(search_rows=[])
-        await _ltm(conn).search_hybrid(
-            Query(text="x", tiers=[MemoryTier.LTM, MemoryTier.MTM]), k=2
-        )
-        _, params = next(
-            (s, p) for s, p in conn.executed if "ORDER  BY rrf DESC" in s
-        )
-        assert params["layers"] == ["LTM", "MTM"]   # .name, not .value
+        await _ltm(conn).search_hybrid(Query(text="x", tiers=[MemoryTier.LTM, MemoryTier.MTM]), k=2)
+        _, params = next((s, p) for s, p in conn.executed if "ORDER  BY rrf DESC" in s)
+        assert params["layers"] == ["LTM", "MTM"]  # .name, not .value
 
 
 # ---------------------------------------------------------------------------
@@ -354,8 +344,8 @@ class TestNeighbors:
 
         sql, params = conn.executed[0]
         assert "WITH RECURSIVE walk" in sql
-        assert "e.invalidated_at IS NULL" in sql       # edges bi-temporal
-        assert "tn.invalidated_at IS NULL" in sql      # target nodes bi-temporal
+        assert "e.invalidated_at IS NULL" in sql  # edges bi-temporal
+        assert "tn.invalidated_at IS NULL" in sql  # target nodes bi-temporal
         assert "NOT e.target_id = ANY(w.path)" in sql  # cycle guard
         assert "LIMIT  %(cap)s" in sql
         assert params["maxd"] == 2

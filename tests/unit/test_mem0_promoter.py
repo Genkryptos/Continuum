@@ -6,6 +6,7 @@ Unit tests for ``continuum.promotion.mem0_promoter.Mem0Promoter``.
 A fake litellm-shaped ``completion_fn`` (tool-calls) and a recording
 ``audit_sink`` are injected — no litellm, no DB, no network.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,27 +35,25 @@ N_ID = uuid.UUID("00000000-0000-0000-0000-0000000000c1")
 
 
 def _fact(text: str = "Alice works at Acme Corp") -> Fact:
-    return Fact(text=text, confidence=0.9, entities_mentioned=[],
-                source_block_id=BLOCK)
+    return Fact(text=text, confidence=0.9, entities_mentioned=[], source_block_id=BLOCK)
 
 
 def _si(text: str, cos: float, nid: uuid.UUID = N_ID) -> ScoredItem:
     return ScoredItem(
         item=MemoryItem(id=str(nid), content=text, tier=MemoryTier.LTM),
         scores=ScoreBreakdown(
-            relevance=cos, importance=0.0, recency=0.0,
-            confidence=1.0, composite=cos,
+            relevance=cos,
+            importance=0.0,
+            recency=0.0,
+            confidence=1.0,
+            composite=cos,
         ),
     )
 
 
 def _tool_resp(args_list: list[dict], *, tin: int = 120, tout: int = 30) -> Any:
     calls = [
-        SimpleNamespace(
-            function=SimpleNamespace(
-                name="memory_operation", arguments=json.dumps(a)
-            )
-        )
+        SimpleNamespace(function=SimpleNamespace(name="memory_operation", arguments=json.dumps(a)))
         for a in args_list
     ]
     return SimpleNamespace(
@@ -87,9 +86,7 @@ class RecordingSink:
 
 
 def _promoter(fake: Any = None, sink: Any = None, **cfg: Any) -> Mem0Promoter:
-    p = Mem0Promoter(
-        PromoterConfig(**cfg), completion_fn=fake, audit_sink=sink
-    )
+    p = Mem0Promoter(PromoterConfig(**cfg), completion_fn=fake, audit_sink=sink)
     p._backoff_initial = 0.0
     p._backoff_max = 0.0
     return p
@@ -108,14 +105,25 @@ def test_schema_shape() -> None:
 
 
 def test_decision_audit_record() -> None:
-    d = Decision(op="UPDATE", target_id=N_ID, rationale="why",
-                 merged_text="m", candidate_text="c", model="gpt-4o-mini",
-                 tokens_in=10, tokens_out=2)
+    d = Decision(
+        op="UPDATE",
+        target_id=N_ID,
+        rationale="why",
+        merged_text="m",
+        candidate_text="c",
+        model="gpt-4o-mini",
+        tokens_in=10,
+        tokens_out=2,
+    )
     rec = d.audit_record()
     assert rec == {
-        "op": "UPDATE", "candidate_text": "c", "target_id": str(N_ID),
-        "llm_model": "gpt-4o-mini", "llm_rationale": "why",
-        "tokens_in": 10, "tokens_out": 2,
+        "op": "UPDATE",
+        "candidate_text": "c",
+        "target_id": str(N_ID),
+        "llm_model": "gpt-4o-mini",
+        "llm_rationale": "why",
+        "tokens_in": 10,
+        "tokens_out": 2,
     }
 
 
@@ -132,7 +140,7 @@ class TestShortCircuit:
         assert d.op == "ADD"
         assert d.target_id is None
         assert d.short_circuited is True
-        assert fake.calls == 0                      # LLM skipped
+        assert fake.calls == 0  # LLM skipped
 
     async def test_no_neighbors_short_circuits_to_add(self) -> None:
         fake = FakeLLM([])
@@ -146,7 +154,7 @@ class TestShortCircuit:
             _fact(), [_si("Alice is employed by Acme Corp", 0.985)]
         )
         assert d.op == "NOOP"
-        assert d.target_id == N_ID                  # the near-duplicate
+        assert d.target_id == N_ID  # the near-duplicate
         assert d.short_circuited is True
         assert fake.calls == 0
 
@@ -166,12 +174,8 @@ class TestShortCircuit:
 
 class TestLLMOperations:
     async def test_add(self) -> None:
-        fake = FakeLLM([_tool_resp([
-            {"operation": "ADD", "rationale": "novel fact"}
-        ])])
-        d = await _promoter(fake).decide_operation(
-            _fact(), [_si("loosely related", 0.70)]
-        )
+        fake = FakeLLM([_tool_resp([{"operation": "ADD", "rationale": "novel fact"}])])
+        d = await _promoter(fake).decide_operation(_fact(), [_si("loosely related", 0.70)])
         assert d.op == "ADD"
         assert d.target_id is None
         assert d.short_circuited is False
@@ -184,10 +188,20 @@ class TestLLMOperations:
 
     async def test_update(self) -> None:
         tid = uuid.uuid4()
-        fake = FakeLLM([_tool_resp([{
-            "operation": "UPDATE", "target_id": str(tid),
-            "rationale": "augments", "merged_text": "Alice works at Acme Corp (NYC)",
-        }])])
+        fake = FakeLLM(
+            [
+                _tool_resp(
+                    [
+                        {
+                            "operation": "UPDATE",
+                            "target_id": str(tid),
+                            "rationale": "augments",
+                            "merged_text": "Alice works at Acme Corp (NYC)",
+                        }
+                    ]
+                )
+            ]
+        )
         d = await _promoter(fake).decide_operation(_fact(), [_si("x", 0.7)])
         assert d.op == "UPDATE"
         assert d.target_id == tid
@@ -195,36 +209,50 @@ class TestLLMOperations:
 
     async def test_delete(self) -> None:
         tid = uuid.uuid4()
-        fake = FakeLLM([_tool_resp([{
-            "operation": "DELETE", "target_id": str(tid),
-            "rationale": "contradicts prior employer",
-        }])])
+        fake = FakeLLM(
+            [
+                _tool_resp(
+                    [
+                        {
+                            "operation": "DELETE",
+                            "target_id": str(tid),
+                            "rationale": "contradicts prior employer",
+                        }
+                    ]
+                )
+            ]
+        )
         d = await _promoter(fake).decide_operation(_fact(), [_si("x", 0.7)])
         assert d.op == "DELETE"
         assert d.target_id == tid
         assert d.merged_text is None
 
     async def test_noop(self) -> None:
-        fake = FakeLLM([_tool_resp([
-            {"operation": "NOOP", "rationale": "already known"}
-        ])])
+        fake = FakeLLM([_tool_resp([{"operation": "NOOP", "rationale": "already known"}])])
         d = await _promoter(fake).decide_operation(_fact(), [_si("x", 0.7)])
         assert d.op == "NOOP" and d.target_id is None
 
     async def test_invalid_op_coerced_to_noop(self) -> None:
-        fake = FakeLLM([_tool_resp([
-            {"operation": "FRObNICATE", "rationale": "?"}
-        ])])
+        fake = FakeLLM([_tool_resp([{"operation": "FRObNICATE", "rationale": "?"}])])
         d = await _promoter(fake).decide_operation(_fact(), [_si("x", 0.7)])
         assert d.op == "NOOP"
 
     async def test_target_forced_null_for_add(self) -> None:
-        fake = FakeLLM([_tool_resp([{
-            "operation": "ADD", "target_id": str(uuid.uuid4()),
-            "rationale": "new",
-        }])])
+        fake = FakeLLM(
+            [
+                _tool_resp(
+                    [
+                        {
+                            "operation": "ADD",
+                            "target_id": str(uuid.uuid4()),
+                            "rationale": "new",
+                        }
+                    ]
+                )
+            ]
+        )
         d = await _promoter(fake).decide_operation(_fact(), [_si("x", 0.7)])
-        assert d.op == "ADD" and d.target_id is None   # schema rule enforced
+        assert d.op == "ADD" and d.target_id is None  # schema rule enforced
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +262,22 @@ class TestLLMOperations:
 
 class TestBatch:
     async def test_batch_one_call_for_many(self) -> None:
-        fake = FakeLLM([_tool_resp([
-            {"operation": "ADD", "rationale": "a"},
-            {"operation": "NOOP", "rationale": "b"},
-            {"operation": "UPDATE", "target_id": str(N_ID),
-             "rationale": "c", "merged_text": "m"},
-        ])])
+        fake = FakeLLM(
+            [
+                _tool_resp(
+                    [
+                        {"operation": "ADD", "rationale": "a"},
+                        {"operation": "NOOP", "rationale": "b"},
+                        {
+                            "operation": "UPDATE",
+                            "target_id": str(N_ID),
+                            "rationale": "c",
+                            "merged_text": "m",
+                        },
+                    ]
+                )
+            ]
+        )
         sink = RecordingSink()
         p = _promoter(fake, sink)
         items = [
@@ -249,33 +287,36 @@ class TestBatch:
         ]
         out = await p.decide_operations_batch(items)
         assert [d.op for d in out] == ["ADD", "NOOP", "UPDATE"]
-        assert fake.calls == 1                       # ONE call for three
+        assert fake.calls == 1  # ONE call for three
         assert len(sink.records) == 3
 
     async def test_short_circuit_excluded_from_call(self) -> None:
         fake = FakeLLM([_tool_resp([{"operation": "ADD", "rationale": "x"}])])
         p = _promoter(fake, RecordingSink())
         items = [
-            (_fact("new"), [_si("n", 0.20)]),          # short-circuit ADD
-            (_fact("dup"), [_si("n", 0.99)]),          # short-circuit NOOP
-            (_fact("ask"), [_si("n", 0.70)]),          # → LLM
+            (_fact("new"), [_si("n", 0.20)]),  # short-circuit ADD
+            (_fact("dup"), [_si("n", 0.99)]),  # short-circuit NOOP
+            (_fact("ask"), [_si("n", 0.70)]),  # → LLM
         ]
         out = await p.decide_operations_batch(items)
         assert [d.op for d in out] == ["ADD", "NOOP", "ADD"]
         assert [d.short_circuited for d in out] == [True, True, False]
-        assert fake.calls == 1                          # only the 3rd hit LLM
+        assert fake.calls == 1  # only the 3rd hit LLM
 
     async def test_batch_size_chunks_calls(self) -> None:
-        fake = FakeLLM([
-            _tool_resp([{"operation": "ADD", "rationale": "a"},
-                        {"operation": "ADD", "rationale": "b"}]),
-            _tool_resp([{"operation": "ADD", "rationale": "c"}]),
-        ])
+        fake = FakeLLM(
+            [
+                _tool_resp(
+                    [{"operation": "ADD", "rationale": "a"}, {"operation": "ADD", "rationale": "b"}]
+                ),
+                _tool_resp([{"operation": "ADD", "rationale": "c"}]),
+            ]
+        )
         p = _promoter(fake, batch_size=2)
         items = [(_fact(f"f{i}"), [_si("n", 0.7)]) for i in range(3)]
         out = await p.decide_operations_batch(items)
         assert len(out) == 3
-        assert fake.calls == 2                          # 3 items / batch 2
+        assert fake.calls == 2  # 3 items / batch 2
 
 
 # ---------------------------------------------------------------------------
@@ -288,13 +329,22 @@ class TestAudit:
         fake = FakeLLM([_tool_resp([{"operation": "ADD", "rationale": "r"}])])
         sink = RecordingSink()
         p = _promoter(fake, sink)
-        await p.decide_operations_batch([
-            (_fact("sc"), [_si("n", 0.1)]),    # short-circuit
-            (_fact("llm"), [_si("n", 0.7)]),   # llm
-        ])
+        await p.decide_operations_batch(
+            [
+                (_fact("sc"), [_si("n", 0.1)]),  # short-circuit
+                (_fact("llm"), [_si("n", 0.7)]),  # llm
+            ]
+        )
         assert len(sink.records) == 2
-        keys = {"op", "candidate_text", "target_id", "llm_model",
-                "llm_rationale", "tokens_in", "tokens_out"}
+        keys = {
+            "op",
+            "candidate_text",
+            "target_id",
+            "llm_model",
+            "llm_rationale",
+            "tokens_in",
+            "tokens_out",
+        }
         assert all(keys == set(r) for r in sink.records)
         sc, llm = sink.records
         assert sc["llm_model"] is None and sc["op"] == "ADD"
@@ -307,8 +357,8 @@ class TestAudit:
 
         fake = FakeLLM([])
         p = _promoter(fake, BadSink())
-        d = await p.decide_operation(_fact(), [])   # short-circuit ADD
-        assert d.op == "ADD"                          # decision still returned
+        d = await p.decide_operation(_fact(), [])  # short-circuit ADD
+        assert d.op == "ADD"  # decision still returned
 
 
 # ---------------------------------------------------------------------------
@@ -321,13 +371,12 @@ class TestGraceful:
         fake = FakeLLM([RuntimeError("boom")] * 3)
         sink = RecordingSink()
         p = _promoter(fake, sink)
-        items = [(_fact("a"), [_si("n", 0.7)]),
-                 (_fact("b"), [_si("n", 0.7)])]
+        items = [(_fact("a"), [_si("n", 0.7)]), (_fact("b"), [_si("n", 0.7)])]
         out = await p.decide_operations_batch(items)
-        assert [d.op for d in out] == ["NOOP", "NOOP"]   # safe default
+        assert [d.op for d in out] == ["NOOP", "NOOP"]  # safe default
         assert all("unavailable" in d.rationale for d in out)
-        assert fake.calls == 3                            # retried
-        assert len(sink.records) == 2                     # still audited
+        assert fake.calls == 3  # retried
+        assert len(sink.records) == 2  # still audited
 
 
 # ---------------------------------------------------------------------------
@@ -352,11 +401,19 @@ class TestPostgresAuditSink:
             yield MockConn()
 
         sink = make_postgres_audit_sink(conn_factory=factory)
-        await sink([
-            Decision(op="ADD", target_id=None, rationale="r",
-                     candidate_text="c", model="gpt-4o-mini",
-                     tokens_in=5, tokens_out=1).audit_record()
-        ])
+        await sink(
+            [
+                Decision(
+                    op="ADD",
+                    target_id=None,
+                    rationale="r",
+                    candidate_text="c",
+                    model="gpt-4o-mini",
+                    tokens_in=5,
+                    tokens_out=1,
+                ).audit_record()
+            ]
+        )
         assert len(executed) == 1
         sql, params = executed[0]
         assert "INSERT INTO memory_promotions" in sql

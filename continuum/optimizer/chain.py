@@ -42,9 +42,7 @@ class OptimizerChain:
     def __init__(self, strategies: list[Optimizer]) -> None:
         self.strategies: list[Optimizer] = list(strategies)
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         """
         Apply each strategy in order. Short-circuit once the bundle fits.
 
@@ -57,7 +55,8 @@ class OptimizerChain:
             if current <= limit:
                 log.debug(
                     "OptimizerChain short-circuit at %s/%s tokens",
-                    current, limit,
+                    current,
+                    limit,
                 )
                 return ctx
             try:
@@ -85,7 +84,8 @@ class OptimizerChain:
             except Exception:
                 log.debug(
                     "cost_estimate failed for %s; skipping in projection",
-                    type(strategy).__name__, exc_info=True,
+                    type(strategy).__name__,
+                    exc_info=True,
                 )
                 continue
             running = min(running, est.tokens)
@@ -118,19 +118,19 @@ def default_optimizer_chain(config: OptimizerConfig) -> OptimizerChain:
     )
 
     stm_keep = int(getattr(config, "stm_turns", 8))
-    summariser_model = str(
-        getattr(config, "summarizer_model", "gpt-4o-mini")
-    )
+    summariser_model = str(getattr(config, "summarizer_model", "gpt-4o-mini"))
     compress_ratio = float(getattr(config, "compress_ratio", 0.5))
     dedupe_threshold = float(getattr(config, "dedupe_threshold", 0.92))
 
-    return OptimizerChain([
-        StmTrim(keep_last=stm_keep),
-        MtmSummarize(model=summariser_model),
-        SemanticDedupe(threshold=dedupe_threshold),
-        LLMLinguaCompress(ratio=compress_ratio),
-        ScoreAwareBudgetPrune(),
-    ])
+    return OptimizerChain(
+        [
+            StmTrim(keep_last=stm_keep),
+            MtmSummarize(model=summariser_model),
+            SemanticDedupe(threshold=dedupe_threshold),
+            LLMLinguaCompress(ratio=compress_ratio),
+            ScoreAwareBudgetPrune(),
+        ]
+    )
 
 
 __all__ = ["OptimizerChain", "default_optimizer_chain"]

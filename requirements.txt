@@ -6,6 +6,17 @@ psycopg2-binary>=2.9.9
 requests>=2.31.0
 sentence-transformers>=3.1.0
 tiktoken>=0.7.0
+rank-bm25>=0.2.2
+mem0ai>=0.1.0
 certifi>=2024.2.2
 duckduckgo-search>=5.3.0
 mcp>=0.1.0
+# Core runtime deps imported at module load by `continuum` (these live in
+# pyproject's core/extra deps; CI installs from this file, so they must be
+# listed here too or test collection fails with ModuleNotFoundError).
+pydantic>=2.0
+pydantic-settings>=2.4
+PyYAML>=6.0
+tenacity>=8.2
+cachetools>=5.3
+numpy>=1.26

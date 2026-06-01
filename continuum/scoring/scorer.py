@@ -37,6 +37,7 @@ Weights come from :class:`continuum.core.config.ScoringConfig.weights`
 own pydantic ``model_validator`` — so "weights must sum to 1.0" is validated
 at config-construction time, before a ``Scorer`` is ever built.
 """
+
 from __future__ import annotations
 
 import math
@@ -108,10 +109,7 @@ class Scorer:
         confidence = _clamp01(item.confidence)
         recency = self._recency(item, ref)
         composite = _clamp01(
-            w.rel * relevance
-            + w.imp * importance
-            + w.rec * recency
-            + w.conf * confidence
+            w.rel * relevance + w.imp * importance + w.rec * recency + w.conf * confidence
         )
         return ScoreBreakdown(
             relevance=relevance,

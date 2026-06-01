@@ -15,6 +15,7 @@ Covers
 * Tier breakdown / messages / tokens_used rebuilt
 * Pydantic config validates ranges
 """
+
 from __future__ import annotations
 
 import uuid
@@ -192,7 +193,8 @@ async def test_concat_truncates_to_max_chars() -> None:
     items = [_stm(big, offset_minutes=i) for i in range(10)]
     ctx = _bundle(items)
     out = await StmTrim(
-        keep_last=2, max_summary_chars=200,
+        keep_last=2,
+        max_summary_chars=200,
     ).apply(ctx, _budget())
     summary = next(it for it in out.items if it.tier == MemoryTier.MTM)
     assert len(summary.content) <= 200
@@ -264,6 +266,7 @@ def test_cost_estimate_no_trim_returns_current_tokens() -> None:
 def test_cost_estimate_llm_method_reports_latency() -> None:
     items = [_stm(f"turn {i}", offset_minutes=i) for i in range(20)]
     cost = StmTrim(
-        keep_last=2, summarization_method="llm",
+        keep_last=2,
+        summarization_method="llm",
     ).cost_estimate(_bundle(items))
     assert cost.latency_ms > 0

@@ -30,15 +30,15 @@ def default_policies() -> list[MemoryPolicy]:
     ``priority`` descending internally.
     """
     return [
-        SensitivityPolicy(),         # 100 — safety override
-        CorrectionPolicy(),          # 85
-        DecisionPolicy(),            # 80
-        TaskUrgencyPolicy(),         # 75
-        UserPreferencePolicy(),      # 70
+        SensitivityPolicy(),  # 100 — safety override
+        CorrectionPolicy(),  # 85
+        DecisionPolicy(),  # 80
+        TaskUrgencyPolicy(),  # 75
+        UserPreferencePolicy(),  # 70
         ProceduralWorkflowPolicy(),  # 65
-        CodeMemoryPolicy(),          # 65
-        MeetingPolicy(),             # 60
-        DefaultFactPolicy(),         # 10 — fall-through
+        CodeMemoryPolicy(),  # 65
+        MeetingPolicy(),  # 60
+        DefaultFactPolicy(),  # 10 — fall-through
     ]
 
 

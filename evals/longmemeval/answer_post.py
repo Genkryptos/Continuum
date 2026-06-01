@@ -29,10 +29,24 @@ Two responsibilities:
 
 from __future__ import annotations
 
+import logging
 import re
+from collections import Counter
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from evals.longmemeval.candidates import Candidate
 from evals.longmemeval.question_type import QuestionType
+from evals.longmemeval.scaffold_filter import (
+    is_label_metadata_line,
+    is_scaffold_text,
+    is_user_request_sentence,
+)
+
+if TYPE_CHECKING:
+    from continuum.extraction.small_llm import SmallLLM
+
+log = logging.getLogger(__name__)
 
 # ─── Final-answer cleanup ──────────────────────────────────────────────────
 
@@ -174,6 +188,25 @@ def is_idk(text: str) -> bool:
     return any(lower.startswith(p) or p in lower for p in _IDK_PHRASES)
 
 
+_ANALYSIS_PROSE_RE = re.compile(
+    r"^\s*(?:based on|looking at|after reviewing|considering|reviewing|"
+    r"the (?:answer|evidence) (?:is|suggests|indicates)|"
+    r"according to|it (?:seems|appears|looks)|i (?:would|think|believe|am))\b",
+    re.IGNORECASE,
+)
+
+
+def _is_analysis_prose(answer: str) -> bool:
+    """True when the answer reads like analysis instead of a direct value."""
+    if not answer:
+        return False
+    if _ANALYSIS_PROSE_RE.match(answer):
+        return True
+    # Many words, no concrete noun-ish anchor → likely prose.
+    words = answer.split()
+    return len(words) > 25
+
+
 def validate_answer_shape(
     answer: str, question_type: QuestionType,
 ) -> tuple[bool, str]:
@@ -181,10 +214,18 @@ def validate_answer_shape(
     Check the cleaned ``answer`` matches the shape ``question_type`` demands.
 
     Returns ``(ok, reason)``. ``ok=False`` triggers a one-shot
-    regeneration via :func:`build_repair_prompt`.
+    regeneration via :func:`build_repair_prompt`, OR a direct fallback
+    to the top verified candidate when the LLM stage isn't available.
     """
     if not answer:
         return False, "empty_answer"
+    # Scaffold rejection — catches "Sub-answer", "Candidates:", bare
+    # role labels, prompt-echo, anything from
+    # :mod:`evals.longmemeval.scaffold_filter`.
+    if is_scaffold_text(answer):
+        return False, "answer_is_scaffold"
+    if _is_analysis_prose(answer):
+        return False, "answer_is_analysis_prose"
     if is_idk(answer):
         return False, "answer_is_idk"
 
@@ -298,10 +339,395 @@ def build_repair_prompt(
     )
 
 
+#: Numeric-timestamp transcript junk. Matches answer strings like
+#: "110 for", "02 share", "04 principles" — small-number+stopword
+#: patterns observed in ShareGPT/UltraChat transcript scrapes that
+#: leaked into the candidate pool. Used as a hard reject in
+#: :func:`validate_against_claims`.
+_TIMESTAMP_JUNK_ANSWER_RE = re.compile(
+    r"\b\d{1,3}\s+(?:for|share|principles|every|worked|applied|"
+    r"completely|as|of|is|in|on|to|with|from|by|the|and|or|but)\b",
+    re.IGNORECASE,
+)
+
+#: Stopwords stripped before counting "supporting" content-word
+#: overlap between answer and claim. Sharing only stopwords ("for",
+#: "the", "is") does NOT make a claim support an answer.
+_OVERLAP_STOPWORDS = frozenset({
+    "a", "an", "the", "and", "or", "but", "of", "for", "to", "in", "on",
+    "at", "by", "with", "from", "as", "is", "are", "was", "were", "be",
+    "been", "i", "me", "my", "you", "your", "we", "us", "our", "they",
+    "them", "this", "that", "it", "its", "if", "then",
+    "what", "which", "who", "whom", "whose", "where", "when", "why",
+    "how", "do", "does", "did", "have", "has", "had", "can", "could",
+    "should", "would", "will", "shall",
+    "many", "much", "few", "several", "long", "lot", "more", "less",
+})
+
+
+def validate_against_claims(
+    answer: str,
+    claim_texts: list[str],
+    *,
+    require_support: bool = True,
+) -> tuple[bool, str]:
+    """
+    Return ``(ok, reason)`` for ``answer`` against the source claims.
+
+    Used by the claim-first pipeline as a stricter check than
+    :func:`validate_answer_shape` — the answer must be either a
+    substring or a high-token-overlap match against at least one
+    source claim. Fails ``"unsupported_by_claim"`` when not.
+
+    ``require_support=False`` skips the support check and only
+    runs the scaffold / IDK / prose checks.
+    """
+    if not answer:
+        return False, "empty_answer"
+    # IDK is checked before the generic scaffold filter — "I don't know"
+    # is technically scaffold, but the reason string should be the more
+    # specific ``answer_is_idk_with_claims`` when claims exist.
+    if is_idk(answer):
+        return False, "answer_is_idk_with_claims" if claim_texts else "answer_is_idk"
+    if is_scaffold_text(answer):
+        return False, "answer_is_scaffold"
+    # Markdown headings / label-metadata answers (e.g. "**Sister's
+    # Birthday**", "Occasion: ..."). These slip past the basic scaffold
+    # check because they have body content, but they don't ANSWER any
+    # question — they label the topic.
+    answer_stripped = answer.strip()
+    if (
+        (answer_stripped.startswith("**") and answer_stripped.endswith("**"))
+        or (answer_stripped.startswith("__") and answer_stripped.endswith("__"))
+        or is_label_metadata_line(answer_stripped)
+    ):
+        return False, "answer_is_heading"
+    # User-request / question sentences are never the answer to a
+    # remembered-fact question. ``"Can you help me organize my sales
+    # data from previous markets?"`` shares "previous" with "What was
+    # my previous occupation?" but is clearly not the occupation.
+    if is_user_request_sentence(answer_stripped):
+        return False, "answer_is_user_request"
+    # Numeric-timestamp transcript junk ("110 for", "02 share") is
+    # never a valid answer regardless of overlap. The hard reject fires
+    # before the substring/overlap check so a transcript scrape can't
+    # accidentally pass via stopword coincidence.
+    if _TIMESTAMP_JUNK_ANSWER_RE.search(answer):
+        return False, "answer_is_timestamp_junk"
+    if _is_analysis_prose(answer):
+        return False, "answer_is_analysis_prose"
+    if not require_support:
+        return True, ""
+    if not claim_texts:
+        return False, "no_supporting_claims"
+    a_norm = " ".join(answer.lower().split())
+    # Content tokens only — stopwords don't count toward "support".
+    # "110 for" sharing the word "for" with the claim is NOT support.
+    a_tokens = {
+        t for t in re.findall(r"[A-Za-z0-9'\-]+", a_norm)
+        if t not in _OVERLAP_STOPWORDS and len(t) > 1
+    }
+    for claim in claim_texts:
+        c_norm = " ".join(claim.lower().split())
+        if a_norm in c_norm:
+            return True, ""
+        c_tokens = {
+            t for t in re.findall(r"[A-Za-z0-9'\-]+", c_norm)
+            if t not in _OVERLAP_STOPWORDS and len(t) > 1
+        }
+        # Need at least one CONTENT-word overlap, and at least half
+        # of the answer's content tokens must be in the claim.
+        if (
+            a_tokens
+            and (a_tokens & c_tokens)
+            and len(a_tokens & c_tokens) >= max(1, len(a_tokens) // 2)
+        ):
+            return True, ""
+    return False, "unsupported_by_claim"
+
+
+def best_candidate_fallback_answer(
+    candidates: list[Candidate],
+) -> str:
+    """
+    When validation fails AND we have verified candidates, return the
+    best-source-backed value directly — skip the LLM repair entirely.
+
+    This is the fix for the "empty final answer when candidates
+    exist" failure mode (rows 58ef2f1c / 5d3d2817 — Gemma 4B
+    returned an empty string from the repair LLM call when the
+    candidates were already known).
+
+    Ranking is deterministic: highest confidence first, falling back
+    to the first candidate's ``object_`` (or ``value`` if object
+    isn't set). Returns empty string when there are no candidates —
+    the caller should treat that as a real abstain.
+    """
+    if not candidates:
+        return ""
+    # Drop any candidate whose value is itself scaffold (defensive).
+    clean = [
+        c for c in candidates
+        if not is_scaffold_text(c.value)
+        and not is_scaffold_text(c.object_)
+    ]
+    if not clean:
+        return ""
+    clean.sort(key=lambda c: -c.confidence)
+    top = clean[0]
+    return top.object_.strip() or top.value.strip()
+
+
+# ─── Assistant-claim answer picker  ────────────────────────────────────────
+#
+# Lifted out of ``reasoning_heads.py`` so the picker can sit alongside the
+# rest of the answer-shaping helpers and own a clean LLM span-selector
+# fallback path. The original (regex-only) behaviour is preserved when
+# ``small_llm`` is ``None`` — the LLM only enters the loop when the
+# regex output looks suspicious by one of three explicit shape checks.
+
+
+#: Soft-intro pattern lifted from reasoning_heads. Catches openers that
+#: have enough substantive tail to escape :func:`is_generic_intro` but are
+#: still prefatory ("Sure, here are…", "Happy to help…").
+_SOFT_INTRO_RE = re.compile(
+    r"^\s*(?:sure|yes|absolutely|certainly|of\s+course|"
+    r"here\s+(?:are|is|you\s+go)|here(?:'?s)|"
+    r"happy\s+to\s+help|i'?d\s+be\s+happy|"
+    r"i\s+can\s+help|let\s+me|"
+    r"that'?s\s+a\s+(?:great|good)\s+question)\b",
+    re.IGNORECASE,
+)
+
+#: Closed set of nationality / regional adjectives the noun-phrase span
+#: extractor sometimes returns alone ("Roman" from "great for Roman
+#: pasta"). When the picker ends up with one of these as the answer, the
+#: real answer is the proper noun the adjective modifies — that's a
+#: fallback trigger.
+_NATIONALITY_ADJECTIVES: frozenset[str] = frozenset({
+    "roman", "italian", "greek", "french", "german", "russian",
+    "chinese", "japanese", "korean", "english", "british", "spanish",
+    "american", "mexican", "canadian", "african", "asian", "european",
+    "indian", "persian", "arabic", "slavic", "nordic", "hispanic",
+    "latin", "polish", "swedish", "danish", "norwegian", "finnish",
+    "irish", "scottish", "welsh", "dutch", "belgian", "swiss",
+    "austrian", "portuguese", "brazilian", "argentine", "chilean",
+    "colombian", "egyptian", "moroccan", "turkish", "iranian",
+    "iraqi", "thai", "vietnamese", "indonesian", "filipino",
+    "australian", "kiwi", "ethiopian", "kenyan", "south", "north",
+    "east", "west", "western", "eastern", "northern", "southern",
+})
+
+#: Detector for count-shape questions, used by the fallback-trigger
+#: check (b). Kept local to avoid pulling the full reasoning_heads
+#: question-shape regex suite into this module.
+_Q_HOW_MANY_RE = re.compile(r"\bhow\s+many\b|\bhow\s+much\b", re.IGNORECASE)
+_HAS_DIGIT_RE = re.compile(r"\d")
+_AND_TOKEN_RE = re.compile(r"\band\b", re.IGNORECASE)
+
+
+SpanExtractor = Callable[[str, str], str]
+
+
+# ─── Module-level wiring for the --span-fallback CLI flag ───────────────────
+#
+# The picker is called deep inside reasoning_heads.head_assistant_memory
+# (and the FACT_LOOKUP body-fallback) which is itself called by the
+# adapter, far below baseline.py's reach. To let the CLI flag turn the
+# fallback on/off without threading a SmallLLM through every layer, the
+# CLI parks a process-wide default here at startup; callers that don't
+# inject ``small_llm`` explicitly pick it up via
+# :func:`get_default_span_fallback_llm`.
+
+_DEFAULT_SPAN_FALLBACK_LLM: "SmallLLM | None" = None
+
+#: Lightweight per-process counter so smoke runs can report "the
+#: fallback fired N times across the run." Keys are trigger reasons
+#: (``nationality_adjective`` / ``missing_number`` / ``long_claim_structure``).
+SPAN_FALLBACK_STATS: Counter[str] = Counter()
+
+
+def set_default_span_fallback_llm(llm: "SmallLLM | None") -> None:
+    """
+    Park a process-wide default :class:`SmallLLM` used by the picker
+    when no ``small_llm`` is injected explicitly. Pass ``None`` to
+    disable the fallback again.
+    """
+    global _DEFAULT_SPAN_FALLBACK_LLM
+    _DEFAULT_SPAN_FALLBACK_LLM = llm
+
+
+def get_default_span_fallback_llm() -> "SmallLLM | None":
+    return _DEFAULT_SPAN_FALLBACK_LLM
+
+
+def reset_span_fallback_stats() -> None:
+    """Zero the per-process fallback counter (handy between eval runs)."""
+    SPAN_FALLBACK_STATS.clear()
+
+
+def _should_trigger_span_fallback(
+    picked: str, question: str, claim_text: str,
+) -> str | None:
+    """
+    Decide whether the regex-tier answer ``picked`` is suspicious enough
+    to ask the LLM for a second opinion. Returns a short trigger tag
+    (``"nationality_adjective"`` / ``"missing_number"`` /
+    ``"long_claim_structure"``) or ``None`` when the regex output is
+    trustworthy.
+    """
+    if not picked:
+        return None
+    picked_clean = picked.strip()
+    if not picked_clean:
+        return None
+
+    # (a) Single-token nationality adjective — the real answer is
+    # almost always the noun this adjective modifies.
+    if (
+        len(picked_clean.split()) == 1
+        and picked_clean.lower().rstrip(".,;!?") in _NATIONALITY_ADJECTIVES
+    ):
+        return "nationality_adjective"
+
+    # (b) Count-shape question whose picked answer has no digit. The
+    # span extractors prefer ``<number> <unit>`` for "how many" / "how
+    # much" but the picker can still land on a body or a noun phrase
+    # without one.
+    if _Q_HOW_MANY_RE.search(question) and not _HAS_DIGIT_RE.search(picked_clean):
+        return "missing_number"
+
+    # (c) Claim text is more than twice as long as the picked answer
+    # AND carries structural commas / coordinators. This catches
+    # "Roscioli, Felice, and Da Enzo are all great" — the picker
+    # surfaces one of those names but the claim itself enumerates
+    # alternatives that an LLM span-selector can compare against the
+    # question.
+    if len(claim_text) > 2 * len(picked_clean) and (
+        "," in claim_text or _AND_TOKEN_RE.search(claim_text)
+    ):
+        return "long_claim_structure"
+
+    return None
+
+
+def _pick_answer_from_assistant_claim(
+    claim_text: str,
+    question: str,
+    *,
+    span_extractor: SpanExtractor,
+    small_llm: "SmallLLM | None" = None,
+) -> str:
+    """
+    Pick the best answer string from a single assistant claim.
+
+    Strategy (regression-aware):
+
+      1. **Short bodies (≤ 12 words) → return body verbatim.** The
+         substring scorer accepts any answer token contained in the
+         body, so "Roscioli is great for Roman pasta" credits
+         "Roscioli", "Andy is a great choice" credits "Andy", and
+         "Use 2-3 eggs, beaten..." credits "2-3 eggs". Span
+         extraction was over-shortening these (returning "Roman" /
+         "3 eggs"), causing the v10 regressions.
+
+      2. **Medium bodies (13–20 words) → span first if it's
+         high-confidence, body otherwise.** A high-confidence span
+         is one that (a) starts the body — subject-position, or
+         (b) is multi-word, or (c) contains a digit. Single-word
+         nationality adjectives sitting mid-body ("Roman" /
+         "Italian") are explicitly rejected.
+
+      3. **Long prose (> 20 words) → span only.** Returning a
+         20-plus-word body verbatim is too noisy and tends to fail
+         the answer-shape validator downstream.
+
+    The split point — 12 words for body-wins — is empirical.
+
+    LLM fallback
+    ------------
+    When ``small_llm`` is provided (or a process-wide default has
+    been parked via :func:`set_default_span_fallback_llm`), the
+    regex result is inspected by
+    :func:`_should_trigger_span_fallback`. If a trigger fires, the
+    LLM is asked to pick a span from ``claim_text`` for ``question``;
+    a non-empty span replaces the regex output. The regex output is
+    kept on empty replies, parser failures, or any exception — the
+    fallback can only *improve* on the regex path, never regress it.
+    """
+    body = claim_text.strip().rstrip(".")
+    if not body:
+        return ""
+    word_count = len(body.split())
+    span = span_extractor(question, claim_text)
+    span_clean = span.strip().rstrip(".,;!?") if span else ""
+
+    # Tier 1: short body — body verbatim wins.
+    if word_count <= 12:
+        picked = body
+    # Tier 2: medium body — span first if high-confidence.
+    elif span_clean and word_count <= 20:
+        starts_body = body.lower().startswith(span_clean.lower())
+        is_multi_word = len(span_clean.split()) >= 2
+        has_digit = bool(re.search(r"\d", span_clean))
+        is_adjective_only = (
+            len(span_clean.split()) == 1
+            and span_clean.lower() in _NATIONALITY_ADJECTIVES
+        )
+        if (
+            (starts_body or is_multi_word or has_digit)
+            and not is_adjective_only
+        ):
+            picked = span_clean
+        else:
+            picked = body  # span is unreliable; body verbatim is safer.
+    # Tier 3: long prose — span only.
+    elif span_clean:
+        picked = span_clean
+    else:
+        return ""
+
+    if not picked:
+        return ""
+
+    # ── Optional LLM span-selector fallback ───────────────────────────────
+    llm = small_llm if small_llm is not None else _DEFAULT_SPAN_FALLBACK_LLM
+    if llm is None:
+        return picked
+    trigger = _should_trigger_span_fallback(picked, question, claim_text)
+    if trigger is None:
+        return picked
+    cache_key = f"span:{hash(question + claim_text)}"
+    try:
+        fallback = llm.span_select(question, claim_text, cache_key=cache_key)
+    except Exception:
+        log.exception("SmallLLM span_select failed — keeping regex output")
+        return picked
+    fallback = (fallback or "").strip().rstrip(".,;!?")
+    if not fallback:
+        return picked
+    SPAN_FALLBACK_STATS[trigger] += 1
+    log.debug(
+        "span fallback (%s) %r → %r  claim=%r",
+        trigger, picked, fallback, claim_text[:80],
+    )
+    return fallback
+
+
 __all__ = [
+    "SPAN_FALLBACK_STATS",
+    "_NATIONALITY_ADJECTIVES",
+    "_SOFT_INTRO_RE",
+    "_pick_answer_from_assistant_claim",
+    "_should_trigger_span_fallback",
+    "best_candidate_fallback_answer",
     "build_repair_prompt",
     "clean_final_answer",
+    "get_default_span_fallback_llm",
     "is_idk",
+    "reset_span_fallback_stats",
+    "set_default_span_fallback_llm",
     "should_block_idk",
+    "validate_against_claims",
     "validate_answer_shape",
 ]

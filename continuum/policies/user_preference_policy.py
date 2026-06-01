@@ -46,9 +46,7 @@ class UserPreferencePolicy:
         candidate: MemoryCandidate,
         context: PolicyEvaluationContext,
     ) -> MemoryHandlingPlan:
-        keep_versions = bool(
-            context.config.get("preserve_preference_versions", True)
-        )
+        keep_versions = bool(context.config.get("preserve_preference_versions", True))
         return MemoryHandlingPlan(
             candidate_id=candidate.id,
             action=MemoryAction.STORE,
@@ -77,8 +75,7 @@ class UserPreferencePolicy:
             ],
             priority=0.9,
             reason=(
-                "User preference: persistent, high retrieval priority, "
-                "domain-scoped versions kept."
+                "User preference: persistent, high retrieval priority, domain-scoped versions kept."
             ),
             policy_ids=[self.policy_id],
         )

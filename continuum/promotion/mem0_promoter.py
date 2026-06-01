@@ -39,6 +39,7 @@ litellm / psycopg3 are lazy-imported; ``completion_fn`` and ``audit_sink``
 are injectable for tests. Any LLM failure degrades a whole chunk to NOOP
 (safe default — never invents ADD/DELETE on error), still audited.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -68,9 +69,7 @@ OPERATIONS = ("ADD", "UPDATE", "DELETE", "NOOP")
 #: LLM function-calling tool schema (exact spec).
 MEMORY_OP_SCHEMA: dict[str, Any] = {
     "name": "memory_operation",
-    "description": (
-        "Decide how to handle a candidate fact relative to existing memories"
-    ),
+    "description": ("Decide how to handle a candidate fact relative to existing memories"),
     "parameters": {
         "type": "object",
         "properties": {
@@ -84,10 +83,7 @@ MEMORY_OP_SCHEMA: dict[str, Any] = {
             },
             "target_id": {
                 "type": "string",
-                "description": (
-                    "UUID of existing fact to update/delete "
-                    "(null for ADD/NOOP)"
-                ),
+                "description": ("UUID of existing fact to update/delete (null for ADD/NOOP)"),
             },
             "rationale": {"type": "string", "description": "Why this operation?"},
             "merged_text": {
@@ -200,9 +196,7 @@ class Mem0Promoter:
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def decide_operation(
-        self, candidate: Fact, neighbors: list[ScoredItem]
-    ) -> Decision:
+    async def decide_operation(self, candidate: Fact, neighbors: list[ScoredItem]) -> Decision:
         """Decide the operation for a single *candidate* (audited)."""
         (decision,) = await self.decide_operations_batch([(candidate, neighbors)])
         return decision
@@ -252,9 +246,7 @@ class Mem0Promoter:
                 best, best_c = si, c
         return best_c, best
 
-    def _short_circuit(
-        self, candidate: Fact, neighbors: list[ScoredItem]
-    ) -> Decision | None:
+    def _short_circuit(self, candidate: Fact, neighbors: list[ScoredItem]) -> Decision | None:
         max_c, best = self._max_cos(neighbors)
         if not neighbors or max_c < self.config.add_threshold:
             return Decision(
@@ -287,9 +279,7 @@ class Mem0Promoter:
 
     # ── LLM decision (batch, parallel tool calls) ───────────────────────────
 
-    async def _decide_via_llm(
-        self, chunk: list[tuple[Fact, list[ScoredItem]]]
-    ) -> list[Decision]:
+    async def _decide_via_llm(self, chunk: list[tuple[Fact, list[ScoredItem]]]) -> list[Decision]:
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": self._user_prompt(chunk)},
@@ -300,8 +290,7 @@ class Mem0Promoter:
         except Exception as exc:
             # Degrade the whole chunk to NOOP — never invent ADD/DELETE on
             # error; promotion must not crash the Promoter.
-            log.exception("Mem0 LLM decision failed — NOOP for %d candidates",
-                          len(chunk))
+            log.exception("Mem0 LLM decision failed — NOOP for %d candidates", len(chunk))
             return [
                 Decision(
                     op="NOOP",
@@ -347,9 +336,7 @@ class Mem0Promoter:
             op=op,
             target_id=target,
             rationale=str(args.get("rationale", "")),
-            merged_text=(
-                str(merged) if op == "UPDATE" and merged else None
-            ),
+            merged_text=(str(merged) if op == "UPDATE" and merged else None),
             candidate_text=candidate.text,
             model=self.config.llm_model,
             tokens_in=tokens_in,
@@ -361,9 +348,7 @@ class Mem0Promoter:
     def _retrying(self) -> AsyncRetrying:
         return AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
-            wait=wait_exponential_jitter(
-                initial=self._backoff_initial, max=self._backoff_max
-            ),
+            wait=wait_exponential_jitter(initial=self._backoff_initial, max=self._backoff_max),
             retry=retry_if_exception(_is_transient),
             reraise=True,
         )
@@ -371,9 +356,7 @@ class Mem0Promoter:
     async def _complete(self, messages: list[dict[str, str]]) -> Any:
         async for attempt in self._retrying():
             with attempt:
-                return await asyncio.wait_for(
-                    self._call(messages), timeout=self.config.timeout
-                )
+                return await asyncio.wait_for(self._call(messages), timeout=self.config.timeout)
         raise RuntimeError("unreachable retry exit")  # pragma: no cover
 
     async def _call(self, messages: list[dict[str, str]]) -> Any:
@@ -391,8 +374,7 @@ class Mem0Promoter:
             import litellm
         except ImportError as exc:  # pragma: no cover - via completion_fn
             raise ImportError(
-                "litellm is required for Mem0Promoter.\n"
-                "Install it with:  pip install litellm"
+                "litellm is required for Mem0Promoter.\nInstall it with:  pip install litellm"
             ) from exc
         return await litellm.acompletion(
             model=self.config.llm_model,
@@ -415,9 +397,7 @@ class Mem0Promoter:
             try:
                 tool_calls = resp["choices"][0]["message"]["tool_calls"]
             except (KeyError, IndexError, TypeError) as exc:
-                raise ValueError(
-                    f"no tool_calls in response: {resp!r}"
-                ) from exc
+                raise ValueError(f"no tool_calls in response: {resp!r}") from exc
 
         args: list[dict[str, Any]] = []
         for tc in tool_calls or []:
@@ -432,12 +412,14 @@ class Mem0Promoter:
             resp.get("usage") if isinstance(resp, dict) else None
         )
         if usage is not None:
-            tin = int(getattr(usage, "prompt_tokens", 0)
-                      or (usage.get("prompt_tokens", 0)
-                          if isinstance(usage, dict) else 0))
-            tout = int(getattr(usage, "completion_tokens", 0)
-                       or (usage.get("completion_tokens", 0)
-                           if isinstance(usage, dict) else 0))
+            tin = int(
+                getattr(usage, "prompt_tokens", 0)
+                or (usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0)
+            )
+            tout = int(
+                getattr(usage, "completion_tokens", 0)
+                or (usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0)
+            )
         return args, tin, tout
 
     # ── prompt ──────────────────────────────────────────────────────────────
@@ -452,8 +434,8 @@ class Mem0Promoter:
                 lines.append("Top similar existing facts:")
                 for si in nbrs[:10]:
                     lines.append(
-                        f'  - id={si.item.id} '
-                        f'cos={si.scores.relevance:.3f} '
+                        f"  - id={si.item.id} "
+                        f"cos={si.scores.relevance:.3f} "
                         f'text="{si.item.content}"'
                     )
             else:
@@ -546,9 +528,7 @@ def make_postgres_audit_sink(
         # Guaranteed by the dsn-or-conn_factory check above: this branch is
         # only reached when conn_factory is None, so dsn is set.
         assert dsn is not None
-        conn = await psycopg.AsyncConnection.connect(
-            dsn, autocommit=True, row_factory=dict_row
-        )
+        conn = await psycopg.AsyncConnection.connect(dsn, autocommit=True, row_factory=dict_row)
         try:
             for r in records:
                 await conn.execute(sql, r)

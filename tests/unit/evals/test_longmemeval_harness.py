@@ -16,6 +16,7 @@ Coverage
 * ``run.run_benchmark`` — wires adapter into factory-provided
   benchmark, normalises results, writes JSON to disk
 """
+
 from __future__ import annotations
 
 import json
@@ -148,9 +149,7 @@ class _FakeRetriever:
         self.calls = 0
         self.raise_ = False
 
-    async def retrieve(
-        self, query: Any, budget: TokenBudget
-    ) -> ContextBundle | None:
+    async def retrieve(self, query: Any, budget: TokenBudget) -> ContextBundle | None:
         self.calls += 1
         if self.raise_:
             raise RuntimeError("retrieve broken")
@@ -164,9 +163,7 @@ class _FakeSession:
         self.turns: list[str] = []
         self.raise_on_turn = False
 
-    async def process_turn(
-        self, user_message: str, *, context_budget: TokenBudget
-    ) -> str:
+    async def process_turn(self, user_message: str, *, context_budget: TokenBudget) -> str:
         if self.raise_on_turn:
             raise RuntimeError("turn boom")
         self.turns.append(user_message)
@@ -199,8 +196,11 @@ def _bundle(stm: list[str], mtm: list[str], ltm: list[str]) -> ContextBundle:
         messages=[],
         tokens_used=0,
         budget=TokenBudget(
-            total=4000, stm_reserved=1000, mtm_reserved=1000,
-            ltm_reserved=2000, response_reserved=200,
+            total=4000,
+            stm_reserved=1000,
+            mtm_reserved=1000,
+            ltm_reserved=2000,
+            response_reserved=200,
         ),
     )
 
@@ -251,11 +251,13 @@ async def test_process_conversation_dispatches_user_turns() -> None:
     stm = _FakeStm()
     session = _FakeSession(retriever=None, stm=stm)
     a = adapter_mod.ContinuumAdapter(session=session, llm=_FakeLLM())
-    await a.process_conversation([
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "hi"},
-        {"role": "user", "content": "how are you"},
-    ])
+    await a.process_conversation(
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+            {"role": "user", "content": "how are you"},
+        ]
+    )
     assert session.turns == ["hello", "how are you"]
     # Assistant turn was STM-appended without firing process_turn.
     assistant_rows = [i for i in stm.appended if i.metadata.get("role") == "assistant"]
@@ -268,10 +270,12 @@ async def test_process_conversation_skips_empty_messages() -> None:
     stm = _FakeStm()
     session = _FakeSession(retriever=None, stm=stm)
     a = adapter_mod.ContinuumAdapter(session=session, llm=_FakeLLM())
-    await a.process_conversation([
-        {"role": "user", "content": ""},
-        {"role": "user", "content": "  "},
-    ])
+    await a.process_conversation(
+        [
+            {"role": "user", "content": ""},
+            {"role": "user", "content": "  "},
+        ]
+    )
     assert session.turns == []
 
 
@@ -306,7 +310,8 @@ async def test_answer_question_degrades_on_retrieve_failure() -> None:
     retriever.raise_ = True
     llm = _FakeLLM()
     a = adapter_mod.ContinuumAdapter(
-        session=_FakeSession(retriever=retriever, stm=_FakeStm()), llm=llm,
+        session=_FakeSession(retriever=retriever, stm=_FakeStm()),
+        llm=llm,
     )
     answer = await a.answer_question("Q?")
     # Still produced an answer using a no-context prompt.
@@ -392,7 +397,9 @@ async def test_run_benchmark_default_filename_uses_clock(tmp_path: Path) -> None
 
     frozen = dt.datetime(2026, 5, 20, 12, 0, 0, tzinfo=dt.UTC)
     await run_mod.run_benchmark(
-        dataset="d", answerer="a", adapter=object(),
+        dataset="d",
+        answerer="a",
+        adapter=object(),
         benchmark_factory=factory,
         out_dir=tmp_path,
         now=lambda: frozen,
@@ -417,7 +424,9 @@ async def test_run_benchmark_normalises_object_results(tmp_path: Path) -> None:
         return _Obj()
 
     results = await run_mod.run_benchmark(
-        dataset="d", answerer="a", adapter=object(),
+        dataset="d",
+        answerer="a",
+        adapter=object(),
         benchmark_factory=factory,
         out_dir=tmp_path,
         results_filename="r.json",

@@ -160,18 +160,12 @@ def _clean(postgres_db: str) -> Iterator[None]:
 
 
 def _llm_response(content: str) -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-    )
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
 def _tool_response(args_list: list[dict]) -> SimpleNamespace:
     calls = [
-        SimpleNamespace(
-            function=SimpleNamespace(
-                name="memory_operation", arguments=json.dumps(a)
-            )
-        )
+        SimpleNamespace(function=SimpleNamespace(name="memory_operation", arguments=json.dumps(a)))
         for a in args_list
     ]
     return SimpleNamespace(
@@ -187,19 +181,15 @@ class FakeGLiNER:
         self, text: str, labels: list[str], *, threshold: float = 0.0
     ) -> list[dict[str, Any]]:
         return [
-            {"text": "Alice", "label": "person", "start": 0, "end": 5,
-             "score": 0.95},
-            {"text": "Acme Corp", "label": "org", "start": 15, "end": 24,
-             "score": 0.88},
+            {"text": "Alice", "label": "person", "start": 0, "end": 5, "score": 0.95},
+            {"text": "Acme Corp", "label": "org", "start": 15, "end": 24, "score": 0.88},
         ]
 
 
 class FakeFactExtractor:
     """One promoted fact per MTM block (deterministic, no LLM)."""
 
-    async def extract_facts(
-        self, block: Any, entities: list[Any]
-    ) -> list[Fact]:
+    async def extract_facts(self, block: Any, entities: list[Any]) -> list[Fact]:
         return [
             Fact(
                 text=f"Promoted fact about {block.text}",
@@ -229,8 +219,10 @@ class FakeReranker:
         for it in items:
             r = rank(it.item.content)
             sb = ScoreBreakdown(
-                relevance=r, importance=it.scores.importance,
-                recency=it.scores.recency, confidence=it.scores.confidence,
+                relevance=r,
+                importance=it.scores.importance,
+                recency=it.scores.recency,
+                confidence=it.scores.confidence,
                 composite=r,
             )
             out.append((r, ScoredItem(item=it.item, scores=sb)))
@@ -279,26 +271,21 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     )
     aid = await ltm.upsert(alpha_item)
     assert isinstance(aid, uuid.UUID)
-    assert isinstance(ltm, LTMProtocol)             # name-based runtime check
+    assert isinstance(ltm, LTMProtocol)  # name-based runtime check
 
     # update bumps updated_at, leaves the row live.
     await ltm.update(aid, {"importance": 0.95, "content": "alpha doc revised"})
-    assert _scalar(
-        postgres_db,
-        "SELECT importance FROM memory_nodes WHERE id=%s", (str(aid),)
-    ) == 0.95
+    assert (
+        _scalar(postgres_db, "SELECT importance FROM memory_nodes WHERE id=%s", (str(aid),)) == 0.95
+    )
 
     # invalidate does NOT delete the row — bi-temporal close only.
-    pre = _scalar(postgres_db,
-                  "SELECT count(*) FROM memory_nodes WHERE id=%s", (str(aid),))
+    pre = _scalar(postgres_db, "SELECT count(*) FROM memory_nodes WHERE id=%s", (str(aid),))
     when = datetime(2030, 1, 1, tzinfo=UTC)
     await ltm.invalidate(aid, when)
-    post = _scalar(postgres_db,
-                   "SELECT count(*) FROM memory_nodes WHERE id=%s", (str(aid),))
-    inv = _scalar(postgres_db,
-                  "SELECT invalidated_at FROM memory_nodes WHERE id=%s",
-                  (str(aid),))
-    assert pre == post == 1                         # row preserved
+    post = _scalar(postgres_db, "SELECT count(*) FROM memory_nodes WHERE id=%s", (str(aid),))
+    inv = _scalar(postgres_db, "SELECT invalidated_at FROM memory_nodes WHERE id=%s", (str(aid),))
+    assert pre == post == 1  # row preserved
     assert inv is not None and inv.astimezone(UTC) == when
 
     # ── 3. Hybrid search returns the right top-k ─────────────────────────────
@@ -310,7 +297,9 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     ):
         await ltm.upsert(
             MemoryItem(
-                content=content, tier=MemoryTier.LTM, confidence=0.9,
+                content=content,
+                tier=MemoryTier.LTM,
+                confidence=0.9,
                 importance=0.7,
                 embedding=_near(alpha_vec, seed=seed)
                 if content.startswith("alpha")
@@ -332,40 +321,49 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     assert "Alice" in names and "Acme Corp" in names
 
     async def llm_x_cf(**_kw: Any) -> Any:
-        return _llm_response(json.dumps({
-            "entities": [
-                {"text": "Engineer", "type": "CONCEPT", "confidence": 0.85}
-            ],
-            "relations": [
-                {"subject": "Alice", "predicate": "EMPLOYED_BY",
-                 "object": "Acme Corp", "confidence": 0.9},
-            ],
-        }))
+        return _llm_response(
+            json.dumps(
+                {
+                    "entities": [{"text": "Engineer", "type": "CONCEPT", "confidence": 0.85}],
+                    "relations": [
+                        {
+                            "subject": "Alice",
+                            "predicate": "EMPLOYED_BY",
+                            "object": "Acme Corp",
+                            "confidence": 0.9,
+                        },
+                    ],
+                }
+            )
+        )
 
-    llm_x = LLMEntityExtractor(
-        LLMExtractionConfig(), completion_fn=llm_x_cf
-    )
-    merged_ents, rels = await llm_x.extract(
-        "Alice works at Acme Corp", ents
-    )
+    llm_x = LLMEntityExtractor(LLMExtractionConfig(), completion_fn=llm_x_cf)
+    merged_ents, rels = await llm_x.extract("Alice works at Acme Corp", ents)
     merged_names = {e.text for e in merged_ents}
-    assert merged_names >= {"Alice", "Acme Corp", "Engineer"}   # LLM enhanced
+    assert merged_names >= {"Alice", "Acme Corp", "Engineer"}  # LLM enhanced
     assert any(r.predicate == "EMPLOYED_BY" for r in rels)
 
     # ── 5. Fact extraction from a SummaryBlock ───────────────────────────────
     async def facts_cf(**_kw: Any) -> Any:
-        return _llm_response(json.dumps({
-            "facts": [
-                {"text": "Alice works at Acme Corp",
-                 "confidence": 0.95,
-                 "entities": ["Alice", "Acme Corp"],
-                 "type": "employment"}
-            ]
-        }))
+        return _llm_response(
+            json.dumps(
+                {
+                    "facts": [
+                        {
+                            "text": "Alice works at Acme Corp",
+                            "confidence": 0.95,
+                            "entities": ["Alice", "Acme Corp"],
+                            "type": "employment",
+                        }
+                    ]
+                }
+            )
+        )
 
     fx = FactExtractor(FactExtractionConfig(), completion_fn=facts_cf)
     block = SummaryBlock(
-        text="Alice mentioned she works at Acme.", id=uuid.uuid4(),
+        text="Alice mentioned she works at Acme.",
+        id=uuid.uuid4(),
     )
     facts = await fx.extract_facts(block, merged_ents)
     assert facts and isinstance(facts[0], Fact)
@@ -379,38 +377,37 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     for i in range(2):
         bid = await mtm.add_summary(
             MemoryItem(
-                content=f"summary block {i}", tier=MemoryTier.MTM,
-                session_id="acc-2", metadata={"role": "summary"},
+                content=f"summary block {i}",
+                tier=MemoryTier.MTM,
+                session_id="acc-2",
+                metadata={"role": "summary"},
             )
         )
         seeded_block_ids.append(bid)
 
     async def mem0_cf(**_kw: Any) -> Any:
         # One ADD tool-call per candidate (parallel function calling).
-        return _tool_response([
-            {"operation": "ADD", "rationale": "novel fact"}
-            for _ in range(2)
-        ])
+        return _tool_response([{"operation": "ADD", "rationale": "novel fact"} for _ in range(2)])
 
     audit_sink = make_postgres_audit_sink(dsn=postgres_db)
     decider = Mem0Promoter(
         PromoterConfig(confidence_threshold=0.6, add_threshold=0.5),
-        completion_fn=mem0_cf, audit_sink=audit_sink,
+        completion_fn=mem0_cf,
+        audit_sink=audit_sink,
     )
 
     ltm_before = _scalar(
         postgres_db,
-        "SELECT count(*) FROM memory_nodes "
-        "WHERE layer='LTM' AND invalidated_at IS NULL",
+        "SELECT count(*) FROM memory_nodes WHERE layer='LTM' AND invalidated_at IS NULL",
     )
-    promotions_before = _scalar(
-        postgres_db, "SELECT count(*) FROM memory_promotions"
-    )
+    promotions_before = _scalar(postgres_db, "SELECT count(*) FROM memory_promotions")
 
     promoter = Promoter(
         PromoterConfig(confidence_threshold=0.6),
-        mtm=mtm, ltm=ltm,
-        fact_extractor=FakeFactExtractor(), decider=decider,
+        mtm=mtm,
+        ltm=ltm,
+        fact_extractor=FakeFactExtractor(),
+        decider=decider,
     )
     report = await promoter.promote()
     assert report.blocks_processed == 2
@@ -419,12 +416,9 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
 
     ltm_after = _scalar(
         postgres_db,
-        "SELECT count(*) FROM memory_nodes "
-        "WHERE layer='LTM' AND invalidated_at IS NULL",
+        "SELECT count(*) FROM memory_nodes WHERE layer='LTM' AND invalidated_at IS NULL",
     )
-    promotions_after = _scalar(
-        postgres_db, "SELECT count(*) FROM memory_promotions"
-    )
+    promotions_after = _scalar(postgres_db, "SELECT count(*) FROM memory_promotions")
     assert ltm_after - ltm_before == 2
     # Audit log: 2 Mem0 ADD rows + 2 mark_processed NOOP rows = +4.
     assert promotions_after - promotions_before >= 4
@@ -441,16 +435,21 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     bg = BackgroundQueue(backoff_initial=0.0, backoff_max=0.0)
     tm = TriggerManager(
         TriggerConfig(block_threshold=1),  # any unprocessed → trigger
-        mtm=mtm, ltm=ltm, promoter=promoter, background=bg,
+        mtm=mtm,
+        ltm=ltm,
+        promoter=promoter,
+        background=bg,
     )
     # No "Bob" entity in LTM → new-entity trigger fires.
-    assert await tm.check_new_entity(
-        [Entity("Bob", "PERSON", 0, 3, 0.95)]
-    ) is True
+    assert await tm.check_new_entity([Entity("Bob", "PERSON", 0, 3, 0.95)]) is True
     # Add an unprocessed block so accumulation ≥ 1 → trigger fires.
     await mtm.add_summary(
-        MemoryItem(content="fresh summary", tier=MemoryTier.MTM,
-                   session_id="trig-1", metadata={"role": "summary"})
+        MemoryItem(
+            content="fresh summary",
+            tier=MemoryTier.MTM,
+            session_id="trig-1",
+            metadata={"role": "summary"},
+        )
     )
     assert await tm.check_block_accumulation() is True
 
@@ -466,19 +465,26 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
         for i in range(5):
             await stm.append(
                 MemoryItem(
-                    content=f"turn {i}", tier=MemoryTier.STM,
+                    content=f"turn {i}",
+                    tier=MemoryTier.STM,
                     session_id="acc-2",
                     metadata={"role": "user" if i % 2 == 0 else "assistant"},
                 )
             )
         retriever = Retriever(
             RetrieverConfig(k1=5, stm_turns=5, ltm_top_k=5),
-            ltm=ltm, stm=stm, mtm=mtm, reranker=FakeReranker(),
+            ltm=ltm,
+            stm=stm,
+            mtm=mtm,
+            reranker=FakeReranker(),
             session_id="acc-2",
         )
         budget = TokenBudget(
-            total=4000, stm_reserved=500, mtm_reserved=1000,
-            ltm_reserved=1000, response_reserved=500,
+            total=4000,
+            stm_reserved=500,
+            mtm_reserved=1000,
+            ltm_reserved=1000,
+            response_reserved=500,
         )
         bundle = await retriever.retrieve(
             Query(text="alpha", embedding=alpha_vec, session_id="acc-2"),
@@ -488,30 +494,42 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     assert bundle.tier_breakdown["stm"] > 0
     assert bundle.tier_breakdown["ltm"] > 0
     assert bundle.tokens_used <= budget.total
-    assert bundle.items[0].content == "alpha doc text"   # reranked top
+    assert bundle.items[0].content == "alpha doc text"  # reranked top
 
     # ── 9. Test coverage ≥ 75 % (real pytest --cov subprocess) ───────────────
     env = {**os.environ, _RECURSION_ENV: "1"}
     t0 = time.perf_counter()
     cov = subprocess.run(
         [
-            sys.executable, "-m", "pytest", "tests/unit", "-m", "unit",
-            "--cov=continuum", "--cov-report=term", "--cov-fail-under=0",
-            "-q", "-p", "no:cacheprovider", "--no-header",
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/unit",
+            "-m",
+            "unit",
+            "--cov=continuum",
+            "--cov-report=term",
+            "--cov-fail-under=0",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--no-header",
         ],
-        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=900,
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=900,
     )
     assert cov.returncode == 0, (cov.stdout + cov.stderr)[-3000:]
     total_line = next(
-        (ln for ln in (cov.stdout + cov.stderr).splitlines()
-         if ln.strip().startswith("TOTAL")),
+        (ln for ln in (cov.stdout + cov.stderr).splitlines() if ln.strip().startswith("TOTAL")),
         None,
     )
     assert total_line, "no coverage TOTAL line found"
     pct = float(re.search(r"(\d+(?:\.\d+)?)%", total_line).group(1))  # type: ignore[union-attr]
     assert pct >= _MIN_COVERAGE_PCT, (
-        f"coverage {pct:.1f}% < {_MIN_COVERAGE_PCT}% gate "
-        f"({total_line.strip()})"
+        f"coverage {pct:.1f}% < {_MIN_COVERAGE_PCT}% gate ({total_line.strip()})"
     )
     cov_dt = time.perf_counter() - t0
 
@@ -519,11 +537,13 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     t0 = time.perf_counter()
     mp = subprocess.run(
         [sys.executable, "-m", "mypy", "--strict", "continuum"],
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=600,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
     assert mp.returncode == 0, (
-        "mypy --strict continuum failed (type coverage < 100%):\n"
-        f"{(mp.stdout + mp.stderr)[-3000:]}"
+        f"mypy --strict continuum failed (type coverage < 100%):\n{(mp.stdout + mp.stderr)[-3000:]}"
     )
     mp_dt = time.perf_counter() - t0
 

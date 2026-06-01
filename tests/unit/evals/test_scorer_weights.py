@@ -8,6 +8,7 @@ Covers ``_parse_scorer_weights``, ``_parse_lme_date``, the recency
 decay, and that the weighted composite actually reorders top-K results.
 Runs offline with a deterministic fake embedder.
 """
+
 from __future__ import annotations
 
 import datetime as dt
@@ -49,8 +50,11 @@ class _FixedEmbedder:
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=8000, stm_reserved=500, mtm_reserved=500,
-        ltm_reserved=2000, response_reserved=500,
+        total=8000,
+        stm_reserved=500,
+        mtm_reserved=500,
+        ltm_reserved=2000,
+        response_reserved=500,
     )
 
 
@@ -75,9 +79,9 @@ def test_parse_weights_renormalises_off_sum() -> None:
 def test_parse_weights_bad_input_falls_back() -> None:
     w = _parse_scorer_weights("garbage")
     assert sum(w.values()) == pytest.approx(1.0)
-    assert w["relevance"] == pytest.approx(0.45)   # defaults
+    assert w["relevance"] == pytest.approx(0.45)  # defaults
 
-    w2 = _parse_scorer_weights("0.5,0.5")          # wrong count
+    w2 = _parse_scorer_weights("0.5,0.5")  # wrong count
     assert w2["relevance"] == pytest.approx(0.45)
 
 
@@ -118,9 +122,13 @@ def test_parse_date_bad_input_returns_none() -> None:
 async def test_recency_uniform_when_no_dates() -> None:
     store = FlatHaystackStore()
     for i in range(4):
-        await store.append(MemoryItem(
-            id=str(uuid.uuid4()), content=f"m{i}", tier=MemoryTier.STM,
-        ))
+        await store.append(
+            MemoryItem(
+                id=str(uuid.uuid4()),
+                content=f"m{i}",
+                tier=MemoryTier.STM,
+            )
+        )
     r = STMSemanticRetriever(
         store=store,
         embedder=_FixedEmbedder({}),
@@ -142,13 +150,15 @@ async def test_recency_decays_with_age() -> None:
         it.created_at = base - dt.timedelta(days=days)
         await store.append(it)
     r = STMSemanticRetriever(
-        store=store, embedder=_FixedEmbedder({}), tau_hours=168.0,  # 7-day
+        store=store,
+        embedder=_FixedEmbedder({}),
+        tau_hours=168.0,  # 7-day
     )
     r._refresh_index()
     rec = r._recency_scores()
     # Newest ≈ 1.0; 7-day-old ≈ e^-1 ≈ 0.368; 30-day-old much smaller.
     assert rec[0] == pytest.approx(1.0, abs=1e-6)
-    assert rec[1] == pytest.approx(np.e ** -1, abs=0.02)
+    assert rec[1] == pytest.approx(np.e**-1, abs=0.02)
     assert rec[2] < rec[1] < rec[0]
 
 
@@ -178,20 +188,21 @@ async def test_recency_weight_reorders_topk() -> None:
 
     # Pure relevance (recency weight 0) — order is arbitrary/stable.
     r_norec = STMSemanticRetriever(
-        store=store, embedder=embedder, top_k=1,
-        score_weights={"relevance": 1.0, "importance": 0.0,
-                       "recency": 0.0, "confidence": 0.0},
+        store=store,
+        embedder=embedder,
+        top_k=1,
+        score_weights={"relevance": 1.0, "importance": 0.0, "recency": 0.0, "confidence": 0.0},
     )
     ctx0 = await r_norec.retrieve(Query(text="q"), _budget())
     # With recency weighting, the NEW item must win the single slot.
     r_rec = STMSemanticRetriever(
-        store=store, embedder=embedder, top_k=1, tau_hours=168.0,
-        score_weights={"relevance": 0.5, "importance": 0.0,
-                       "recency": 0.5, "confidence": 0.0},
+        store=store,
+        embedder=embedder,
+        top_k=1,
+        tau_hours=168.0,
+        score_weights={"relevance": 0.5, "importance": 0.0, "recency": 0.5, "confidence": 0.0},
     )
     ctx1 = await r_rec.retrieve(Query(text="q"), _budget())
-    assert ctx1.items[0].id == "new", (
-        "recency weight should promote the newer item to the top slot"
-    )
+    assert ctx1.items[0].id == "new", "recency weight should promote the newer item to the top slot"
     # ctx0 just needs to have returned something (order undefined at tie).
     assert len(ctx0.items) == 1

@@ -117,26 +117,17 @@ class SemanticDedupe(BaseOptimizer):
         config: SemanticDedupeConfig | None = None,
     ) -> None:
         base = config or SemanticDedupeConfig()
-        self.threshold: float = (
-            threshold if threshold is not None else base.threshold
-        )
+        self.threshold: float = threshold if threshold is not None else base.threshold
         self.skip_if_fewer_than: int = (
-            skip_if_fewer_than
-            if skip_if_fewer_than is not None
-            else base.skip_if_fewer_than
+            skip_if_fewer_than if skip_if_fewer_than is not None else base.skip_if_fewer_than
         )
-        self.score_key: Callable[[MemoryItem], float] = (
-            score_key or _default_score
-        )
+        self.score_key: Callable[[MemoryItem], float] = score_key or _default_score
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def apply(
-        self, ctx: ContextBundle, budget: TokenBudget
-    ) -> ContextBundle:
+    async def apply(self, ctx: ContextBundle, budget: TokenBudget) -> ContextBundle:
         ltm_items = [
-            it for it in ctx.items
-            if it.tier == MemoryTier.LTM and it.embedding is not None
+            it for it in ctx.items if it.tier == MemoryTier.LTM and it.embedding is not None
         ]
         if len(ltm_items) < self.skip_if_fewer_than:
             return ctx
@@ -154,9 +145,7 @@ class SemanticDedupe(BaseOptimizer):
             items=new_items,
             messages=new_messages,
             tier_breakdown=new_breakdown,
-            tokens_used=sum(
-                estimate_tokens_text(i.content) for i in new_items
-            ),
+            tokens_used=sum(estimate_tokens_text(i.content) for i in new_items),
             debug_info={
                 **ctx.debug_info,
                 "semantic_dedupe": {
@@ -174,16 +163,14 @@ class SemanticDedupe(BaseOptimizer):
         bound for typical bundles.
         """
         ltm_items = [
-            it for it in ctx.items
-            if it.tier == MemoryTier.LTM and it.embedding is not None
+            it for it in ctx.items if it.tier == MemoryTier.LTM and it.embedding is not None
         ]
         current = sum(estimate_tokens_text(it.content) for it in ctx.items)
         if len(ltm_items) < self.skip_if_fewer_than:
             return Cost(tokens=current, latency_ms=0.0)
         # Coarse projection: assume 5 % duplicate rate by default.
-        avg_tokens = (
-            sum(estimate_tokens_text(it.content) for it in ltm_items)
-            / max(1, len(ltm_items))
+        avg_tokens = sum(estimate_tokens_text(it.content) for it in ltm_items) / max(
+            1, len(ltm_items)
         )
         projected = current - int(avg_tokens * len(ltm_items) * 0.05)
         return Cost(
@@ -193,9 +180,7 @@ class SemanticDedupe(BaseOptimizer):
 
     # ── internals ───────────────────────────────────────────────────────────
 
-    def _find_duplicates_to_remove(
-        self, ltm_items: list[MemoryItem]
-    ) -> set[str]:
+    def _find_duplicates_to_remove(self, ltm_items: list[MemoryItem]) -> set[str]:
         """
         Build the cosine similarity matrix and pick lower-scored items in
         every pair ≥ ``threshold`` for removal.
@@ -223,9 +208,7 @@ class SemanticDedupe(BaseOptimizer):
                     continue
                 if sim[i, j] < self.threshold:
                     continue
-                loser = _pick_loser(
-                    ltm_items[i], ltm_items[j], scores[i], scores[j]
-                )
+                loser = _pick_loser(ltm_items[i], ltm_items[j], scores[i], scores[j])
                 to_remove.add(loser.id)
         return to_remove
 
@@ -251,10 +234,7 @@ def _embedding_matrix(items: list[MemoryItem]) -> np.ndarray[Any, Any] | None:
         return None
     dim = rows[0].shape[0]
     if any(r.shape != (dim,) for r in rows):
-        log.warning(
-            "inconsistent embedding dimensions across LTM items; "
-            "skipping semantic dedup"
-        )
+        log.warning("inconsistent embedding dimensions across LTM items; skipping semantic dedup")
         return None
     return np.stack(rows, axis=0)
 
@@ -284,9 +264,7 @@ def cosine_similarity_matrix(matrix: np.ndarray[Any, Any]) -> np.ndarray[Any, An
     return np.asarray(sim)
 
 
-def _pick_loser(
-    a: MemoryItem, b: MemoryItem, score_a: float, score_b: float
-) -> MemoryItem:
+def _pick_loser(a: MemoryItem, b: MemoryItem, score_a: float, score_b: float) -> MemoryItem:
     """Lower score loses; ties broken by older created_at, then id."""
     if score_a != score_b:
         return b if score_a > score_b else a
@@ -298,9 +276,7 @@ def _pick_loser(
     return a if str(a.id) < str(b.id) else b
 
 
-def _rebuild_messages(
-    ctx: ContextBundle, items: list[MemoryItem]
-) -> list[dict[str, str]]:
+def _rebuild_messages(ctx: ContextBundle, items: list[MemoryItem]) -> list[dict[str, str]]:
     """
     Drop the messages whose paired item was removed; keep extras
     (messages with no item — e.g. injected system prompts) intact.
@@ -320,9 +296,7 @@ def _rebuild_messages(
 def _tier_breakdown(items: list[MemoryItem]) -> dict[str, int]:
     counts: dict[str, int] = {"stm": 0, "mtm": 0, "ltm": 0}
     for it in items:
-        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(
-            it.content
-        )
+        counts[it.tier.value] = counts.get(it.tier.value, 0) + estimate_tokens_text(it.content)
     return counts
 
 

@@ -47,9 +47,7 @@ class MeetingPolicy:
         candidate: MemoryCandidate,
         context: PolicyEvaluationContext,
     ) -> MemoryHandlingPlan:
-        ttl_days = int(
-            context.config.get("meeting_raw_transcript_ttl_days", 30)
-        )
+        ttl_days = int(context.config.get("meeting_raw_transcript_ttl_days", 30))
         expire_at = context.now + timedelta(days=ttl_days)
         return MemoryHandlingPlan(
             candidate_id=candidate.id,

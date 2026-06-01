@@ -1,2 +1,0 @@
-question_id,failure_category,expected_answer,model_answer,expected_session_ids,retrieved_session_ids,error,latency_ms
-58bf7951,wrong_retrieval,The Glass Menagerie,I don't know.,answer_355c48bb,answer_355c48bb;answer_355c48bb;answer_355c48bb;answer_355c48bb,,2044.8

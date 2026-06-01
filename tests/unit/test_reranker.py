@@ -5,6 +5,7 @@ Unit tests for ``continuum.retrieval.reranker.Reranker``. A fake
 CrossEncoder is injected via ``model_factory`` — no sentence-transformers /
 torch / network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,8 +32,11 @@ def _si(text: str, composite: float = 0.5) -> ScoredItem:
     return ScoredItem(
         item=MemoryItem(content=text, tier=MemoryTier.LTM),
         scores=ScoreBreakdown(
-            relevance=composite, importance=0.3, recency=0.4,
-            confidence=0.6, composite=composite,
+            relevance=composite,
+            importance=0.3,
+            recency=0.4,
+            confidence=0.6,
+            composite=composite,
         ),
     )
 
@@ -45,11 +49,9 @@ class FakeCE:
         self._sleep = sleep
         self.calls: list[tuple[int, int]] = []  # (n_pairs, batch_size)
 
-    def predict(
-        self, sentences: list[list[str]], *, batch_size: int = 32, **_: Any
-    ) -> list[float]:
+    def predict(self, sentences: list[list[str]], *, batch_size: int = 32, **_: Any) -> list[float]:
         if self._sleep:
-            time.sleep(self._sleep)            # blocking — must run in a thread
+            time.sleep(self._sleep)  # blocking — must run in a thread
         self.calls.append((len(sentences), batch_size))
         return [self._logits.get(doc, 0.0) for _q, doc in sentences]
 
@@ -92,13 +94,13 @@ class TestReorder:
     async def test_relevant_item_moves_up(self) -> None:
         # Recall order is poor: the truly relevant doc is last.
         items = [_si(f"junk-{i}") for i in range(10)] + [_si("the answer")]
-        logits = {"the answer": 8.0}            # everything else → 0.0
+        logits = {"the answer": 8.0}  # everything else → 0.0
         rr, _ = _rr(logits, skip_if_fewer_than=2)
 
         out = await rr.rerank("q", items)
 
         assert out[0].item.content == "the answer"
-        assert out[0].score > out[1].score      # composite now = sigmoid(logit)
+        assert out[0].score > out[1].score  # composite now = sigmoid(logit)
         assert out[0].score == pytest.approx(1.0 / (1.0 + math.exp(-8.0)))
         # Provenance recorded on the item.
         meta = out[0].item.metadata["rerank"]
@@ -111,11 +113,11 @@ class TestReorder:
         out = await rr.rerank("q", items)
         assert {i.item.content for i in out} == {i.item.content for i in items}
         assert len(out) == len(items)
-        assert out[0].item.content == "c"       # highest logit first
+        assert out[0].item.content == "c"  # highest logit first
 
     async def test_stable_for_ties(self) -> None:
         items = [_si("p"), _si("q"), _si("r")] + [_si(f"z{i}") for i in range(8)]
-        rr, _ = _rr({})                          # all logits 0.0 → all tie
+        rr, _ = _rr({})  # all logits 0.0 → all tie
         out = await rr.rerank("query", items)
         assert [i.item.content for i in out[:3]] == ["p", "q", "r"]  # stable
 
@@ -131,7 +133,7 @@ class TestBatchingAndTopN:
         rr, fake = _rr({}, batch_size=8)
         await rr.rerank("q", items)
         assert fake is not None
-        assert fake.calls == [(12, 8)]           # all pairs, configured batch
+        assert fake.calls == [(12, 8)]  # all pairs, configured batch
 
     async def test_only_top_n_reranked_tail_preserved(self) -> None:
         items = [_si(f"item-{i}") for i in range(20)]
@@ -140,12 +142,10 @@ class TestBatchingAndTopN:
         out = await rr.rerank("q", items)
 
         assert fake is not None
-        assert fake.calls[0][0] == 5             # only 5 pairs scored
-        assert out[0].item.content == "item-4"   # reranked into the lead
+        assert fake.calls[0][0] == 5  # only 5 pairs scored
+        assert out[0].item.content == "item-4"  # reranked into the lead
         # The tail (items 5..19) keeps its original recall order.
-        assert [i.item.content for i in out[5:]] == [
-            f"item-{i}" for i in range(5, 20)
-        ]
+        assert [i.item.content for i in out[5:]] == [f"item-{i}" for i in range(5, 20)]
 
 
 # ---------------------------------------------------------------------------
@@ -161,20 +161,18 @@ class TestSkip:
             called["built"] = True
             return FakeCE({})
 
-        rr = Reranker(
-            RerankerConfig(skip_if_fewer_than=10), model_factory=factory
-        )
-        items = [_si(f"d{i}") for i in range(9)]   # 9 < 10 → skip
+        rr = Reranker(RerankerConfig(skip_if_fewer_than=10), model_factory=factory)
+        items = [_si(f"d{i}") for i in range(9)]  # 9 < 10 → skip
         out = await rr.rerank("q", items)
 
-        assert out == items                        # identical order, untouched
-        assert called["built"] is False            # model never loaded
+        assert out == items  # identical order, untouched
+        assert called["built"] is False  # model never loaded
 
     async def test_runs_at_threshold(self) -> None:
         rr, fake = _rr({"d0": 3.0}, skip_if_fewer_than=10)
-        items = [_si(f"d{i}") for i in range(10)]   # exactly 10 → run
+        items = [_si(f"d{i}") for i in range(10)]  # exactly 10 → run
         out = await rr.rerank("q", items)
-        assert fake is not None and fake.calls      # model was used
+        assert fake is not None and fake.calls  # model was used
         assert out[0].item.content == "d0"
 
 
@@ -188,8 +186,7 @@ class TestAsync:
         # Blocking 0.2s predict must not stall a concurrent coroutine.
         items = [_si(f"d{i}") for i in range(10)]
         fake = FakeCE({"d0": 5.0}, sleep=0.20)
-        rr = Reranker(RerankerConfig(skip_if_fewer_than=2),
-                      model_factory=lambda _m, _d: fake)
+        rr = Reranker(RerankerConfig(skip_if_fewer_than=2), model_factory=lambda _m, _d: fake)
 
         ticks = 0
 
@@ -201,7 +198,7 @@ class TestAsync:
 
         out, _ = await asyncio.gather(rr.rerank("q", items), ticker())
         assert out[0].item.content == "d0"
-        assert ticks >= 10            # loop kept running during predict()
+        assert ticks >= 10  # loop kept running during predict()
 
 
 # ---------------------------------------------------------------------------
@@ -214,29 +211,25 @@ class TestGraceful:
         def boom(_m: str, _d: str) -> Any:
             raise RuntimeError("download failed")
 
-        rr = Reranker(RerankerConfig(skip_if_fewer_than=2),
-                      model_factory=boom)
+        rr = Reranker(RerankerConfig(skip_if_fewer_than=2), model_factory=boom)
         items = [_si(f"d{i}") for i in range(10)]
         out = await rr.rerank("q", items)
-        assert out == items                        # unchanged, no raise
+        assert out == items  # unchanged, no raise
 
     async def test_predict_failure_returns_recall_order(self) -> None:
         class Broken:
             def predict(self, *_a: Any, **_k: Any) -> Any:
                 raise RuntimeError("CUDA OOM")
 
-        rr = Reranker(RerankerConfig(skip_if_fewer_than=2),
-                      model_factory=lambda _m, _d: Broken())
+        rr = Reranker(RerankerConfig(skip_if_fewer_than=2), model_factory=lambda _m, _d: Broken())
         items = [_si(f"d{i}") for i in range(10)]
         assert await rr.rerank("q", items) == items
 
     async def test_length_mismatch_is_graceful(self) -> None:
         class WrongLen:
-            def predict(self, sentences: list[list[str]],
-                        **_k: Any) -> list[float]:
-                return [1.0]                       # too few scores
+            def predict(self, sentences: list[list[str]], **_k: Any) -> list[float]:
+                return [1.0]  # too few scores
 
-        rr = Reranker(RerankerConfig(skip_if_fewer_than=2),
-                      model_factory=lambda _m, _d: WrongLen())
+        rr = Reranker(RerankerConfig(skip_if_fewer_than=2), model_factory=lambda _m, _d: WrongLen())
         items = [_si(f"d{i}") for i in range(10)]
         assert await rr.rerank("q", items) == items

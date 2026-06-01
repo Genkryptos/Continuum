@@ -47,6 +47,7 @@ intent onto the real fields:
 * "Query.filters (JSONB tags)" → ``query.metadata_filter`` (``tags @> …``).
 * ``query.as_of`` is honoured as a bi-temporal point-in-time when set.
 """
+
 from __future__ import annotations
 
 import json
@@ -165,9 +166,7 @@ class PostgresLTM:
         if conn_factory is None and pool is None and dsn is None:
             raise ValueError("Provide one of: dsn, pool, or conn_factory.")
         if not embedding_type.isalpha():
-            raise ValueError(
-                f"embedding_type must be a bare identifier, got {embedding_type!r}"
-            )
+            raise ValueError(f"embedding_type must be a bare identifier, got {embedding_type!r}")
         self._dsn = dsn
         self._pool = pool
         self._owns_pool = False
@@ -225,9 +224,7 @@ class PostgresLTM:
         await self.aclose()
 
     @staticmethod
-    async def _exec(
-        conn: Any, sql: str, params: Any, *, prepare: bool = False
-    ) -> Any:
+    async def _exec(conn: Any, sql: str, params: Any, *, prepare: bool = False) -> Any:
         """psycopg3 ``conn.execute`` (server-prepared for hot reads)."""
         return await conn.execute(sql, params, prepare=prepare)
 
@@ -350,9 +347,7 @@ class PostgresLTM:
 
     # ── invalidate (bi-temporal close, no delete) ───────────────────────────
 
-    async def invalidate(
-        self, id: uuid.UUID | str, at: datetime | None = None
-    ) -> None:
+    async def invalidate(self, id: uuid.UUID | str, at: datetime | None = None) -> None:
         """
         Close *id*'s transaction-time window by setting ``invalidated_at``.
 
@@ -366,16 +361,12 @@ class PostgresLTM:
             f"WHERE id = %(id)s AND invalidated_at IS NULL"
         )
         async with self._connect() as conn:
-            await self._exec(
-                conn, sql, {"id": str(_as_uuid(id)), "at": when}
-            )
+            await self._exec(conn, sql, {"id": str(_as_uuid(id)), "at": when})
         log.debug("LTM invalidate id=%s at=%s", id, when)
 
     # ── hybrid search (single SQL: dense ⊕ sparse ⊕ RRF) ────────────────────
 
-    async def search_hybrid(
-        self, q: Query, k: int = 10
-    ) -> list[ScoredItem]:
+    async def search_hybrid(self, q: Query, k: int = 10) -> list[ScoredItem]:
         """
         Dense (halfvec ``<=>``) + sparse (pg_trgm ``similarity``) fused with
         Reciprocal Rank Fusion **in one SQL statement**, current rows only.
@@ -418,9 +409,7 @@ class PostgresLTM:
                 "(valid_from IS NULL OR valid_from <= %(as_of)s) "
                 "AND (valid_to IS NULL OR valid_to > %(as_of)s)"
             )
-        cte_where = " AND ".join(
-            ["layer = ANY(%(layers)s)", *cte_extra]
-        )
+        cte_where = " AND ".join(["layer = ANY(%(layers)s)", *cte_extra])
 
         ctes: list[str] = []
         join_clause = ""
@@ -465,14 +454,10 @@ class PostgresLTM:
             return []
 
         d_term = (
-            f"COALESCE(1.0/({self._rrf_k} + d.rk), 0)"
-            if "d.id IS NOT NULL" in present
-            else "0"
+            f"COALESCE(1.0/({self._rrf_k} + d.rk), 0)" if "d.id IS NOT NULL" in present else "0"
         )
         s_term = (
-            f"COALESCE(1.0/({self._rrf_k} + s.rk), 0)"
-            if "s.id IS NOT NULL" in present
-            else "0"
+            f"COALESCE(1.0/({self._rrf_k} + s.rk), 0)" if "s.id IS NOT NULL" in present else "0"
         )
 
         sql = f"""
@@ -490,8 +475,7 @@ class PostgresLTM:
         async with self._connect() as conn:
             if "t" in params:
                 await conn.execute(
-                    f"SET pg_trgm.similarity_threshold = "
-                    f"{float(self._trgm_threshold)}"
+                    f"SET pg_trgm.similarity_threshold = {float(self._trgm_threshold)}"
                 )
             cur = await self._exec(conn, sql, params, prepare=True)
             rows = await cur.fetchall()
@@ -595,9 +579,7 @@ class PostgresLTM:
                     source_id=_as_uuid(r["source_id"]),
                     target_id=_as_uuid(r["target_id"]),
                     predicate=r.get("predicate"),
-                    weight=(
-                        float(r["weight"]) if r.get("weight") is not None else None
-                    ),
+                    weight=(float(r["weight"]) if r.get("weight") is not None else None),
                     depth=int(r["depth"]),
                     target=self._row_to_item(r),
                 )
@@ -615,9 +597,7 @@ class PostgresLTM:
     @staticmethod
     def _row_to_item(row: dict[str, Any]) -> MemoryItem:
         raw_tags = row.get("tags") or {}
-        tags: dict[str, Any] = (
-            raw_tags if isinstance(raw_tags, dict) else json.loads(raw_tags)
-        )
+        tags: dict[str, Any] = raw_tags if isinstance(raw_tags, dict) else json.loads(raw_tags)
         if row.get("kind") is not None:
             tags["kind"] = row["kind"]
 
@@ -633,12 +613,8 @@ class PostgresLTM:
             id=str(row["id"]) if row.get("id") is not None else str(row["target_id"]),
             content=str(row.get("text") or ""),
             tier=MemoryTier.LTM,
-            importance=(
-                float(row["importance"]) if row.get("importance") is not None else 0.5
-            ),
-            confidence=(
-                float(row["confidence"]) if row.get("confidence") is not None else 1.0
-            ),
+            importance=(float(row["importance"]) if row.get("importance") is not None else 0.5),
+            confidence=(float(row["confidence"]) if row.get("confidence") is not None else 1.0),
             created_at=created_at,
             metadata=tags,
         )

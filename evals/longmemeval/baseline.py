@@ -136,6 +136,13 @@ class RowResult:
     #: The fix for `retrieved_count = 0` and `retrieval_ms = 0` despite
     #: non-empty `retrieved_session_ids` lives in this field.
     telemetry: dict[str, Any] = dataclasses.field(default_factory=dict)
+    #: Dual-track verdicts so analyses can report both metrics from one run.
+    #: ``substring_correct`` is the legacy cheap matcher; ``judge_correct``
+    #: is the LLM judge's verdict (``None`` when the judge wasn't run or its
+    #: call failed). The "primary" ``correct`` above mirrors the judge when
+    #: it ran, falling back to substring otherwise.
+    substring_correct: bool = False
+    judge_correct: bool | None = None
 
 
 @dataclasses.dataclass
@@ -153,6 +160,25 @@ class BaselineResults:
         if not self.rows:
             return 0.0
         return sum(1 for r in self.rows if r.correct) / len(self.rows)
+
+    @property
+    def substring_accuracy(self) -> float:
+        """Accuracy under the cheap substring scorer (kept for reference)."""
+        if not self.rows:
+            return 0.0
+        return sum(1 for r in self.rows if r.substring_correct) / len(self.rows)
+
+    @property
+    def judged_accuracy(self) -> float | None:
+        """Accuracy under the LLM judge. ``None`` if no row was judged."""
+        judged = [r for r in self.rows if r.judge_correct is not None]
+        if not judged:
+            return None
+        return sum(1 for r in judged if r.judge_correct) / len(judged)
+
+    @property
+    def judged_row_count(self) -> int:
+        return sum(1 for r in self.rows if r.judge_correct is not None)
 
     @property
     def avg_tokens(self) -> float:
@@ -249,6 +275,12 @@ class BaselineResults:
             "metrics": {
                 "n_questions": len(self.rows),
                 "accuracy": self.accuracy,
+                # Dual scorers — substring is kept around as a reference
+                # column; judged_accuracy is the primary metric whenever a
+                # judge was wired in (``None`` if no row was judged).
+                "substring_accuracy": self.substring_accuracy,
+                "judged_accuracy": self.judged_accuracy,
+                "judged_row_count": self.judged_row_count,
                 "avg_tokens": self.avg_tokens,
                 "recall": self.recall,
                 "latency_p50_ms": self.latency_p50,
@@ -386,8 +418,10 @@ async def run_baseline(
     dataset_loader: DatasetLoader,
     answerer: str = "gpt-4o-mini",
     output_dir: Path | str | None = None,
+    output_file: Path | str | None = None,
     scorer: Scorer | None = None,
     row_scorer: RowScorer | None = None,
+    judge: Any | None = None,
     limit: int | None = None,
     price_per_1k_out: dict[str, float] | None = None,
     now: Callable[[], dt.datetime] | None = None,
@@ -416,7 +450,19 @@ async def run_baseline(
         ``./results``.
     scorer:
         Optional answer-vs-expected scorer. Defaults to
-        :func:`default_scorer`.
+        :func:`default_scorer`. This is the *substring reference*
+        scorer; its verdict is always recorded as
+        ``RowResult.substring_correct``.
+    judge:
+        Optional LLM judge (anything exposing ``async is_correct(question,
+        expected, actual) -> bool`` — typically
+        :class:`evals.longmemeval.judge.LLMJudgeScorer`). When provided,
+        the judge runs **inline** after every answer, its verdict is
+        recorded as ``RowResult.judge_correct``, and the row's primary
+        ``correct`` flag mirrors the judge.
+    output_file:
+        Explicit JSON path to write to. Overrides the default
+        ``<output_dir>/baseline_<YYYY-MM-DD>.json`` naming.
     limit:
         Cap the number of rows processed (handy for smoke tests).
     price_per_1k_out:
@@ -443,6 +489,7 @@ async def run_baseline(
             adapter=adapter_factory(),
             scorer=scorer,
             row_scorer=row_scorer,
+            judge=judge,
             answerer=answerer,
             prices=prices,
             count_tokens=counter,
@@ -477,7 +524,7 @@ async def run_baseline(
         finished_at=finished.isoformat(),
     )
 
-    _persist(results, out_root, clock)
+    _persist(results, out_root, clock, output_file=output_file)
     _print_summary(results)
     return results
 
@@ -491,6 +538,7 @@ async def _run_one(
     prices: dict[str, float],
     count_tokens: Callable[[str], int],
     row_scorer: RowScorer | None = None,
+    judge: Any | None = None,
 ) -> RowResult:
     """Run a single question. All exceptions captured into the result."""
     error: str | None = None
@@ -499,6 +547,18 @@ async def _run_one(
     t0 = time.perf_counter()
     try:
         await _maybe_await(adapter.process_conversation(row.messages))
+        # Pass dataset hints to the adapter so its router can
+        # disambiguate categories (assistant-memory, preference,
+        # temporal, multi-session, knowledge-update) that the
+        # question's surface form alone can't reliably distinguish.
+        # Set via attributes rather than a kwarg so the adapter
+        # protocol stays single-arg.
+        if hasattr(adapter, "dataset_question_type"):
+            adapter.dataset_question_type = row.question_type
+        if hasattr(adapter, "dataset_is_multi_session"):
+            adapter.dataset_is_multi_session = (
+                len(row.answer_session_ids or []) > 1
+            )
         answer = await _maybe_await(adapter.answer_question(row.question))
     except Exception as exc:
         log.exception("row %s failed", row.question_id)
@@ -510,12 +570,29 @@ async def _run_one(
     retrieved = _extract_retrieved_session_ids(adapter)
 
     answer_tokens = count_tokens(answer)
+    # ── dual scorers ───────────────────────────────────────────────────────
+    # `substring_correct` is the reference (default_scorer or whatever the
+    # caller injected as ``scorer``/``row_scorer``). The optional ``judge``
+    # is the primary metric when wired up: its verdict becomes ``correct``.
     if row_scorer is not None:
-        correct = bool(answer) and bool(
+        substring_correct = bool(answer) and bool(
             await _maybe_await(row_scorer(row, answer))
         )
     else:
-        correct = bool(answer) and scorer(answer, row.expected_answer)
+        substring_correct = bool(answer) and scorer(answer, row.expected_answer)
+
+    judge_correct: bool | None = None
+    if judge is not None and answer:
+        try:
+            judge_correct = bool(
+                await _maybe_await(
+                    judge.is_correct(row.question, row.expected_answer, answer)
+                )
+            )
+        except Exception:
+            log.exception("judge call failed for %s", row.question_id)
+            judge_correct = None
+    correct = judge_correct if judge_correct is not None else substring_correct
     recall_diag = _recall_diagnostics(
         expected=row.answer_session_ids,
         retrieved=retrieved,
@@ -525,6 +602,11 @@ async def _run_one(
         else _classify_failure(
             answer=answer, error=error,
             retrieved=retrieved, expected=row.answer_session_ids,
+            question_type=row.question_type,
+            decomposition_stats=(
+                getattr(adapter, "last_decomposition_stats", None) or {}
+            ),
+            expected_answer=row.expected_answer,
         )
     )
     # Optional optimizer telemetry — the adapter publishes this dict on
@@ -534,7 +616,14 @@ async def _run_one(
     # present, it's the source of truth for retrieved_count / latency /
     # tokens — the previous logs had zeros here while retrieved_session_ids
     # was non-empty. Falls back to optimizer stats when telemetry absent.
-    telem = getattr(adapter, "last_telemetry", None) or {}
+    telem = dict(getattr(adapter, "last_telemetry", None) or {})
+    # Merge in per-row store metrics (currently only populated by
+    # ContinuumLTMHaystackStore). Adds ``ltm_backend``, ``supersessions``,
+    # ``ltm_facts_live``, ``promoter_path`` keys to the row's telemetry
+    # block so the result JSON records the LTM lift signal end-to-end.
+    store_metrics = getattr(adapter, "last_store_metrics", None)
+    if store_metrics:
+        telem["store_metrics"] = dict(store_metrics)
     # Cost: prefer the real telemetry figure (it adds across every LLM
     # call, including decompose + sub-answers + synthesis + repair).
     # Fallback to the legacy per-answer-token estimate for back-compat.
@@ -580,11 +669,42 @@ async def _run_one(
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),
         strategy_savings=dict(opt.get("strategy_savings", {})),
-        decomposition_stats=dict(
-            getattr(adapter, "last_decomposition_stats", None) or {}
-        ),
+        decomposition_stats={
+            **(getattr(adapter, "last_decomposition_stats", None) or {}),
+            **(
+                {"structured_fallthrough":
+                 getattr(adapter, "last_structured_fallthrough", None) or {}}
+                if getattr(adapter, "last_structured_fallthrough", None)
+                else {}
+            ),
+        },
         telemetry=dict(telem),
+        substring_correct=substring_correct,
+        judge_correct=judge_correct,
     )
+
+
+#: Per LongMemEval ``question_type`` → the TaskMode the question
+#: *should* route to. Used by :func:`_classify_failure` to detect
+#: ``wrong_route`` — when the adapter's chosen route disagrees with
+#: the dataset hint. Mirrors the table in ``task_router.py`` so the
+#: two stay in sync; if you add a new category there, mirror it here.
+_EXPECTED_ROUTE_BY_TYPE: dict[str, str] = {
+    "single-session-user":        "FACT_LOOKUP",
+    "single-session-assistant":   "ASSISTANT_MEMORY_LOOKUP",
+    "single-session-preference":  "PREFERENCE_PROFILE",
+    "knowledge-update":           "KNOWLEDGE_UPDATE",
+    "multi-session":              "MULTI_SESSION_AGGREGATE",
+    "temporal-reasoning":         "TEMPORAL_REASONING",
+}
+
+# Bare-date pattern — used to flag "answer looks like a date when a
+# duration was asked for" (the missing_temporal_computation bucket).
+_BARE_DATE_RE = re.compile(
+    r"^(?:\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?|"
+    r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)$",
+    re.IGNORECASE,
+)
 
 
 def _classify_failure(
@@ -593,14 +713,111 @@ def _classify_failure(
     error: str | None,
     retrieved: Sequence[str],
     expected: Sequence[str],
+    question_type: str = "",
+    decomposition_stats: dict[str, Any] | None = None,
+    expected_answer: str = "",
 ) -> str:
-    """Map a wrong answer into one of the four diagnostic buckets."""
+    """
+    Map a wrong answer into a precise diagnostic bucket.
+
+    Buckets (ordered from most-specific to most-generic):
+
+    * ``llm_error`` — adapter raised or returned an ``[error:`` shim.
+    * ``other`` — no gold to compare against.
+    * ``missing_fact`` — none of the expected sessions were retrieved.
+      (Retrieval is the bottleneck here; nothing else could have
+      worked.)
+    * ``wrong_route`` — adapter chose a route that disagrees with the
+      LongMemEval category. The answer might still be plausible but
+      it came from the wrong reasoning head.
+    * ``wrong_role`` — the answer span came from a turn whose speaker
+      doesn't match the question shape (user-only or assistant-only).
+    * ``missing_aggregation`` — multi-session question, but a single
+      span was returned instead of an aggregation.
+    * ``missing_temporal_computation`` — temporal question, but the
+      answer looks like a bare date rather than a computed duration.
+    * ``stale_fact`` — knowledge-update question where the chosen span
+      mentions any of the standard update markers (changed, used to,
+      previously) — i.e., probably the wrong half of the update pair.
+    * ``wrong_span`` — right session was retrieved, right route, but
+      the picked span doesn't match the gold.
+    * ``wrong_retrieval`` — catch-all when none of the above fire.
+    """
     if error or answer.startswith("[error:"):
         return "llm_error"
     if not expected:
-        return "other"  # nothing to compare against
+        return "other"
     if not any(sid in retrieved for sid in expected):
         return "missing_fact"
+
+    stats = decomposition_stats or {}
+    qtype = (question_type or "").strip().lower()
+    answer_clean = (answer or "").strip()
+    answer_lower = answer_clean.lower()
+
+    # 1) Wrong route — the adapter's chosen route disagrees with the
+    # dataset category. We read the route from any of the keys the
+    # structured / claim-first / decomposed-answer heads use.
+    actual_route = (
+        stats.get("claim_first_route")
+        or stats.get("route")
+        or stats.get("mode")
+        or ""
+    )
+    expected_route = _EXPECTED_ROUTE_BY_TYPE.get(qtype)
+    if expected_route and actual_route:
+        actual_norm = str(actual_route).upper().replace("CLAIM_FIRST_", "")
+        structured_passthrough = {
+            expected_route,
+            "CLAIM_FIRST_STRUCTURED",
+            "CLAIM_FIRST_STRUCTURED_EXPANDED",
+        }
+        # The structured/expanded routes encode "claim_first answered
+        # without going through a specific head" — only flag a route
+        # mismatch when the actual route is a *different* TaskMode head.
+        if (
+            actual_norm not in structured_passthrough
+            and expected_route not in actual_norm
+        ):
+            return "wrong_route"
+
+    # 2) Wrong role — the answer came from a speaker the question
+    # shape forbids.
+    matched_claim = stats.get("structured_matched_claim") or {}
+    matched_role = str(matched_claim.get("source_role", "")).lower()
+    if matched_role:
+        if qtype == "single-session-assistant" and matched_role != "assistant":
+            return "wrong_role"
+        if qtype == "single-session-user" and matched_role == "assistant":
+            return "wrong_role"
+
+    # 3) Multi-session that returned a single span without aggregation.
+    if qtype == "multi-session" and not any(
+        marker in answer_lower
+        for marker in (",", " and ", " across ", " total", " altogether")
+    ) and len(answer_clean.split()) <= 6:
+        return "missing_aggregation"
+
+    # 4) Temporal-reasoning that returned a bare date instead of a
+    # computed duration / ordering phrase.
+    if qtype == "temporal-reasoning" and _BARE_DATE_RE.match(answer_clean):
+        return "missing_temporal_computation"
+
+    # 5) Knowledge-update where the chosen span looks like the stale
+    # half of the update pair.
+    if qtype == "knowledge-update":
+        stale_markers = (
+            "used to", "previously", "before",
+            "formerly", "old name", "changed from",
+        )
+        matched_text = str(matched_claim.get("text", "")).lower()
+        if any(m in matched_text for m in stale_markers):
+            return "stale_fact"
+
+    # 6) Right session retrieved but wrong span chosen.
+    if any(sid in retrieved for sid in expected):
+        return "wrong_span"
+
     return "wrong_retrieval"
 
 
@@ -620,9 +837,18 @@ def _recall_diagnostics(
 
 
 def _failure_breakdown(rows: list[RowResult]) -> dict[str, int]:
+    # Seed every bucket so the report shows zeros explicitly when a
+    # category has no failures of that type — easier to read than
+    # "missing key" at the call site.
     out: dict[str, int] = {
         "llm_error": 0,
         "missing_fact": 0,
+        "wrong_route": 0,
+        "wrong_role": 0,
+        "wrong_span": 0,
+        "stale_fact": 0,
+        "missing_aggregation": 0,
+        "missing_temporal_computation": 0,
         "wrong_retrieval": 0,
         "other": 0,
     }
@@ -674,11 +900,18 @@ def _persist(
     results: BaselineResults,
     out_dir: Path,
     now: Callable[[], dt.datetime],
+    *,
+    output_file: Path | str | None = None,
 ) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = now().strftime("%Y-%m-%d")
-    json_path = out_dir / f"baseline_{stamp}.json"
-    csv_path = out_dir / "baseline_failures.csv"
+    if output_file is not None:
+        json_path = Path(output_file)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        csv_path = json_path.with_suffix(".failures.csv")
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = now().strftime("%Y-%m-%d")
+        json_path = out_dir / f"baseline_{stamp}.json"
+        csv_path = out_dir / "baseline_failures.csv"
 
     json_path.write_text(json.dumps(results.to_dict(), indent=2, default=str))
     log.info("metrics written to %s", json_path)
@@ -719,7 +952,12 @@ def _print_summary(results: BaselineResults) -> None:
     print(f"LongMemEval baseline — {results.dataset}")
     print(f"  answerer:        {results.answerer}")
     print(f"  questions:       {len(results.rows)}")
-    print(f"  accuracy:        {results.accuracy:.1%}")
+    judged = results.judged_accuracy
+    if judged is not None:
+        print(f"  judged_accuracy: {judged:.1%}  (primary — LLM judge)")
+        print(f"  substring_acc:   {results.substring_accuracy:.1%}  (reference only)")
+    else:
+        print(f"  substring_acc:   {results.substring_accuracy:.1%}  (primary — no judge wired)")
     print(f"  recall:          {results.recall:.1%}")
     print(f"  avg tokens:      {results.avg_tokens:.0f}")
     print(f"  latency p50/p95: {results.latency_p50:.0f}ms / {results.latency_p95:.0f}ms")
@@ -791,8 +1029,42 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--answerer", default="gpt-4o-mini")
     p.add_argument("--output", type=Path, default=Path("results"))
     p.add_argument(
-        "--limit", type=int, default=None,
+        "--out", type=Path, default=None,
+        help="Explicit JSON output path (overrides --output's dated naming).",
+    )
+    p.add_argument(
+        "--limit", "--n", type=int, default=None, dest="limit",
         help="cap on rows (handy for smoke testing)",
+    )
+    # --judge defaults ON now that it's the primary metric. Pass --no-judge
+    # to fall back to substring-only (e.g. for offline / no-API-key smokes).
+    p.add_argument(
+        "--judge", dest="judge", action="store_true", default=True,
+        help="Run the gpt-4o-mini LLM judge inline. Default: on.",
+    )
+    p.add_argument(
+        "--no-judge", dest="judge", action="store_false",
+        help="Disable the inline LLM judge (substring scorer only).",
+    )
+    p.add_argument(
+        "--judge-model", default="gpt-4o-mini",
+        help="Model used by the inline LLM judge (default: gpt-4o-mini).",
+    )
+    # ── Span-selector fallback (answer_post._pick_answer_from_assistant_claim).
+    p.add_argument(
+        "--span-fallback", dest="span_fallback",
+        action="store_true", default=True,
+        help=(
+            "Enable the SmallLLM span-selector fallback inside the "
+            "assistant-claim picker. Fires when the regex output is a "
+            "single nationality adjective, fails a count-shape check, "
+            "or sits inside a structured claim much longer than itself. "
+            "Default: on."
+        ),
+    )
+    p.add_argument(
+        "--no-span-fallback", dest="span_fallback", action="store_false",
+        help="Disable the SmallLLM span-selector fallback.",
     )
     return p.parse_args(argv)
 
@@ -802,17 +1074,58 @@ def _cli_main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI
     CLI entry — wires the real Continuum session + the upstream
     LongMemEval loader.
 
-    The actual loader / adapter wiring depends on user config (DSNs,
-    LLM keys), so the CLI raises ``NotImplementedError`` and points
-    at :func:`run_baseline` which the user calls from their own
-    bootstrap script. The tests cover ``run_baseline`` directly.
+    Most production runs go through ``evals.longmemeval.bootstrap_ollama``
+    which carries the full adapter / retrieval / decompose wiring. This
+    thin entry covers the **promoted smoke** path:
+
+        python -m evals.longmemeval.baseline --n 25 --judge \\
+            --out results/smoke_judge.json
+
+    Requires ``OPENAI_API_KEY`` when ``--judge`` is on (default).
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    _parse_args(argv)
+    args = _parse_args(argv)
+    # ── span-selector fallback wiring ──────────────────────────────────────
+    # Parked as a process-wide default so deeply-nested callers in
+    # reasoning_heads (head_assistant_memory, FACT_LOOKUP body fallback)
+    # pick it up without us having to thread a SmallLLM through every
+    # adapter layer. Cheap to construct; the cache is on disk.
+    if args.span_fallback:
+        try:
+            from continuum.extraction.small_llm import SmallLLM
+            from evals.longmemeval.answer_post import (
+                reset_span_fallback_stats,
+                set_default_span_fallback_llm,
+            )
+            reset_span_fallback_stats()
+            set_default_span_fallback_llm(SmallLLM())
+            log.info("span fallback enabled (SmallLLM default)")
+        except ImportError as exc:
+            log.warning("span fallback unavailable: %s", exc)
+    judge_obj: Any | None = None
+    if args.judge:
+        try:
+            from evals.longmemeval.bootstrap_ollama import OpenAILLM
+            from evals.longmemeval.judge import LLMJudgeScorer
+        except ImportError as exc:
+            raise SystemExit(
+                f"--judge requires openai + bootstrap_ollama deps: {exc}"
+            ) from exc
+        import os
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise SystemExit(
+                "--judge needs OPENAI_API_KEY in the environment. "
+                "Pass --no-judge to run the substring scorer only."
+            )
+        judge_obj = LLMJudgeScorer(
+            llm=OpenAILLM(model=args.judge_model, rpm=60)
+        )
     raise NotImplementedError(
-        "Wire your Continuum session + LongMemEval dataset loader and "
-        "call evals.longmemeval.baseline.run_baseline(...) directly. "
-        "See the module docstring for the contract."
+        "Wire your Continuum adapter + LongMemEval dataset loader and call "
+        "evals.longmemeval.baseline.run_baseline(..., judge=<judge>) "
+        "directly, or use evals.longmemeval.bootstrap_ollama which already "
+        "carries the full wiring. judge_obj=%r limit=%s out=%s"
+        % (judge_obj, args.limit, args.out)
     )
 
 

@@ -46,8 +46,7 @@ class SensitivityPolicy:
     def supports(self, candidate: MemoryCandidate) -> bool:
         return (
             candidate.candidate_type == MemoryCandidateType.SENSITIVE_DATA
-            or candidate.sensitivity
-            in (Sensitivity.CONFIDENTIAL, Sensitivity.RESTRICTED)
+            or candidate.sensitivity in (Sensitivity.CONFIDENTIAL, Sensitivity.RESTRICTED)
         )
 
     async def evaluate(
@@ -55,9 +54,7 @@ class SensitivityPolicy:
         candidate: MemoryCandidate,
         context: PolicyEvaluationContext,
     ) -> MemoryHandlingPlan:
-        require_approval = bool(
-            context.config.get("require_approval_for_restricted", True)
-        )
+        require_approval = bool(context.config.get("require_approval_for_restricted", True))
         is_restricted = candidate.sensitivity == Sensitivity.RESTRICTED or (
             candidate.candidate_type == MemoryCandidateType.SENSITIVE_DATA
         )

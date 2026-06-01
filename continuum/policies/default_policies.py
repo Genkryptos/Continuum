@@ -53,9 +53,7 @@ class DefaultFactPolicy:
     ) -> MemoryHandlingPlan | None:
         ttl_days = context.config.get("default_fact_ttl_days")
         ttl_seconds = (
-            int(timedelta(days=int(ttl_days)).total_seconds())
-            if ttl_days is not None
-            else None
+            int(timedelta(days=int(ttl_days)).total_seconds()) if ttl_days is not None else None
         )
         return MemoryHandlingPlan(
             candidate_id=candidate.id,

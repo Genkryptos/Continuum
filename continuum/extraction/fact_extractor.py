@@ -26,6 +26,7 @@ Robustness mirrors :class:`LLMEntityExtractor`: litellm is lazy-imported,
 retried (tenacity), each attempt is bounded by ``config.timeout``, and *any*
 failure degrades to ``[]`` — fact extraction never raises into the Promoter.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -175,9 +176,7 @@ class FactExtractor:
     def _retrying(self) -> AsyncRetrying:
         return AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
-            wait=wait_exponential_jitter(
-                initial=self._backoff_initial, max=self._backoff_max
-            ),
+            wait=wait_exponential_jitter(initial=self._backoff_initial, max=self._backoff_max),
             retry=retry_if_exception(_is_transient),
             reraise=True,
         )
@@ -185,9 +184,7 @@ class FactExtractor:
     async def _complete(self, messages: list[dict[str, str]]) -> str:
         async for attempt in self._retrying():
             with attempt:
-                resp = await asyncio.wait_for(
-                    self._call(messages), timeout=self.config.timeout
-                )
+                resp = await asyncio.wait_for(self._call(messages), timeout=self.config.timeout)
                 return self._content(resp)
         raise RuntimeError("unreachable retry exit")  # pragma: no cover
 
@@ -204,8 +201,7 @@ class FactExtractor:
             import litellm
         except ImportError as exc:  # pragma: no cover - via completion_fn
             raise ImportError(
-                "litellm is required for FactExtractor.\n"
-                "Install it with:  pip install litellm"
+                "litellm is required for FactExtractor.\nInstall it with:  pip install litellm"
             ) from exc
         return await litellm.acompletion(
             model=self.config.model,

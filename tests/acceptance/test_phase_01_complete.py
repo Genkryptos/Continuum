@@ -105,9 +105,7 @@ def _scalar(dsn: str, sql: str, params: tuple = ()) -> object:
 def _is_async_callable(obj: object, name: str) -> bool:
     """True if ``obj.name`` is a coroutine *or* async-generator function."""
     fn = getattr(obj, name, None)
-    return fn is not None and (
-        inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn)
-    )
+    return fn is not None and (inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn))
 
 
 # ---------------------------------------------------------------------------
@@ -148,9 +146,7 @@ async def test_foundation_hardening_complete(
     for name in ("add_summary", "recent", "scan_unprocessed", "mark_processed"):
         assert _is_async_callable(mtm_pg, name), f"MTM.{name} not async"
     for name in ("process_turn", "checkpoint", "search"):
-        assert _is_async_callable(
-            ContinuumSession, name
-        ), f"ContinuumSession.{name} not async"
+        assert _is_async_callable(ContinuumSession, name), f"ContinuumSession.{name} not async"
         # …and a sync wrapper exists for every async verb.
         assert callable(getattr(ContinuumSession, f"{name}_sync", None)), (
             f"missing sync wrapper for {name}"
@@ -190,9 +186,7 @@ async def test_foundation_hardening_complete(
         assert session.background.health()["ok"] is True
 
     # ── 5. pgvector ≥ 0.8 + HNSW halfvec index ───────────────────────────────
-    ver_raw = _scalar(
-        postgres_db, "SELECT extversion FROM pg_extension WHERE extname='vector'"
-    )
+    ver_raw = _scalar(postgres_db, "SELECT extversion FROM pg_extension WHERE extname='vector'")
     assert ver_raw is not None, "pgvector extension not installed"
     assert meets_minimum(parse_pgvector_version(str(ver_raw)), MIN_PGVECTOR), (
         f"pgvector {ver_raw} < {'.'.join(map(str, MIN_PGVECTOR))}"
@@ -210,25 +204,21 @@ async def test_foundation_hardening_complete(
     assert col_type == "halfvec(1024)", f"embedding is {col_type}, expected halfvec(1024)"
     hnsw_def = _scalar(
         postgres_db,
-        "SELECT indexdef FROM pg_indexes "
-        "WHERE indexname='memory_nodes_embedding_hnsw_idx'",
+        "SELECT indexdef FROM pg_indexes WHERE indexname='memory_nodes_embedding_hnsw_idx'",
     )
     assert hnsw_def is not None and "hnsw" in str(hnsw_def).lower(), (
         "HNSW index missing on memory_nodes.embedding"
     )
 
     # ── 6. pg_trgm extension + trigram GIN index ─────────────────────────────
-    assert _scalar(
-        postgres_db, "SELECT 1 FROM pg_extension WHERE extname='pg_trgm'"
-    ) == 1, "pg_trgm extension not enabled"
+    assert _scalar(postgres_db, "SELECT 1 FROM pg_extension WHERE extname='pg_trgm'") == 1, (
+        "pg_trgm extension not enabled"
+    )
     trgm_idx = _scalar(
         postgres_db,
-        "SELECT indexdef FROM pg_indexes "
-        "WHERE indexname='memory_nodes_text_trgm_live_idx'",
+        "SELECT indexdef FROM pg_indexes WHERE indexname='memory_nodes_text_trgm_live_idx'",
     )
-    assert trgm_idx is not None and "gin_trgm_ops" in str(trgm_idx), (
-        "trigram GIN index missing"
-    )
+    assert trgm_idx is not None and "gin_trgm_ops" in str(trgm_idx), "trigram GIN index missing"
 
     # ── 7. Hybrid search (dense ⊕ sparse ⊕ RRF) ──────────────────────────────
     def _vec(seed: int) -> list[float]:
@@ -247,7 +237,7 @@ async def test_foundation_hardening_complete(
         with ins.cursor() as cur:
             for text, emb in rows:
                 cur.execute(
-                    "INSERT INTO memory_nodes (id, layer, \"text\", embedding) "
+                    'INSERT INTO memory_nodes (id, layer, "text", embedding) '
                     "VALUES (gen_random_uuid(), 'MTM', %s, %s::halfvec)",
                     (text, to_halfvec_literal(emb)),
                 )
@@ -256,8 +246,8 @@ async def test_foundation_hardening_complete(
 
     retriever = PostgresRetriever(dsn=postgres_db)
     results = await retriever.hybrid_search(
-        query_text="database connection pooling",   # lexical signal
-        query_embedding=target_vec,                  # dense signal
+        query_text="database connection pooling",  # lexical signal
+        query_embedding=target_vec,  # dense signal
         k=3,
     )
     assert results, "hybrid_search returned nothing"
@@ -270,9 +260,19 @@ async def test_foundation_hardening_complete(
     env = {**os.environ, _RECURSION_ENV: "1"}
     cov = subprocess.run(
         [
-            sys.executable, "-m", "pytest", "tests/unit", "-m", "unit",
-            "--cov=continuum", "--cov-report=term", "--cov-fail-under=0",
-            "-q", "-p", "no:cacheprovider", "--no-header",
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/unit",
+            "-m",
+            "unit",
+            "--cov=continuum",
+            "--cov-report=term",
+            "--cov-fail-under=0",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--no-header",
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -282,16 +282,12 @@ async def test_foundation_hardening_complete(
     )
     out = cov.stdout + cov.stderr
     assert cov.returncode == 0, f"unit suite failed under coverage:\n{out[-3000:]}"
-    total_line = next(
-        (ln for ln in out.splitlines() if ln.strip().startswith("TOTAL")), None
-    )
+    total_line = next((ln for ln in out.splitlines() if ln.strip().startswith("TOTAL")), None)
     assert total_line, f"no coverage TOTAL line found:\n{out[-2000:]}"
     m = re.search(r"(\d+(?:\.\d+)?)%", total_line)
     assert m, f"could not parse coverage %: {total_line!r}"
     coverage_pct = float(m.group(1))
-    assert coverage_pct >= 60.0, (
-        f"coverage {coverage_pct:.1f}% < 60% gate ({total_line.strip()})"
-    )
+    assert coverage_pct >= 60.0, f"coverage {coverage_pct:.1f}% < 60% gate ({total_line.strip()})"
 
     # ── 9. Type coverage 100 % (mypy --strict exit 0) ────────────────────────
     mp = subprocess.run(
@@ -302,6 +298,5 @@ async def test_foundation_hardening_complete(
         timeout=600,
     )
     assert mp.returncode == 0, (
-        "mypy --strict continuum failed (type coverage < 100%):\n"
-        f"{(mp.stdout + mp.stderr)[-3000:]}"
+        f"mypy --strict continuum failed (type coverage < 100%):\n{(mp.stdout + mp.stderr)[-3000:]}"
     )

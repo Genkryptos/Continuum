@@ -151,9 +151,7 @@ def _insert_edge(
 class FakeFacts:
     """One promoted fact per MTM block, deterministic from block.text."""
 
-    async def extract_facts(
-        self, block: Any, entities: list[Any]
-    ) -> list[Fact]:
+    async def extract_facts(self, block: Any, entities: list[Any]) -> list[Fact]:
         return [
             Fact(
                 text=f"Promoted: {block.text}",
@@ -173,9 +171,13 @@ class FakeDecider:
     ) -> list[Decision]:
         return [
             Decision(
-                op="ADD", target_id=None, rationale="new",
-                candidate_text=p[0].text, model="gpt-4o-mini",
-                tokens_in=10, tokens_out=2,
+                op="ADD",
+                target_id=None,
+                rationale="new",
+                candidate_text=p[0].text,
+                model="gpt-4o-mini",
+                tokens_in=10,
+                tokens_out=2,
             )
             for p in pairs
         ]
@@ -190,9 +192,7 @@ class FakeReranker:
     contains "Acme" > everything else.
     """
 
-    async def rerank(
-        self, query: str, items: list[ScoredItem]
-    ) -> list[ScoredItem]:
+    async def rerank(self, query: str, items: list[ScoredItem]) -> list[ScoredItem]:
         from continuum.core.types import ScoreBreakdown
 
         def rr(content: str) -> float:
@@ -211,8 +211,10 @@ class FakeReranker:
         for it in items:
             r = rr(it.item.content)
             new_scores = ScoreBreakdown(
-                relevance=r, importance=it.scores.importance,
-                recency=it.scores.recency, confidence=it.scores.confidence,
+                relevance=r,
+                importance=it.scores.importance,
+                recency=it.scores.recency,
+                confidence=it.scores.confidence,
                 composite=r,
             )
             out.append((r, ScoredItem(item=it.item, scores=new_scores)))
@@ -227,12 +229,12 @@ class FakeReranker:
 
 async def test_query_to_context_assembly(postgres_db: str) -> None:
     # ── 0. Reach the Phase 0.1 DB state (idempotent) ─────────────────────────
-    _apply(postgres_db, MIG_002)        # → embedding halfvec(1024) + HNSW
-    _apply(postgres_db, MIG_003)        # → pg_trgm GIN
+    _apply(postgres_db, MIG_002)  # → embedding halfvec(1024) + HNSW
+    _apply(postgres_db, MIG_003)  # → pg_trgm GIN
 
     session_id = f"e2e-{uuid.uuid4().hex[:8]}"
     query_text = "What does Alice do?"
-    query_vec = _unit_vec(seed=1)        # "alice topic" direction
+    query_vec = _unit_vec(seed=1)  # "alice topic" direction
 
     stm = PostgresSTM(dsn=postgres_db, max_tokens=100_000)
     mtm = PostgresMTM(dsn=postgres_db)
@@ -283,7 +285,7 @@ async def test_query_to_context_assembly(postgres_db: str) -> None:
             tier=MemoryTier.LTM,
             confidence=0.95,
             importance=0.8,
-            embedding=_unit_vec(seed=2),      # orthogonal-ish to query
+            embedding=_unit_vec(seed=2),  # orthogonal-ish to query
             metadata={"kind": "entity", "label": "ORG"},
         )
         acme_id = await ltm.upsert(ltm_acme_entity)
@@ -317,8 +319,7 @@ async def test_query_to_context_assembly(postgres_db: str) -> None:
         # ── 2. Promotion: drive 6 unprocessed MTM blocks → LTM ────────────────
         ltm_before = _count(
             postgres_db,
-            "SELECT count(*) FROM memory_nodes "
-            "WHERE layer='LTM' AND invalidated_at IS NULL",
+            "SELECT count(*) FROM memory_nodes WHERE layer='LTM' AND invalidated_at IS NULL",
         )
         unproc_before = _count(
             postgres_db,
@@ -331,19 +332,20 @@ async def test_query_to_context_assembly(postgres_db: str) -> None:
 
         promoter = Promoter(
             PromoterConfig(confidence_threshold=0.6),
-            mtm=mtm, ltm=ltm,
-            fact_extractor=FakeFacts(), decider=FakeDecider(),
+            mtm=mtm,
+            ltm=ltm,
+            fact_extractor=FakeFacts(),
+            decider=FakeDecider(),
         )
         report = await promoter.promote()
 
         assert report.blocks_processed == 6
-        assert len(report.added) == 6                         # one ADD per block
+        assert len(report.added) == 6  # one ADD per block
         assert report.errors == []
         # LTM grew by exactly the promoted-block count.
         ltm_after = _count(
             postgres_db,
-            "SELECT count(*) FROM memory_nodes "
-            "WHERE layer='LTM' AND invalidated_at IS NULL",
+            "SELECT count(*) FROM memory_nodes WHERE layer='LTM' AND invalidated_at IS NULL",
         )
         assert ltm_after == ltm_before + 6
         # All MTM blocks are now processed.
@@ -363,15 +365,23 @@ async def test_query_to_context_assembly(postgres_db: str) -> None:
             # rather than already being a hybrid hit — the point of this
             # E2E assertion is that the graph stage adds new candidates.
             RetrieverConfig(
-                k1=3, stm_turns=10, ltm_top_k=10, graph_expand_n=10,
+                k1=3,
+                stm_turns=10,
+                ltm_top_k=10,
+                graph_expand_n=10,
             ),
-            ltm=ltm, stm=stm, mtm=mtm,
+            ltm=ltm,
+            stm=stm,
+            mtm=mtm,
             reranker=FakeReranker(),
             session_id=session_id,
         )
         budget = TokenBudget(
-            total=8000, stm_reserved=1000, mtm_reserved=2000,
-            ltm_reserved=2000, response_reserved=1000,
+            total=8000,
+            stm_reserved=1000,
+            mtm_reserved=2000,
+            ltm_reserved=2000,
+            response_reserved=1000,
         )
         bundle = await retriever.retrieve(
             Query(text=query_text, embedding=query_vec, session_id=session_id),
@@ -393,9 +403,9 @@ async def test_query_to_context_assembly(postgres_db: str) -> None:
     assert bundle.debug_info["graph_added"] >= 1
 
     # STM/MTM populated as configured.
-    assert bundle.debug_info["stm"] == 10                 # config.stm_turns
-    assert bundle.debug_info["mtm"] >= 1                   # at least one summary
-    assert bundle.debug_info["ltm_final"] <= 10           # config.ltm_top_k cap
+    assert bundle.debug_info["stm"] == 10  # config.stm_turns
+    assert bundle.debug_info["mtm"] >= 1  # at least one summary
+    assert bundle.debug_info["ltm_final"] <= 10  # config.ltm_top_k cap
 
     # Tier accounting + budget invariants.
     assert set(bundle.tier_breakdown) == {"stm", "mtm", "ltm"}

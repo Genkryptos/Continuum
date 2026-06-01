@@ -4,6 +4,7 @@ tests/unit/test_entity_extractor.py
 Unit tests for ``continuum.extraction.entity_extractor`` — a fake GLiNER is
 injected via ``model_factory`` so neither ``gliner`` nor ``torch`` is needed.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -65,8 +66,13 @@ class TestConfig:
 
     def test_entity_types_constant(self) -> None:
         assert ENTITY_TYPES == (
-            "PERSON", "ORG", "LOCATION", "DATE",
-            "PRODUCT", "TECH", "CONCEPT",
+            "PERSON",
+            "ORG",
+            "LOCATION",
+            "DATE",
+            "PRODUCT",
+            "TECH",
+            "CONCEPT",
         )
 
 
@@ -114,7 +120,7 @@ class TestEntityExtraction:
 class TestConfidenceFiltering:
     async def test_below_threshold_dropped(self) -> None:
         spans = [
-            _span("Bob", "person", 0, 3, 0.92),     # keep
+            _span("Bob", "person", 0, 3, 0.92),  # keep
             _span("maybe", "concept", 4, 9, 0.40),  # drop (< 0.7)
         ]
         ex, _ = _extractor(spans)
@@ -123,17 +129,13 @@ class TestConfidenceFiltering:
 
     async def test_custom_threshold(self) -> None:
         spans = [_span("X", "tech", 0, 1, 0.80)]
-        ex, _ = _extractor(
-            spans, config=ExtractionConfig(confidence_threshold=0.9)
-        )
+        ex, _ = _extractor(spans, config=ExtractionConfig(confidence_threshold=0.9))
         ents, _ = await ex.extract("X")
-        assert ents == []                      # 0.80 < 0.90
+        assert ents == []  # 0.80 < 0.90
 
-        ex2, _ = _extractor(
-            spans, config=ExtractionConfig(confidence_threshold=0.5)
-        )
+        ex2, _ = _extractor(spans, config=ExtractionConfig(confidence_threshold=0.5))
         ents2, _ = await ex2.extract("X")
-        assert len(ents2) == 1                 # 0.80 ≥ 0.50
+        assert len(ents2) == 1  # 0.80 ≥ 0.50
 
 
 # ---------------------------------------------------------------------------
@@ -144,19 +146,13 @@ class TestConfidenceFiltering:
 class TestRelationExtraction:
     def _rels(self, text: str) -> list[tuple[str, str, str]]:
         ex, _ = _extractor([])
-        return [
-            (r.subject, r.predicate, r.object) for r in ex.extract_relations(text)
-        ]
+        return [(r.subject, r.predicate, r.object) for r in ex.extract_relations(text)]
 
     def test_employed_by_works_at(self) -> None:
-        assert ("Alice", "EMPLOYED_BY", "Acme") in self._rels(
-            "Alice works at Acme."
-        )
+        assert ("Alice", "EMPLOYED_BY", "Acme") in self._rels("Alice works at Acme.")
 
     def test_employed_by_passive(self) -> None:
-        assert ("Bob", "EMPLOYED_BY", "Globex") in self._rels(
-            "Bob is employed by Globex."
-        )
+        assert ("Bob", "EMPLOYED_BY", "Globex") in self._rels("Bob is employed by Globex.")
 
     def test_uses(self) -> None:
         assert ("Carol", "USES", "Python") in self._rels("Carol uses Python.")
@@ -210,9 +206,7 @@ class TestGracefulDegradation:
         ex = EntityExtractor(model_factory=lambda _m, _d: Broken())
         assert await ex.extract("Bob uses Python") == ([], [])
 
-    async def test_relation_failure_keeps_entities(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_relation_failure_keeps_entities(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ex, _ = _extractor([_span("Z", "tech", 0, 1, 0.99)])
 
         def bad(_text: str) -> list[Relation]:
@@ -220,8 +214,8 @@ class TestGracefulDegradation:
 
         monkeypatch.setattr(ex, "extract_relations", bad)
         ents, rels = await ex.extract("Z")
-        assert [e.text for e in ents] == ["Z"]   # entities survive
-        assert rels == []                         # relations degraded
+        assert [e.text for e in ents] == ["Z"]  # entities survive
+        assert rels == []  # relations degraded
 
 
 # ---------------------------------------------------------------------------
@@ -231,9 +225,7 @@ class TestGracefulDegradation:
 
 class TestDeviceResolution:
     def test_cpu_forced(self) -> None:
-        ex = EntityExtractor(
-            config=ExtractionConfig(device="cpu"), model_factory=lambda m, d: None
-        )
+        ex = EntityExtractor(config=ExtractionConfig(device="cpu"), model_factory=lambda m, d: None)
         assert ex._resolve_device() == "cpu"
 
     def test_auto_without_cuda_is_cpu(self) -> None:
@@ -252,9 +244,7 @@ class TestDeviceResolution:
             seen["device"] = device
             return FakeGLiNER([])
 
-        ex = EntityExtractor(
-            config=ExtractionConfig(device="cpu"), model_factory=fac
-        )
+        ex = EntityExtractor(config=ExtractionConfig(device="cpu"), model_factory=fac)
         await ex.extract("hello world")
         assert seen["model"] == "urchade/gliner_multi-v2.1"
         assert seen["device"] == "cpu"
