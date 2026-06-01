@@ -36,9 +36,12 @@ dist/
 build/
 *.egg-info/
 
-# Datasets — downloaded on demand, never committed
-evals/locomo/data/                 # LOCOMO (make bench-locomo)
-evals/longmemeval/LongMemEval/     # LongMemEval-S (clone upstream / make repro)
+# Datasets — downloaded on demand, never committed.
+# NB: .gitignore has no inline comments — keep patterns on their own lines.
+# LOCOMO (make bench-locomo):
+evals/locomo/data/
+# LongMemEval-S (clone upstream / make repro):
+evals/longmemeval/LongMemEval/
 
 # Eval + benchmark run outputs (regenerated; not source)
 results/
