@@ -191,7 +191,29 @@ judge-nondeterminism → worst-case to measure, on 6% of the dataset. Flag stays
 (off by default, documented); not shipped as a win. *Lesson: this category is
 not where measurable wins live — go where the metric is crisp.*
 
-### Next: WS-1 temporal
-n=133 (4× preference), dates/counts are far more exact-matchable (crisper
-metric, less judge noise), +5-8pp expected — the lever most likely to clear
-the noise floor.
+### WS-1 temporal conditioning — **WIN (the first measurable lever)**
+Root cause was NOT arithmetic difficulty (the original assumption): the direct
+adapter built `[role] content` and **dropped the turn dates entirely**, so the
+model answered *"the conversation doesn't include any dates" / "0"*. WS-1
+(`--temporal-conditioning`, gated): prefix each retrieved turn with its
+`[YYYY-MM-DD]` date, inject the reference "now" (`question_date`), prompt for an
+explicit scoped date calculation.
+
+**Result (n=133, judged, DeepInfra-pinned):**
+
+| | judged |
+|---|---:|
+| baseline (dates dropped) | 39.8% |
+| **+ temporal conditioning** | **72.9%** |
+| **Δ** | **+33.1pp** |
+| A/A noise floor (2 identical baselines) | 0.8pp |
+
+Signal beats noise ~40×. Gated to temporal questions → other categories
+provably untouched → **~+8.8pp overall (60.8% → ~69.6%, projected)**. Confirm
+with one full-500 judged run for the published headline. Recommend making
+`--temporal-conditioning` **default-on** for v1.1 (gated, no downside).
+
+### Next levers (by expected value)
+- **WS-2 aggregation** (multi-session, n=133, ~55%) — cheap prompt branch, next.
+- **WS-6 graph** — the dormant bi-temporal KG (differentiator).
+- WS-4 reranker — needs the retriever over-fetch fix; likely sub-noise, low priority.
