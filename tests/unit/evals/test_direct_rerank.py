@@ -117,3 +117,26 @@ async def test_no_reranker_uses_retrieval_order() -> None:
     prompt = adapter.llm.prompt  # type: ignore[attr-defined]
     assert adapter.last_telemetry["reranked"] is False
     assert "turn-A" in prompt and "turn-B" in prompt
+
+
+async def test_rerank_to_controls_keep_count_not_top_k() -> None:
+    # The bug WS-4 fixed: rerank kept top_k (so with top_k >= pool it was a
+    # no-op). Now rerank keeps `rerank_to`. pool=10, top_k=8, rerank_to=3 →
+    # reranks the pool and keeps the best 3 (reverse reranker → J, I, H).
+    pool = [_item(t) for t in "ABCDEFGHIJ"]
+    session = SimpleNamespace(retriever=_FakeRetriever(pool), stm=None, session_id="s")
+    adapter = _DirectAnswerAdapter(
+        session=session,
+        llm=_CaptureLLM(),
+        answer_max_tokens=16,
+        top_k=8,
+        max_context_chars=10_000,
+        reranker=_ReverseReranker(),
+        rerank_to=3,
+    )
+    await adapter.answer_question("q?")
+    prompt = adapter.llm.prompt  # type: ignore[attr-defined]
+    assert adapter.last_telemetry["reranked"] is True
+    assert adapter.last_telemetry["retrieved_items"] == 3
+    assert "turn-J" in prompt and "turn-I" in prompt and "turn-H" in prompt
+    assert "turn-A" not in prompt and "turn-G" not in prompt

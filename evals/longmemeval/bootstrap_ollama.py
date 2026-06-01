@@ -482,11 +482,25 @@ class OpenRouterLLM:
         api_key: str | None = None,
         rpm: int = 60,
         max_retries: int = 8,
+        provider_pin: str | None = None,
+        seed: int | None = 0,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.temperature = temperature
+        # Determinism for ablations. OpenRouter routes a model across MANY
+        # backend providers; even at temperature 0 the outputs differ run to
+        # run (MoE expert routing + batch nondeterminism + provider switching
+        # measured ~44% answer variance on gpt-oss-120b). Two levers:
+        #   * provider_pin — force ONE backend (no fallbacks), removing the
+        #     provider-switch variance. The slug is an OpenRouter provider
+        #     name, e.g. "DeepInfra", "Fireworks", "Together". Falls back to
+        #     OPENROUTER_PROVIDER env.
+        #   * seed — fixed sampling seed; honoured by providers that support
+        #     it (combined with require_parameters below).
+        self.provider_pin = provider_pin or os.environ.get("OPENROUTER_PROVIDER") or None
+        self.seed = seed
         key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not key:
             raise RuntimeError(
@@ -498,13 +512,28 @@ class OpenRouterLLM:
         self._throttle = _AdaptiveThrottle(rpm)
         self._max_retries = max_retries
 
-    async def complete(self, *, prompt: str, max_tokens: int) -> str:
-        payload = {
+    def _build_payload(self, prompt: str, max_tokens: int) -> dict[str, Any]:
+        """Construct the request body (pure; unit-tested for determinism keys)."""
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": self.temperature,
         }
+        if self.seed is not None:
+            payload["seed"] = self.seed
+        if self.provider_pin:
+            # Pin to a single backend, no fallbacks; require_parameters makes
+            # the provider honour temperature/seed (else it may ignore them).
+            payload["provider"] = {
+                "order": [self.provider_pin],
+                "allow_fallbacks": False,
+                "require_parameters": True,
+            }
+        return payload
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        payload = self._build_payload(prompt, max_tokens)
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -2684,6 +2713,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         top_k: int = 12,
         max_context_chars: int = 32000,
         reranker: CrossEncoderReranker | None = None,
+        rerank_to: int = 0,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -2692,9 +2722,13 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._max_context_chars = max_context_chars
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
-        # on (question, turn) and we keep the best ``top_k`` for context —
-        # instead of the first ``top_k`` in raw RRF order.
+        # on (question, turn) and we keep the best ``rerank_to`` for context.
+        # NB: rerank only helps when the retrieved pool is LARGER than the
+        # keep count — i.e. the retriever must over-fetch. With the v1
+        # session-aware config the pool is small (~4-8), so raise the
+        # retriever's max_items well above rerank_to or this is a no-op.
         self._reranker = reranker
+        self._rerank_to = rerank_to
         self.last_telemetry: dict[str, Any] = {}
 
     async def answer_question(self, question: str) -> str:
@@ -2709,9 +2743,13 @@ class _DirectAnswerAdapter(_IngestingAdapter):
 
         pool = list(getattr(ctx, "items", []) or [])
         reranked = False
-        if self._reranker is not None and len(pool) > self._top_k:
+        # Keep ``rerank_to`` after reranking (falls back to top_k if unset).
+        # Fire only when the pool actually exceeds the keep count — else
+        # reranking can't change which items reach the prompt.
+        keep = self._rerank_to if self._rerank_to and self._rerank_to > 0 else self._top_k
+        if self._reranker is not None and len(pool) > keep:
             try:
-                items = await self._reranker.rerank(question, pool, top_k=self._top_k)
+                items = await self._reranker.rerank(question, pool, top_k=keep)
                 reranked = True
             except Exception:
                 log.exception("direct rerank failed; using retrieval order")
@@ -4139,6 +4177,7 @@ def make_adapter_factory(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
                 top_k=top_k, max_context_chars=direct_max_context_chars,
                 reranker=reranker,  # WS-4: precision pass in the winning path
+                rerank_to=rerank_to,  # keep best N after rerank (not top_k)
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4333,8 +4372,14 @@ async def main_async(args: argparse.Namespace) -> int:
         log.info("provider=groq model=%s rpm=%d", model, args.rpm)
         llm = GroqLLM(model=model, rpm=args.rpm)
     elif args.provider == "openrouter":
-        log.info("provider=openrouter model=%s rpm=%d", model, args.rpm)
-        llm = OpenRouterLLM(model=model, rpm=args.rpm)
+        log.info(
+            "provider=openrouter model=%s rpm=%d provider_pin=%s seed=%s",
+            model, args.rpm, args.openrouter_provider or "(none)", args.seed,
+        )
+        llm = OpenRouterLLM(
+            model=model, rpm=args.rpm,
+            provider_pin=args.openrouter_provider, seed=args.seed,
+        )
     elif args.provider == "nvidia":
         log.info("provider=nvidia model=%s rpm=%d", model, args.rpm)
         llm = NvidiaLLM(model=model, rpm=args.rpm)
@@ -4786,6 +4831,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
+    p.add_argument(
+        "--openrouter-provider",
+        default=None,
+        help=(
+            "Pin OpenRouter to a SINGLE backend provider (no fallbacks) for "
+            "reproducible ablations — e.g. 'DeepInfra', 'Fireworks', "
+            "'Together'. OpenRouter otherwise routes across providers, giving "
+            "~44%% answer variance run-to-run even at temperature 0. Also "
+            "reads OPENROUTER_PROVIDER. Find a model's providers at "
+            "openrouter.ai/models/<model>."
+        ),
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help=(
+            "Sampling seed sent to the provider (default 0). Honoured by "
+            "providers that support it; combine with --openrouter-provider "
+            "for the most reproducible runs."
+        ),
+    )
     p.add_argument(
         "--bedrock-region",
         default=DEFAULT_BEDROCK_REGION,
