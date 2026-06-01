@@ -403,6 +403,14 @@ _PRICE_PER_1K_OUT: dict[str, float] = {
     "llama-3.3-70b-versatile": 0.00079,
     "llama-3.1-8b-instant": 0.00008,
     "gemma2-9b-it": 0.00020,
+    # OpenRouter model ids (the v1 answerer + judge). APPROXIMATE output
+    # prices per 1K tokens — OpenRouter routes to multiple providers whose
+    # prices drift, so treat the resulting cost as an estimate, not a bill.
+    # Kills the historic $0.00 artifact; verify against your OpenRouter
+    # dashboard for exact accounting.
+    "openai/gpt-oss-120b": 0.00045,
+    "meta-llama/llama-3.3-70b-instruct": 0.00040,
+    "meta-llama/llama-3.1-8b-instruct": 0.00006,
 }
 
 
