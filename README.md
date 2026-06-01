@@ -72,12 +72,12 @@ See [`examples/chat_agent/`](examples/chat_agent/) for source + the interactive 
 │   process_turn(user_msg)                                           │
 │        │                                                           │
 │        ▼                                                           │
-│   ┌────────┐    ┌──────────┐   ┌─────────┐   ┌──────────────┐     │
-│   │  STM   │ →  │ Retriever│ → │Optimizer│ → │  Responder   │     │
-│   │ recent │    │ cosine + │   │ chain   │   │ your LLM     │     │
-│   │ turns  │    │ composite│   │ (compress│   │ + ctx        │     │
-│   │        │    │ scorer   │   │  budget) │   │              │     │
-│   └────┬───┘    └──────────┘   └─────────┘   └──────┬───────┘     │
+│   ┌────────┐    ┌──────────┐   ┌─────────┐   ┌──────────────┐      │
+│   │  STM   │ →  │ Retriever│ → │Optimizer│ → │  Responder   │      │
+│   │ recent │    │ cosine + │   │ chain   │   │ your LLM     │      │
+│   │ turns  │    │ composite│   │(compress│   │ + ctx        │      │
+│   │        │    │ scorer   │   │ budget) │   │              │      │
+│   └────┬───┘    └──────────┘   └─────────┘   └──────┬───────┘      │
 │        │                                            │              │
 │        │ promotion (background queue)               │ reply        │
 │        ▼                                            ▼              │
@@ -86,8 +86,8 @@ See [`examples/chat_agent/`](examples/chat_agent/) for source + the interactive 
 │   └────┬───┘                                                       │
 │        ▼                                                           │
 │   ┌────────┐                                                       │
-│   │  LTM   │ ← atomic facts + entities + supersession             │
-│   │ pgvector│   + bi-temporal columns (valid_from, invalidated_at)│
+│   │  LTM   │ ← atomic facts + entities + supersession              │
+│   │pgvector│   + bi-temporal columns (valid_from, invalidated_at)  │
 │   └────────┘                                                       │
 └────────────────────────────────────────────────────────────────────┘
 ```
