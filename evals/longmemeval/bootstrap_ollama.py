@@ -2687,6 +2687,32 @@ class _IterativeReasoningAdapter(_IngestingAdapter):
         return result.answer
 
 
+# WS-7 preference conditioning — open-ended "recommend / suggest / which
+# should I" requests that should honour a preference the user stated earlier.
+# In the eval we gate primarily on the dataset's question_type; this wording
+# detector is the production fallback when no type label is available.
+_PREFERENCE_INTENT_TERMS: tuple[str, ...] = (
+    "recommend",
+    "suggest",
+    "which should i",
+    "what should i",
+    "best for me",
+    "best option",
+    "resources",
+    "ideas for",
+    "tailor",
+    "personali",  # personalize / personalise / personalized
+    "based on my",
+    "for my",
+)
+
+
+def _is_preference_question(question: str) -> bool:
+    """Heuristic gate for preference-sensitive open-ended requests."""
+    q = (question or "").lower()
+    return any(term in q for term in _PREFERENCE_INTENT_TERMS)
+
+
 class _DirectAnswerAdapter(_IngestingAdapter):
     """
     Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
@@ -2714,12 +2740,19 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         max_context_chars: int = 32000,
         reranker: CrossEncoderReranker | None = None,
         rerank_to: int = 0,
+        preference_conditioning: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
         self._max_context_chars = max_context_chars
+        # WS-7: when on, preference-type questions get a prompt that tells the
+        # model to identify and APPLY a stated user preference from the
+        # retrieved turns (recall is ~93%; the gap is application). Feature-
+        # flagged + gated so factual/temporal/etc. questions are never touched
+        # — the over-personalization risk only appears under global injection.
+        self._pref_conditioning = preference_conditioning
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
         # on (question, turn) and we keep the best ``rerank_to`` for context.
@@ -2778,8 +2811,30 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # plus a wording check, and switch to a combine-everything prompt.
         from evals.longmemeval.decomposed_answer import is_aggregate_question
         qt = (getattr(self, "dataset_question_type", "") or "").lower()
+        # WS-7 preference branch (gated on the flag + the type/wording).
+        preference = self._pref_conditioning and (
+            qt == "single-session-preference" or _is_preference_question(question)
+        )
         aggregate = qt == "multi-session" or is_aggregate_question(question)
-        if aggregate:
+        if preference:
+            # Reminder-style conditioning (PrefEval's best prompting method),
+            # with the over-personalization guard baked into the wording:
+            # apply ONLY a relevant stated preference, never invent one,
+            # preserve factual accuracy.
+            prompt = (
+                "The retrieved conversation may contain preferences this user "
+                "has stated — tools they use, brands they like, topics they "
+                "care about, or things they dislike. Identify any preference "
+                "that is directly relevant to the request below and tailor "
+                "your answer to honour it: favour options aligned with the "
+                "preference and avoid ones that contradict it. If no stated "
+                "preference is relevant, answer normally — never invent a "
+                "preference, and never sacrifice factual accuracy. Reply with "
+                "just the answer.\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
+        elif aggregate:
             prompt = (
                 "The question below asks you to combine information that "
                 "may be spread across MULTIPLE parts of the retrieved "
@@ -2810,6 +2865,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "answer_mode": "direct",
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
+            "preference_prompt": preference,
             "reranked": reranked,
         }
         return (answer or "").strip()
@@ -4049,6 +4105,7 @@ def make_adapter_factory(
     iterative_max_rounds: int = 2,
     direct_answer: bool = False,
     direct_max_context_chars: int = 32000,
+    preference_conditioning: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4178,6 +4235,7 @@ def make_adapter_factory(
                 top_k=top_k, max_context_chars=direct_max_context_chars,
                 reranker=reranker,  # WS-4: precision pass in the winning path
                 rerank_to=rerank_to,  # keep best N after rerank (not top_k)
+                preference_conditioning=preference_conditioning,  # WS-7
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4631,6 +4689,7 @@ async def main_async(args: argparse.Namespace) -> int:
         iterative_max_rounds=args.max_rounds,
         direct_answer=(args.reasoner == "direct"),
         direct_max_context_chars=args.max_context_chars,
+        preference_conditioning=args.pref_conditioning,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5144,6 +5203,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=2,
         help="Number of best turns to keep per selected source session.",
+    )
+    p.add_argument(
+        "--pref-conditioning",
+        action="store_true",
+        default=False,
+        help=(
+            "WS-7: for preference-type questions only, use a prompt that tells "
+            "the answerer to identify and APPLY a stated user preference from "
+            "the retrieved turns (recall ~93%%, the gap is application). "
+            "Feature-flagged + gated; factual/temporal/etc. questions are "
+            "never touched. A/B: run baseline vs this flag, judge, ablate."
+        ),
     )
     p.add_argument(
         "--wiki-memory",
