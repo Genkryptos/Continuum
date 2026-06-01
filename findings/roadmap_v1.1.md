@@ -77,13 +77,40 @@ it lost to direct retrieval everywhere).
 
 ### WS-4 · Recall residual — reranker + embedder upgrade *(the "recall" half)*
 - **Where recall still misses**: 8.4% overall; multi-session ~85%.
-- **Approach**: add a **cross-encoder / Cohere reranker** over the hybrid
-  (cosine ⊕ BM25 ⊕ RRF) candidate set; A/B a stronger embedder
-  (MiniLM → bge-large or text-embedding-3-small).
+- **Approach**: **wire the existing `continuum/retrieval/reranker.py`** into
+  the eval-winning path — it's already built but *not used* in the v1 direct
+  config. Then A/B a stronger embedder (MiniLM → bge-large or
+  text-embedding-3-small).
 - **Expected**: recall 91.6% → ~95%, plus precision gains that lift every
   category ≈ **+2-4pp overall**.
-- **Effort**: M · **Risk**: added latency/cost (rerank = +1 call); embedder
-  swap re-indexes everything.
+- **Effort**: S-M (reranker exists) · **Risk**: added latency/cost
+  (rerank = +1 call); embedder swap re-indexes everything.
+
+### WS-6 · Wire the dormant bi-temporal knowledge graph ⭐⭐ *(the buried moat)*
+- **What's already built** (a capability audit surprise): the entire graph
+  stack exists and is **bi-temporal** — `memory_edges` (edges carry
+  `invalidated_at`), a production recursive-CTE `neighbors()` traversal
+  (~2 ms, cycle-guarded), and `_graph_expand()` already wired into the
+  retriever (gated by `graph_expand_n`). The extractors even produce
+  `(entities, relations)`.
+- **The single missing step**: nothing **writes** edges. The promoter's
+  `_neighbors()` is semantic-similarity search, not graph edges; the
+  extracted `relations` are discarded. No `INSERT INTO memory_edges` exists.
+- **Approach**: add a relation-writer — persist extracted
+  `(subject, PREDICATE, object)` triples to `memory_edges` at promotion time,
+  carrying bi-temporal `invalidated_at` so superseded relations drop out of
+  traversal automatically. Turn on `graph_expand_n` in the eval config.
+- **Why it matters**: this *is* Zep's winning architecture (a temporal
+  knowledge graph with validity windows). Continuum already architected it;
+  populating edges unlocks **multi-hop** ("X's manager's project") — exactly
+  where flat retrieval dies and graphs win — on top of the bi-temporal
+  invalidation we already have.
+- **Expected**: multi-hop / cross-entity questions are the residual in
+  multi-session (55%) and part of temporal; realistic **+3-6pp overall**,
+  and a genuine architectural differentiator.
+- **Effort**: M · **Risk**: relation-extraction precision (bad edges add
+  noise — gate edge writes on confidence; measure with `graph_expand_n` on
+  vs off on the full set).
 
 ### WS-5 · Measurement honesty *(prerequisite, do first)*
 - **Per-category ablation harness** — every lever reports its pp delta on the
@@ -99,7 +126,7 @@ it lost to direct retrieval everywhere).
 
 ## 3 · Target & guardrails
 
-- **Stacked target: 60.8% → ~70-72% judged** from WS-1+2+3+4, *without*
+- **Stacked target: 60.8% → ~72-75% judged** from WS-1+2+3+4+6, *without*
   resurrecting the general reasoner.
 - **Gate**: every change is A/B'd on the full 500 with the LLM judge **before
   it lands**. Any regression on the solved categories (single-session
@@ -115,9 +142,14 @@ it lost to direct retrieval everywhere).
 
 1. **WS-5 harness** — so everything after is measured honestly.
 2. **WS-2 aggregation** — cheapest win, validates the harness.
-3. **WS-1 temporal** — biggest prize.
-4. **WS-3 knowledge-update** — cheap, leverages existing supersession data.
-5. **WS-4 reranker/embedder** — the recall half; most infra.
+3. **WS-4 reranker** — the reranker already exists; wiring it is near-free recall.
+4. **WS-1 temporal** — biggest single-category prize.
+5. **WS-6 graph** — the buried moat; unlocks multi-hop + the differentiator story.
+6. **WS-3 knowledge-update** — cheap, leverages existing supersession data.
+
+> **Capability-audit note:** WS-4 (reranker) and WS-6 (bi-temporal graph) are
+> both *already built* in the codebase and merely dormant. Before adding new
+> machinery, the cheapest wins are turning on what's already there.
 
 Each lands as its own branch + PR with a before/after full-500 judged table in
 the description, so the pp contribution of every lever is on the record.
