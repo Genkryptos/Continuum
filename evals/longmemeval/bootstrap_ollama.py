@@ -306,6 +306,8 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
             answer_session_ids=list(ans_sids),
             question_type=str(r.get("question_type", "unknown")),
             user_id=user_id,
+            # The question's reference date ("now") for temporal reasoning.
+            question_date=str(r.get("question_date", "") or ""),
         ))
     return rows
 
@@ -2713,6 +2715,42 @@ def _is_preference_question(question: str) -> bool:
     return any(term in q for term in _PREFERENCE_INTENT_TERMS)
 
 
+# WS-1 temporal reasoning — date-delta questions ("how many days between X and
+# Y", "how many weeks ago", "in what order"). The measured failure is NOT
+# arithmetic difficulty: the direct context dropped the turn dates entirely, so
+# the model answered "no dates available" / "0". The fix surfaces each turn's
+# date + the reference "now", gated to temporal questions.
+_TEMPORAL_INTENT_TERMS: tuple[str, ...] = (
+    "how many days",
+    "how many weeks",
+    "how many months",
+    "how many years",
+    "how long ago",
+    "how long since",
+    "how long has",
+    "days passed",
+    "weeks ago",
+    "months ago",
+    "years ago",
+    "weeks have passed",
+    "months have passed",
+    " since ",
+    " before ",
+    " after ",
+    "in what order",
+    "in the order",
+    "which happened first",
+    "which came first",
+    "earlier or later",
+)
+
+
+def _is_temporal_question(question: str) -> bool:
+    """Heuristic gate for date-arithmetic / event-ordering questions."""
+    q = (question or "").lower()
+    return any(term in q for term in _TEMPORAL_INTENT_TERMS)
+
+
 class _DirectAnswerAdapter(_IngestingAdapter):
     """
     Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
@@ -2741,6 +2779,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         reranker: CrossEncoderReranker | None = None,
         rerank_to: int = 0,
         preference_conditioning: bool = False,
+        temporal_conditioning: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -2753,6 +2792,11 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # flagged + gated so factual/temporal/etc. questions are never touched
         # — the over-personalization risk only appears under global injection.
         self._pref_conditioning = preference_conditioning
+        # WS-1: when on, temporal questions get each retrieved turn PREFIXED
+        # with its date + the reference "now", and a prompt to compute the
+        # delta. The measured failure was dates missing from the prompt
+        # entirely ("the conversation doesn't include any dates"). Gated.
+        self._temporal_conditioning = temporal_conditioning
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
         # on (question, turn) and we keep the best ``rerank_to`` for context.
@@ -2793,30 +2837,59 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             self.last_telemetry = {"llm_call_count": 0, "answer_mode": "direct"}
             return ""
 
+        from evals.longmemeval.decomposed_answer import is_aggregate_question
+        qt = (getattr(self, "dataset_question_type", "") or "").lower()
+        # WS-1 temporal branch (gated): the failure was that turn dates never
+        # reached the prompt, so surface each turn's date here.
+        temporal = self._temporal_conditioning and (
+            qt == "temporal-reasoning" or _is_temporal_question(question)
+        )
+        # WS-7 preference branch (gated on the flag + the type/wording).
+        preference = self._pref_conditioning and (
+            qt == "single-session-preference" or _is_preference_question(question)
+        )
+        # Aggregation questions (multi-session "how many / which / list all")
+        # need the model to combine items across sessions, not return the
+        # first matching span (43/50 multi-session failures were
+        # missing_aggregation despite 85% recall).
+        aggregate = qt == "multi-session" or is_aggregate_question(question)
+
         lines: list[str] = []
         for it in items:
             content = (getattr(it, "content", "") or "").strip()
             if not content:
                 continue
-            role = (getattr(it, "metadata", {}) or {}).get("role", "") or ""
-            lines.append(f"[{role}] {content}" if role else content)
+            meta = getattr(it, "metadata", {}) or {}
+            role = meta.get("role", "") or ""
+            if temporal:
+                # Prefix each turn with its date so date arithmetic is
+                # possible at all (otherwise the model sees no timestamps).
+                date = meta.get("date") or ""
+                if not date:
+                    ca = getattr(it, "created_at", None)
+                    date = ca.isoformat()[:10] if ca is not None else ""
+                stamp = f"[{date}] " if date else ""
+                lines.append(f"{stamp}[{role}] {content}" if role else f"{stamp}{content}")
+            else:
+                lines.append(f"[{role}] {content}" if role else content)
         context = "\n".join(lines)[: self._max_context_chars]
-
-        # Aggregation questions (multi-session "how many / which / list
-        # all across our chats") need the model to combine items spread
-        # across sessions, not return the first matching span. The
-        # generic "just the answer" prompt biases toward a single span
-        # (observed: 43/50 multi-session failures were missing_aggregation
-        # despite 85% recall). Detect aggregation via the dataset hint
-        # plus a wording check, and switch to a combine-everything prompt.
-        from evals.longmemeval.decomposed_answer import is_aggregate_question
-        qt = (getattr(self, "dataset_question_type", "") or "").lower()
-        # WS-7 preference branch (gated on the flag + the type/wording).
-        preference = self._pref_conditioning and (
-            qt == "single-session-preference" or _is_preference_question(question)
-        )
-        aggregate = qt == "multi-session" or is_aggregate_question(question)
-        if preference:
+        if temporal:
+            # The turns above are date-stamped. Give "now" and ask for an
+            # explicit, scoped date calculation (NOT a general reasoning loop).
+            today = (getattr(self, "dataset_question_date", "") or "").strip()
+            today_line = f"Today's date is {today}.\n" if today else ""
+            prompt = (
+                "Each retrieved turn below is prefixed with the date it was "
+                "said, in [YYYY-MM-DD] form. " + today_line + "Use these dates "
+                "to answer the question: find the relevant event date(s), then "
+                "compute the difference (count of days / weeks / months, or how "
+                "long ago relative to today), or put the events in time order. "
+                "Work it out from the dates — do not guess. Reply with just the "
+                "answer (the number or ordering).\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
+        elif preference:
             # Reminder-style conditioning (PrefEval's best prompting method).
             # v2: the first A/B was net-neutral (+4/-4) — it rescued
             # abstentions but ALSO turned specific correct answers into generic
@@ -2869,6 +2942,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
             "preference_prompt": preference,
+            "temporal_prompt": temporal,
             "reranked": reranked,
         }
         return (answer or "").strip()
@@ -4109,6 +4183,7 @@ def make_adapter_factory(
     direct_answer: bool = False,
     direct_max_context_chars: int = 32000,
     preference_conditioning: bool = False,
+    temporal_conditioning: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4239,6 +4314,7 @@ def make_adapter_factory(
                 reranker=reranker,  # WS-4: precision pass in the winning path
                 rerank_to=rerank_to,  # keep best N after rerank (not top_k)
                 preference_conditioning=preference_conditioning,  # WS-7
+                temporal_conditioning=temporal_conditioning,  # WS-1
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4693,6 +4769,7 @@ async def main_async(args: argparse.Namespace) -> int:
         direct_answer=(args.reasoner == "direct"),
         direct_max_context_chars=args.max_context_chars,
         preference_conditioning=args.pref_conditioning,
+        temporal_conditioning=args.temporal_conditioning,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5217,6 +5294,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "the retrieved turns (recall ~93%%, the gap is application). "
             "Feature-flagged + gated; factual/temporal/etc. questions are "
             "never touched. A/B: run baseline vs this flag, judge, ablate."
+        ),
+    )
+    p.add_argument(
+        "--temporal-conditioning",
+        action="store_true",
+        default=False,
+        help=(
+            "WS-1: for temporal-reasoning questions only, PREFIX each retrieved "
+            "turn with its date + give the reference 'now', and prompt for an "
+            "explicit date calculation. Fixes the measured failure where the "
+            "direct context dropped all dates ('no dates available' -> '0'). "
+            "Gated; other categories untouched. A/B vs baseline, judged."
         ),
     )
     p.add_argument(

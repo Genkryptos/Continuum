@@ -92,6 +92,9 @@ class EvalRow:
     answer_session_ids: list[str] = dataclasses.field(default_factory=list)
     question_type: str = "unknown"
     user_id: str | None = None
+    #: The question's reference date ("now") — temporal-reasoning needs it to
+    #: answer "how many weeks ago / since" questions. Empty when unknown.
+    question_date: str = ""
 
 
 @dataclasses.dataclass
@@ -563,6 +566,8 @@ async def _run_one(
         # protocol stays single-arg.
         if hasattr(adapter, "dataset_question_type"):
             adapter.dataset_question_type = row.question_type
+        if hasattr(adapter, "dataset_question_date"):
+            adapter.dataset_question_date = row.question_date
         if hasattr(adapter, "dataset_is_multi_session"):
             adapter.dataset_is_multi_session = (
                 len(row.answer_session_ids or []) > 1

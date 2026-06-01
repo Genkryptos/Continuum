@@ -94,6 +94,7 @@ class ContinuumAdapter:
         #: them (e.g. the direct/iterative adapters) silently never
         #: received the hint.
         self.dataset_question_type: str | None = None
+        self.dataset_question_date: str | None = None  # "now" for temporal Qs
         self.dataset_is_multi_session: bool = False
 
     # ── LongMemEval interface ───────────────────────────────────────────────
