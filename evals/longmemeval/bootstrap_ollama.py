@@ -2780,6 +2780,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         rerank_to: int = 0,
         preference_conditioning: bool = False,
         temporal_conditioning: bool = False,
+        aggregation_v2: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -2797,6 +2798,11 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # delta. The measured failure was dates missing from the prompt
         # entirely ("the conversation doesn't include any dates"). Gated.
         self._temporal_conditioning = temporal_conditioning
+        # WS-2: when on, aggregation questions get a stronger "enumerate every
+        # distinct instance, dedupe, THEN count" prompt — the failure was the
+        # model counting without listing ("3 weddings" -> "1"). Gated to the
+        # same aggregate questions; A/B vs the current aggregation prompt.
+        self._aggregation_v2 = aggregation_v2
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
         # on (question, turn) and we keep the best ``rerank_to`` for context.
@@ -2910,6 +2916,24 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
+        elif aggregate and self._aggregation_v2:
+            # WS-2: enumerate-then-count. The failure mode was the model
+            # counting/answering without first listing the instances
+            # ("3 weddings" -> "1"). Force an explicit enumeration + dedupe
+            # before the final count/list.
+            prompt = (
+                "The question below asks you to COUNT or LIST things that may "
+                "be spread across MULTIPLE parts of the retrieved conversation. "
+                "Work in two steps:\n"
+                "1) First enumerate EVERY distinct relevant instance you can "
+                "find, one per line, removing duplicates (the same instance "
+                "mentioned twice counts once).\n"
+                "2) Then give the FINAL answer — the total count or the "
+                "complete de-duplicated list — based on that enumeration.\n"
+                "Do not stop at the first match and do not guess a number.\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
         elif aggregate:
             prompt = (
                 "The question below asks you to combine information that "
@@ -2941,6 +2965,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "answer_mode": "direct",
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
+            "aggregation_v2": bool(aggregate and self._aggregation_v2),
             "preference_prompt": preference,
             "temporal_prompt": temporal,
             "reranked": reranked,
@@ -4183,7 +4208,8 @@ def make_adapter_factory(
     direct_answer: bool = False,
     direct_max_context_chars: int = 32000,
     preference_conditioning: bool = False,
-    temporal_conditioning: bool = False,
+    temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
+    aggregation_v2: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4315,6 +4341,7 @@ def make_adapter_factory(
                 rerank_to=rerank_to,  # keep best N after rerank (not top_k)
                 preference_conditioning=preference_conditioning,  # WS-7
                 temporal_conditioning=temporal_conditioning,  # WS-1
+                aggregation_v2=aggregation_v2,  # WS-2
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4770,6 +4797,7 @@ async def main_async(args: argparse.Namespace) -> int:
         direct_max_context_chars=args.max_context_chars,
         preference_conditioning=args.pref_conditioning,
         temporal_conditioning=args.temporal_conditioning,
+        aggregation_v2=args.aggregation_v2,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5297,15 +5325,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--temporal-conditioning",
+        "--aggregation-v2",
         action="store_true",
         default=False,
         help=(
-            "WS-1: for temporal-reasoning questions only, PREFIX each retrieved "
-            "turn with its date + give the reference 'now', and prompt for an "
-            "explicit date calculation. Fixes the measured failure where the "
-            "direct context dropped all dates ('no dates available' -> '0'). "
-            "Gated; other categories untouched. A/B vs baseline, judged."
+            "WS-2: for aggregation/multi-session questions only, use a stronger "
+            "'enumerate every distinct instance -> dedupe -> THEN count' prompt "
+            "(the failure was counting without listing: '3 weddings' -> '1'). "
+            "Off by default; A/B vs the current aggregation prompt, judged."
+        ),
+    )
+    p.add_argument(
+        "--temporal-conditioning",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "WS-1 (DEFAULT-ON for v1.1, +33.1pp measured): for "
+            "temporal-reasoning questions only, PREFIX each retrieved turn with "
+            "its date + give the reference 'now', and prompt for an explicit "
+            "date calculation. Fixes the measured failure where the direct "
+            "context dropped all dates ('no dates available' -> '0'). Gated; "
+            "other categories untouched. Use --no-temporal-conditioning for "
+            "the A/B baseline arm."
         ),
     )
     p.add_argument(
