@@ -2683,12 +2683,18 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         answer_max_tokens: int = 128,
         top_k: int = 12,
         max_context_chars: int = 32000,
+        reranker: CrossEncoderReranker | None = None,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
         self._max_context_chars = max_context_chars
+        # WS-4: optional cross-encoder precision pass. The retriever
+        # over-fetches for recall; the reranker reorders that pool jointly
+        # on (question, turn) and we keep the best ``top_k`` for context —
+        # instead of the first ``top_k`` in raw RRF order.
+        self._reranker = reranker
         self.last_telemetry: dict[str, Any] = {}
 
     async def answer_question(self, question: str) -> str:
@@ -2701,7 +2707,17 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 log.exception("direct retrieve failed for %r", question[:80])
         self.last_ctx = ctx
 
-        items = list(getattr(ctx, "items", []) or [])[: self._top_k]
+        pool = list(getattr(ctx, "items", []) or [])
+        reranked = False
+        if self._reranker is not None and len(pool) > self._top_k:
+            try:
+                items = await self._reranker.rerank(question, pool, top_k=self._top_k)
+                reranked = True
+            except Exception:
+                log.exception("direct rerank failed; using retrieval order")
+                items = pool[: self._top_k]
+        else:
+            items = pool[: self._top_k]
         if not items:
             self.last_telemetry = {"llm_call_count": 0, "answer_mode": "direct"}
             return ""
@@ -2756,6 +2772,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "answer_mode": "direct",
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
+            "reranked": reranked,
         }
         return (answer or "").strip()
 
@@ -4121,6 +4138,7 @@ def make_adapter_factory(
             return _DirectAnswerAdapter(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
                 top_k=top_k, max_context_chars=direct_max_context_chars,
+                reranker=reranker,  # WS-4: precision pass in the winning path
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
