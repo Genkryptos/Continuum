@@ -217,7 +217,19 @@ temporal **41.4% → 73.7%**. The attributable driver is temporal (+32pp ≈
 (WS-1 doesn't touch them). `--temporal-conditioning` is now **default-on** for
 v1.1.
 
+### WS-2 aggregation v2 — built, tested, **NEGATIVE (don't ship)**
+Hypothesis: multi-session fails because the model counts without enumerating
+("3 weddings" → "1"); fix = "enumerate every instance → dedupe → THEN count".
+**Result (n=133, judged):** fired on 133/133, answers went 34 → 281 chars (it
+*did* enumerate), but accuracy was **flat: +6/−7 flips, net −0.8pp = the A/A
+noise floor (0.8pp)** — and it cost ~7× more tokens. Net-neutral, strictly more
+expensive. Flag stays off (`--aggregation-v2`), kept as a documented negative.
+**Key learning: multi-session's bottleneck is NOT prompt-level aggregation —
+it's upstream (retrieval completeness / multi-hop). Prompt levers won't move it.**
+
 ### Next levers (by expected value)
-- **WS-2 aggregation** (multi-session, n=133, ~55%) — cheap prompt branch, next.
-- **WS-6 graph** — the dormant bi-temporal KG (differentiator).
-- WS-4 reranker — needs the retriever over-fetch fix; likely sub-noise, low priority.
+- **WS-6 graph** — the dormant bi-temporal KG. Now the *indicated* lever for
+  multi-session (the bottleneck is retrieval/multi-hop, per WS-2's negative) AND
+  the differentiator. Top priority.
+- WS-3 knowledge-update (78 @ 60%) — recency/supersession prompting; cheap.
+- WS-4 reranker — needs the retriever over-fetch fix; recall lever, ties to WS-6.
