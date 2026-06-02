@@ -282,9 +282,26 @@ both baselines (worst treatment 51 > best baseline 50) → consistently positive
 n=78, so the magnitude is approximate — confirm exact value in the full-500).
 Gated, low-risk, on-thesis → flipped default-on.
 
-### Remaining levers
-- **WS-4 reranker** — needs the retriever over-fetch fix (20–40 candidates);
-  recall lever, ~+2pp.
-- **WS-temporal-code** — deterministic date math for the temporal residual
-  (TReMu-style); extends the WS-1 win.
-- WS-6 graph — product differentiator, *not* a benchmark lever (per research).
+### WS-date-math — built, tested, **NEGATIVE (don't ship)**
+`--temporal-codemath` (off by default): model emits a date SPEC, code computes
+the delta deterministically. **Result (n=133):** fired on **56/133** temporal
+rows, and on those it helped **0** and broke **3** (A/B −1.5pp vs +0.8pp A/A
+noise). Decisive finding: `F→T=0` means **the temporal residual is an
+event-identification problem, not arithmetic** — code computing over the wrong
+dates is just confidently wrong. WS-1 (surface dates) already captured the
+entire *fixable* temporal win; the rest is reader-bound. Flag stays off.
+
+### The pattern (5 A/Bs): surface data wins, add-machinery loses
+- ✅ WS-1 temporal (surface dates, +32pp) · ✅ WS-3 ku-recency (surface current
+  facts, +4.5pp) — both **surface hidden data**.
+- ❌ WS-2 aggregation · ❌ WS-7 preference · ❌ WS-date-math — all **add
+  processing on top**, all net-neutral/negative.
+- Conclusion: the memory layer's job is to surface the right context, not
+  out-compute the reader. Architecture-native levers at gpt-oss-120b are
+  **mined out at ~72.8%**.
+
+### Remaining (no longer benchmark-ROI levers at this model)
+- **WS-6 graph** — a *product differentiator* build (real multi-hop), not a
+  LongMemEval lever; the eval graph is a from-scratch in-memory build.
+- **Frontier reader** — the only path to 90%+ (a model choice, not architecture).
+- WS-4 reranker over-fetch — small recall lever (~+2pp), if desired.
