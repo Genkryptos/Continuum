@@ -103,8 +103,9 @@ db-up: ## Start local Postgres (pgvector) in the background and wait until ready
 	@$(COMPOSE) exec -T postgres sh -c \
 		'until pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-continuum} >/dev/null 2>&1; do sleep 1; done' \
 		|| true
-	@echo "Postgres is up → postgresql://postgres:postgres@localhost:5432/continuum"
-	@echo "next:  make check-env    (verify your .env can reach it)"
+	@echo "Postgres is up (host port = POSTGRES_PORT, default 5432; see docker ps)"
+	@echo "next:  make db-migrate   (create the pgvector ext + LTM schema)"
+	@echo "       make check-env    (verify your config can reach it)"
 
 db-down: ## Stop the local Postgres container (named data volume is kept)
 	@$(COMPOSE) down
