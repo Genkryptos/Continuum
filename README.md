@@ -142,8 +142,12 @@ That's the complete loop. No Postgres needed for the demo or any of the benchmar
 ```bash
 cp .env.example .env       # fill in a provider key and/or CONTINUUM_DB_DSN
 make db-up                 # start Postgres + pgvector (docker-compose), wait until ready
-make check-env             # ✓/✗ report: config loads, provider key, DB reachable, in-memory smoke
+make db-migrate            # create the pgvector extension + LTM schema
+make check-env             # ✓/✗ report: config loads, provider key, DB reachable + schema, smoke
+make run                   # interactive chat REPL on a real Postgres-backed session
 ```
+
+`make run` (i.e. `python -m continuum.chat`) starts an interactive `you>` REPL on a **real** `ContinuumSession` — `PostgresSTM` + `PostgresLTM` + the hybrid `Retriever` + an OpenRouter responder. Every turn persists to Postgres and is indexed for recall, so quitting and re-running with the same `--session` remembers the conversation. Useful flags: `--session <id>` (named persistent session), `--model <id>` (OpenRouter model, default `openai/gpt-4o-mini`), `--in-memory` (no DB, quick smoke — also `make run-mem`), `--mock` (deterministic, no LLM call), `--no-embeddings` (skip the embedder download). Inside the REPL: `/help`, `/search <q>`, `/stats`, `/session <id>`, `/exit`.
 
 `make check-env` (i.e. `python -m continuum.doctor`) is the "did I set this up right?" command — it loads your config, detects which LLM provider key is present (in `.env` or your shell), probes the configured Postgres DSN for the `pgvector` extension, and runs one in-memory turn end-to-end. A missing key or unreachable DB is a **warning** (the offline path still works); a broken config or a session that won't start is a **failure** (non-zero exit, so it works in CI too). Add `--ping` to validate each provider key against a live read-only API call, or `--full` to actually load the embedder.
 
@@ -155,9 +159,11 @@ make check-env             # ✓/✗ report: config loads, provider key, DB reac
 
 | target | what |
 |---|---|
-| `make demo-chat` | scripted 60-second chat-agent walkthrough |
+| `make demo-chat` | scripted 60-second chat-agent walkthrough (in-memory) |
+| `make run` | interactive chat REPL on a real Postgres-backed session |
 | `make db-up` / `make db-down` | start / stop local Postgres+pgvector (docker-compose) |
-| `make check-env` | verify your `.env`: config, provider key, DB, in-memory smoke |
+| `make db-migrate` | apply migrations (pgvector ext + LTM schema) |
+| `make check-env` | verify your `.env`: config, provider key, DB+schema, smoke |
 | `make bench-ingest` | ingest throughput (Continuum vs raw list vs mem0) |
 | `make bench-retrieval` | retrieval recall@k vs naive cosine |
 | `make bench-supersession` | the killer feature — 100 % vs 38 % |
