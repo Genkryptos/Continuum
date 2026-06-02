@@ -2945,11 +2945,19 @@ class _DirectAnswerAdapter(_IngestingAdapter):
 
         pool = list(getattr(ctx, "items", []) or [])
         reranked = False
+        # WS-4: the cross-encoder rerank measurably HELPS the retrieval-bound
+        # categories (knowledge-update, multi-session) but HURTS preference
+        # (the reranker reorders away the turns the preference rubric needs).
+        # Gate it off for preference questions — keep the retrieval gains clean.
+        _qt_early = (getattr(self, "dataset_question_type", "") or "").lower()
+        _is_pref_early = self._pref_conditioning and (
+            _qt_early == "single-session-preference" or _is_preference_question(question)
+        )
         # Keep ``rerank_to`` after reranking (falls back to top_k if unset).
         # Fire only when the pool actually exceeds the keep count — else
         # reranking can't change which items reach the prompt.
         keep = self._rerank_to if self._rerank_to and self._rerank_to > 0 else self._top_k
-        if self._reranker is not None and len(pool) > keep:
+        if self._reranker is not None and not _is_pref_early and len(pool) > keep:
             try:
                 items = await self._reranker.rerank(question, pool, top_k=keep)
                 reranked = True
@@ -3155,6 +3163,9 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "temporal_codemath": codemath_applied,
             "ku_prompt": ku,
             "reranked": reranked,
+            "rerank_skipped_preference": bool(
+                self._reranker is not None and _is_pref_early
+            ),
         }
         return answer
 

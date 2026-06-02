@@ -119,6 +119,33 @@ async def test_no_reranker_uses_retrieval_order() -> None:
     assert "turn-A" in prompt and "turn-B" in prompt
 
 
+async def test_rerank_skipped_for_preference_questions() -> None:
+    # WS-4: rerank helps the retrieval-bound categories but HURTS preference,
+    # so it's gated off for single-session-preference. Pool A..E, top_k=2,
+    # reverse reranker — but the preference type means rerank is skipped and
+    # the raw-order head (A, B) reaches the prompt unchanged.
+    pool = [_item(t) for t in "ABCDE"]
+    rer = _ReverseReranker()
+    session = SimpleNamespace(retriever=_FakeRetriever(pool), stm=None, session_id="s")
+    adapter = _DirectAnswerAdapter(
+        session=session,
+        llm=_CaptureLLM(),
+        answer_max_tokens=16,
+        top_k=2,
+        max_context_chars=10_000,
+        reranker=rer,
+        preference_conditioning=True,
+    )
+    adapter.dataset_question_type = "single-session-preference"  # type: ignore[attr-defined]
+    await adapter.answer_question("what do I prefer?")
+    prompt = adapter.llm.prompt  # type: ignore[attr-defined]
+    assert rer.called is False
+    assert adapter.last_telemetry["reranked"] is False
+    assert adapter.last_telemetry["rerank_skipped_preference"] is True
+    # raw-order head survives (rerank did not reorder E,D in)
+    assert "turn-A" in prompt and "turn-B" in prompt
+
+
 async def test_rerank_to_controls_keep_count_not_top_k() -> None:
     # The bug WS-4 fixed: rerank kept top_k (so with top_k >= pool it was a
     # no-op). Now rerank keeps `rerank_to`. pool=10, top_k=8, rerank_to=3 →

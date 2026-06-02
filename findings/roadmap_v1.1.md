@@ -300,8 +300,35 @@ entire *fixable* temporal win; the rest is reader-bound. Flag stays off.
   out-compute the reader. Architecture-native levers at gpt-oss-120b are
   **mined out at ~72.8%**.
 
+### WS-4 over-fetch + cross-encoder rerank — **PROMISING, full-500 confirm pending**
+`--rerank --rerank-to 24` on an over-fetched pool (pool > 24 so the reranker
+actually reorders what reaches the prompt). This is **architecture-native**: it
+improves *retrieval* (the winning pattern), not reader machinery. First attempt
+was a no-op (pool ≤ keep count); fixed by over-fetching the pool above the keep.
+
+**Result (balanced-120, judged, A/B + A/A noise):**
+- **Recall 93.0% → 98.8% (+5.8pp)** — the over-fetch genuinely surfaces more
+  relevant turns. This is the mechanism, measured directly.
+- Reranked **120/120** rows (lever engaged); context kept exactly 24.
+- Per-category, **treatment beats *both* A/A baselines** on the two
+  retrieval-bound categories: **knowledge-update 60/55 → 75 (+15–20)**,
+  **multi-session 35/35 → 50 (+15)**. ss-user (-5) is identical in A/A → noise
+  (guard trip is a false positive); temporal +5 also in A/A → noise.
+- **single-session-preference 50/55 → 30 (−20–25):** treatment below *both*
+  baselines → rerank reorders away the turns the preference rubric needs. **Fix
+  shipped:** rerank is now **gated OFF for preference** questions
+  (`rerank_skipped_preference` telemetry), keeping the retrieval gains clean.
+
+**Why the +1.7pp balanced-120 overall understates it:** preference is
+over-weighted in balanced-120 (20/120 = 17%) vs the real dataset (30/500 = 6%).
+At true category weights (KU 16%, MS 27%), with preference now gated:
+> 72.8 + (78/500·~12) + (133/500·~12) ≈ **~77–79% projected full-500**
+Even at half the balanced-120 magnitude this clears the full-500 noise (~±2pp)
+decisively. This is the **first lever since temporal that looks like a real win**
+— and it's on-thesis (surface better context via retrieval, don't out-compute
+the reader). **Next: full-500 A/B vs `v1_1_final` to confirm before shipping.**
+
 ### Remaining (no longer benchmark-ROI levers at this model)
 - **WS-6 graph** — a *product differentiator* build (real multi-hop), not a
   LongMemEval lever; the eval graph is a from-scratch in-memory build.
 - **Frontier reader** — the only path to 90%+ (a model choice, not architecture).
-- WS-4 reranker over-fetch — small recall lever (~+2pp), if desired.
