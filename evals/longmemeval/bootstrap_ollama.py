@@ -2778,6 +2778,86 @@ def _is_knowledge_update_question(question: str) -> bool:
     return any(term in q for term in _KNOWLEDGE_UPDATE_TERMS)
 
 
+# WS-date-math — the temporal residual is date ARITHMETIC the model still
+# botches even with dates surfaced (WS-1). For delta questions we ask the model
+# to emit a small SPEC alongside its answer, then compute the result in CODE
+# (deterministic — NOT an agent tool-loop, NOT a second call). Graceful: if the
+# SPEC is missing/unparseable we keep the model's free-text answer.
+_TEMPORAL_DELTA_TERMS: tuple[str, ...] = (
+    "how many days",
+    "how many weeks",
+    "how many months",
+    "how many years",
+    "how long ago",
+    "how long since",
+    "days passed",
+    "weeks passed",
+    "months passed",
+    "days ago",
+    "weeks ago",
+    "months ago",
+    "years ago",
+    "weeks have passed",
+    "months have passed",
+)
+
+
+def _is_temporal_delta_question(question: str) -> bool:
+    """Date-arithmetic subset of temporal (count of days/weeks/months between
+    events or 'ago'). Ordering questions are left to the WS-1 prompt."""
+    q = (question or "").lower()
+    return any(term in q for term in _TEMPORAL_DELTA_TERMS)
+
+
+def _compute_temporal_from_spec(answer: str) -> str | None:
+    """Parse a ``SPEC: {json}`` line from the model output and compute the
+    date delta deterministically. Returns a clean answer string, or ``None``
+    if no valid SPEC (caller then keeps the model's free-text answer).
+
+    SPEC shape: ``{"op": "between"|"ago", "unit": "days"|"weeks"|"months"|
+    "years", "dates": ["YYYY-MM-DD", ...], "now": "YYYY-MM-DD"}``.
+    """
+    m = re.search(r"SPEC:\s*(\{.*\})", answer, re.DOTALL)
+    if not m:
+        return None
+    try:
+        spec = json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(spec, dict):
+        return None
+
+    def _parse(d: Any) -> dt.date | None:
+        try:
+            return dt.date.fromisoformat(str(d)[:10])
+        except (ValueError, TypeError):
+            return None
+
+    op = str(spec.get("op", "")).lower()
+    unit = str(spec.get("unit", "days")).lower().rstrip("s") + "s"
+    dates = [d for d in (_parse(x) for x in spec.get("dates", []) or []) if d]
+    now = _parse(spec.get("now"))
+
+    if op in ("ago", "since") and dates and now:
+        a, b = now, dates[0]
+    elif op in ("between", "diff", "") and len(dates) >= 2:
+        a, b = dates[0], dates[1]
+    else:
+        return None
+
+    days = abs((a - b).days)
+    if unit == "days":
+        return f"{days} days"
+    if unit == "weeks":
+        return f"{round(days / 7)} weeks"
+    if unit == "months":
+        months = abs((a.year - b.year) * 12 + (a.month - b.month))
+        return f"{months} months"
+    if unit == "years":
+        return f"{abs(a.year - b.year)} years"
+    return None
+
+
 class _DirectAnswerAdapter(_IngestingAdapter):
     """
     Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
@@ -2809,6 +2889,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         temporal_conditioning: bool = False,
         aggregation_v2: bool = False,
         knowledge_update_conditioning: bool = False,
+        temporal_codemath: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -2837,6 +2918,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # state / most-recent statement over stale raw turns. Uses the
         # supersession moat directly. Gated; A/B vs baseline.
         self._ku_conditioning = knowledge_update_conditioning
+        # WS-date-math: for temporal DELTA questions, have the model emit a
+        # date SPEC and compute the delta in code (deterministic), overriding
+        # its mental arithmetic. Builds on WS-1 (dates already surfaced).
+        self._temporal_codemath = temporal_codemath
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
         # on (question, turn) and we keep the best ``rerank_to`` for context.
@@ -2883,6 +2968,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # reached the prompt, so surface each turn's date here.
         temporal = self._temporal_conditioning and (
             qt == "temporal-reasoning" or _is_temporal_question(question)
+        )
+        # WS-date-math: a DELTA sub-question we can verify in code.
+        temporal_delta = (
+            temporal and self._temporal_codemath and _is_temporal_delta_question(question)
         )
         # WS-7 preference branch (gated on the flag + the type/wording).
         preference = self._pref_conditioning and (
@@ -2948,6 +3037,19 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
+            if temporal_delta:
+                # WS-date-math: also ask for a machine-checkable SPEC so code
+                # can compute the delta exactly (overriding mental arithmetic).
+                prompt += (
+                    "\n\nThen, on a NEW final line, emit a SPEC for the "
+                    "calculation as JSON:\n"
+                    'SPEC: {"op": "between"|"ago", "unit": "days"|"weeks"|'
+                    '"months"|"years", "dates": ["YYYY-MM-DD", ...], '
+                    '"now": "YYYY-MM-DD"}\n'
+                    'Use op="between" with the two event dates for "between X '
+                    'and Y"; use op="ago" with the single event date + now for '
+                    '"how long ago / since".'
+                )
         elif ku:
             prompt = (
                 "The user's situation may have CHANGED over time. Items marked "
@@ -3026,6 +3128,22 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         except Exception:
             log.exception("direct answer LLM call failed")
             answer = ""
+        answer = (answer or "").strip()
+
+        # WS-date-math: replace the model's mental arithmetic with the
+        # code-computed delta when a valid SPEC is present; otherwise strip the
+        # SPEC line so it doesn't leak into the free-text answer.
+        codemath_applied = False
+        if temporal_delta and answer:
+            computed = _compute_temporal_from_spec(answer)
+            if computed is not None:
+                answer = computed
+                codemath_applied = True
+            else:
+                # SPEC is the final line — strip it and anything after,
+                # even when truncated/invalid (no closing brace).
+                answer = re.sub(r"\s*SPEC:.*", "", answer, flags=re.DOTALL).strip()
+
         self.last_telemetry = {
             "llm_call_count": 1,
             "answer_mode": "direct",
@@ -3034,10 +3152,11 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "aggregation_v2": bool(aggregate and self._aggregation_v2),
             "preference_prompt": preference,
             "temporal_prompt": temporal,
+            "temporal_codemath": codemath_applied,
             "ku_prompt": ku,
             "reranked": reranked,
         }
-        return (answer or "").strip()
+        return answer
 
 
 # ---------------------------------------------------------------------------
@@ -4278,6 +4397,7 @@ def make_adapter_factory(
     temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
     aggregation_v2: bool = False,
     knowledge_update_conditioning: bool = True,  # WS-3 confirmed (~+4.5pp KU) → default-on
+    temporal_codemath: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4411,6 +4531,7 @@ def make_adapter_factory(
                 temporal_conditioning=temporal_conditioning,  # WS-1
                 aggregation_v2=aggregation_v2,  # WS-2
                 knowledge_update_conditioning=knowledge_update_conditioning,  # WS-3
+                temporal_codemath=temporal_codemath,  # WS-date-math
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4868,6 +4989,7 @@ async def main_async(args: argparse.Namespace) -> int:
         temporal_conditioning=args.temporal_conditioning,
         aggregation_v2=args.aggregation_v2,
         knowledge_update_conditioning=args.ku_recency,
+        temporal_codemath=args.temporal_codemath,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5392,6 +5514,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "the retrieved turns (recall ~93%%, the gap is application). "
             "Feature-flagged + gated; factual/temporal/etc. questions are "
             "never touched. A/B: run baseline vs this flag, judge, ablate."
+        ),
+    )
+    p.add_argument(
+        "--temporal-codemath",
+        action="store_true",
+        default=False,
+        help=(
+            "WS-date-math: for temporal DELTA questions (how many days/weeks/"
+            "months between/ago), have the model emit a date SPEC and compute "
+            "the delta in CODE (deterministic, one call, no agent loop), "
+            "overriding its mental arithmetic. Builds on --temporal-conditioning "
+            "(dates already surfaced). Off by default; A/B vs baseline."
         ),
     )
     p.add_argument(
