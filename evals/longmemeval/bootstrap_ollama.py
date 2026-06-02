@@ -4277,7 +4277,7 @@ def make_adapter_factory(
     preference_conditioning: bool = False,
     temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
     aggregation_v2: bool = False,
-    knowledge_update_conditioning: bool = False,
+    knowledge_update_conditioning: bool = True,  # WS-3 confirmed (~+4.5pp KU) → default-on
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -5396,14 +5396,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--ku-recency",
-        action="store_true",
-        default=False,
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "WS-3: for knowledge-update questions only, sort the current LTM "
-            "facts (superseded already removed) to the front, mark them "
+            "WS-3 (DEFAULT-ON for v1.1, confirmed ~+4.5pp KU): for "
+            "knowledge-update questions only, sort the current LTM facts "
+            "(superseded already removed) to the front, mark them "
             "[CURRENT FACT], and prompt the reader to prefer the current state "
             "/ latest statement over the stale raw turn still in context. Uses "
-            "the supersession layer directly. Off by default; A/B vs baseline."
+            "the supersession layer directly. Use --no-ku-recency for the "
+            "A/B baseline arm."
         ),
     )
     p.add_argument(

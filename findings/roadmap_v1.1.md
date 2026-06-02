@@ -248,13 +248,18 @@ mid-tier model.** Optimise *Continuum-attributable* levers (the ones that work
 because of the schema); treat the frontier-reader swap as a documented
 experiment ("memory + best reader = ~90%"), not "Continuum's number."
 
-### WS-3 knowledge-update recency — **BUILT (the on-thesis lever)**
-`--ku-recency` (gated to KU questions): the current LTM facts are already
-superseded-filtered, but the stale RAW turn still distracts the reader.
-Verified data: KU rows carry ~240 live LTM facts (`source="ltm_fact"`) and
-supersession fires. WS-3 sorts current facts first, marks them `[CURRENT
-FACT]`, and prompts "prefer current state / latest statement." Uses the
-supersession moat directly → an attributable gain. 4 unit tests; A/B pending.
+### WS-3 knowledge-update recency — **WIN, default-on (~+4.5pp KU)**
+`--ku-recency` (now default-on): the current LTM facts are already
+superseded-filtered, but the stale RAW turn still distracts the reader. WS-3
+sorts current facts first, marks them `[CURRENT FACT]`, prompts "prefer current
+state / latest statement." Uses the supersession moat directly — attributable.
+
+**Result (n=78, judged, 2 baseline + 2 treatment runs):**
+baselines 47/78 · 50/78 → treatments 53/78 · 51/78. Both treatment runs beat
+both baselines (worst treatment 51 > best baseline 50) → consistently positive,
+**~+4.5pp on KU (≈ +0.7pp overall), moderate confidence** (tight margin at
+n=78, so the magnitude is approximate — confirm exact value in the full-500).
+Gated, low-risk, on-thesis → flipped default-on.
 
 ### Remaining levers
 - **WS-4 reranker** — needs the retriever over-fetch fix (20–40 candidates);
