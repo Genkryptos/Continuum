@@ -236,14 +236,22 @@ def check_database(report: Report, cfg: Any) -> None:
         return
     try:
         with psycopg.connect(dsn, connect_timeout=5) as conn:
-            row = conn.execute(
+            ext = conn.execute(
                 "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
             ).fetchone()
-            if row and row[0]:
-                report.add("database", OK, f"connected ({safe}); pgvector {row[0]}")
-            else:
+            # to_regclass returns NULL when the table doesn't exist (no error).
+            schema = conn.execute("SELECT to_regclass('public.memory_nodes')").fetchone()
+            has_schema = bool(schema and schema[0])
+            if not (ext and ext[0]):
                 report.add("database", WARN, f"connected ({safe}); pgvector NOT installed",
-                           hint="run:  CREATE EXTENSION IF NOT EXISTS vector;")
+                           hint="run `make db-migrate` (migration 001 runs CREATE EXTENSION vector)")
+            elif not has_schema:
+                report.add("database", WARN,
+                           f"connected ({safe}); pgvector {ext[0]} but LTM schema NOT applied",
+                           hint="run `make db-migrate` to create memory_nodes + the rest")
+            else:
+                report.add("database", OK,
+                           f"connected ({safe}); pgvector {ext[0]}; LTM schema present")
     except Exception as exc:
         report.add("database", WARN, f"cannot reach {safe}: {str(exc).splitlines()[0]}",
                    hint="run `make db-up` (or skip — the in-memory path needs no DB)")

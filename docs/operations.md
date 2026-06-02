@@ -44,25 +44,38 @@ export CONTINUUM_DB_URL='postgresql://postgres:secret@localhost:5432/continuum'
 
 ### Running the migrations
 
-```bash
-# Auto-applied on first session.start() if you opt in:
-from continuum.db.pgvector_upgrade import ensure_schema
-await ensure_schema(config.database)
-```
-
-Or apply manually:
+The `stm_messages` table self-bootstraps (`PostgresSTM.ensure_schema()` runs on
+`session.start()`). Everything else — the `vector` / `pg_trgm` extensions, the
+`memory_nodes` graph, the HNSW index, and the policy tables — lives in
+`migrations/*.sql` and is **not** auto-applied. Run it explicitly:
 
 ```bash
-psql $CONTINUUM_DB_URL -f migrations/001_initial.sql
-psql $CONTINUUM_DB_URL -f migrations/002_pgvector_upgrade.sql
-psql $CONTINUUM_DB_URL -f migrations/003_lexical_search.sql
-psql $CONTINUUM_DB_URL -f migrations/004_policies.sql
+make db-migrate            # applies all pending migrations to CONTINUUM_DB_DSN
+make db-migrate-dry        # list what would be applied, without applying
 ```
 
-Migration 002 adds the `vector(384)` column + ivfflat index.
-Migration 003 adds `tsvector` + GIN index for lexical search.
-Migration 004 adds the policy engine tables and the
-`superseded_by` / `valid_from` / `recorded_at` columns on LTM.
+`make db-migrate` is just `python -m continuum.db.migrate` (pass `--dsn` to
+override). Each file is idempotent and records itself into `schema_migrations`,
+so re-running is safe and only pending migrations execute. Equivalent manual
+path with `psql`:
+
+```bash
+psql $CONTINUUM_DB_DSN -f migrations/001_ltm_schema.sql
+psql $CONTINUUM_DB_DSN -f migrations/002_pgvector_upgrade.sql
+psql $CONTINUUM_DB_DSN -f migrations/003_lexical_search.sql
+psql $CONTINUUM_DB_DSN -f migrations/004_policy_engine.sql
+```
+
+* **001** `CREATE EXTENSION vector / pg_trgm / uuid-ossp`, the bi-temporal
+  `memory_nodes` / `memory_edges` / `memory_episodes` tables, and the HNSW index.
+* **002** upgrades the `vector(1024)` embedding column to `halfvec` + rebuilds
+  the HNSW index (requires pgvector ≥ 0.8.0).
+* **003** adds the trigram (`pg_trgm`) index that powers hybrid lexical search.
+* **004** adds the policy-engine tables (`memory_decision_traces`,
+  `memory_pending_approvals`) and the candidate/sensitivity/urgency columns.
+
+After migrating, confirm with `make check-env` — it reports `LTM schema present`
+once `memory_nodes` exists.
 
 ## 2 · Scaling
 

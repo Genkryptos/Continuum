@@ -17,7 +17,7 @@
 .PHONY: test test-fast test-integration test-cov benchmark \
         lint typecheck format check \
         install install-dev clean help \
-        db-up db-down db-logs db-reset check-env check-env-ping \
+        db-up db-down db-logs db-reset db-migrate db-migrate-dry check-env check-env-ping \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -114,6 +114,12 @@ db-logs: ## Tail the local Postgres logs
 
 db-reset: ## Stop Postgres AND delete its data volume (destructive)
 	@$(COMPOSE) down -v
+
+db-migrate: ## Apply migrations/*.sql to the configured DB (creates pgvector ext + LTM schema)
+	@$(BENCH_PYTHON) -m continuum.db.migrate
+
+db-migrate-dry: ## Show which migrations would be applied, without applying them
+	@$(BENCH_PYTHON) -m continuum.db.migrate --dry-run
 
 check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
 	@$(BENCH_PYTHON) -m continuum.doctor
