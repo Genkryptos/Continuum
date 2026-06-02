@@ -2751,6 +2751,33 @@ def _is_temporal_question(question: str) -> bool:
     return any(term in q for term in _TEMPORAL_INTENT_TERMS)
 
 
+# WS-3 knowledge-update — the user's situation CHANGED and the question asks
+# for the current state. Continuum's supersession already removes the stale
+# LTM fact (source="ltm_fact" items are current-only), but the old raw turn
+# is still in context and distracts the reader. Gate is mainly the dataset
+# question_type; this wording detector is the production fallback.
+_KNOWLEDGE_UPDATE_TERMS: tuple[str, ...] = (
+    "currently",
+    "current",
+    "these days",
+    "right now",
+    "as of now",
+    "still ",
+    "anymore",
+    "now that",
+    "most recent",
+    "latest",
+    "up to date",
+    "nowadays",
+)
+
+
+def _is_knowledge_update_question(question: str) -> bool:
+    """Heuristic gate for 'what is the current state after a change' questions."""
+    q = (question or "").lower()
+    return any(term in q for term in _KNOWLEDGE_UPDATE_TERMS)
+
+
 class _DirectAnswerAdapter(_IngestingAdapter):
     """
     Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
@@ -2781,6 +2808,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         preference_conditioning: bool = False,
         temporal_conditioning: bool = False,
         aggregation_v2: bool = False,
+        knowledge_update_conditioning: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -2803,6 +2831,12 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # model counting without listing ("3 weddings" -> "1"). Gated to the
         # same aggregate questions; A/B vs the current aggregation prompt.
         self._aggregation_v2 = aggregation_v2
+        # WS-3: when on, knowledge-update questions sort the current LTM facts
+        # (source="ltm_fact", superseded already removed) to the front, mark
+        # them [CURRENT FACT], and prompt the reader to prefer the current
+        # state / most-recent statement over stale raw turns. Uses the
+        # supersession moat directly. Gated; A/B vs baseline.
+        self._ku_conditioning = knowledge_update_conditioning
         # WS-4: optional cross-encoder precision pass. The retriever
         # over-fetches for recall; the reranker reorders that pool jointly
         # on (question, turn) and we keep the best ``rerank_to`` for context.
@@ -2854,11 +2888,27 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         preference = self._pref_conditioning and (
             qt == "single-session-preference" or _is_preference_question(question)
         )
+        # WS-3 knowledge-update branch (gated): the current LTM facts are
+        # already superseded-filtered; surface + prioritise them so the reader
+        # prefers current state over the stale raw turn still in context.
+        ku = self._ku_conditioning and (
+            qt == "knowledge-update" or _is_knowledge_update_question(question)
+        )
         # Aggregation questions (multi-session "how many / which / list all")
         # need the model to combine items across sessions, not return the
         # first matching span (43/50 multi-session failures were
         # missing_aggregation despite 85% recall).
         aggregate = qt == "multi-session" or is_aggregate_question(question)
+
+        if ku:
+            # Current-first: live LTM facts (source="ltm_fact") ahead of raw
+            # turns. Stable sort preserves retrieval order within each group.
+            items = sorted(
+                items,
+                key=lambda it: 0
+                if (getattr(it, "metadata", {}) or {}).get("source") == "ltm_fact"
+                else 1,
+            )
 
         lines: list[str] = []
         for it in items:
@@ -2876,6 +2926,9 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                     date = ca.isoformat()[:10] if ca is not None else ""
                 stamp = f"[{date}] " if date else ""
                 lines.append(f"{stamp}[{role}] {content}" if role else f"{stamp}{content}")
+            elif ku and meta.get("source") == "ltm_fact":
+                # Mark resolved current facts so the reader trusts them.
+                lines.append(f"[CURRENT FACT] {content}")
             else:
                 lines.append(f"[{role}] {content}" if role else content)
         context = "\n".join(lines)[: self._max_context_chars]
@@ -2892,6 +2945,19 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 "long ago relative to today), or put the events in time order. "
                 "Work it out from the dates — do not guess. Reply with just the "
                 "answer (the number or ordering).\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
+        elif ku:
+            prompt = (
+                "The user's situation may have CHANGED over time. Items marked "
+                "[CURRENT FACT] are the user's current, resolved facts — "
+                "outdated versions have already been removed by the memory "
+                "system. When the raw conversation contains statements that "
+                "conflict across time, the user's CURRENT situation is the most "
+                "recent one. Prefer the [CURRENT FACT] items and the latest "
+                "statement; never answer with a value the user has since "
+                "changed. Reply with just the current answer.\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
@@ -2968,6 +3034,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "aggregation_v2": bool(aggregate and self._aggregation_v2),
             "preference_prompt": preference,
             "temporal_prompt": temporal,
+            "ku_prompt": ku,
             "reranked": reranked,
         }
         return (answer or "").strip()
@@ -4210,6 +4277,7 @@ def make_adapter_factory(
     preference_conditioning: bool = False,
     temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
     aggregation_v2: bool = False,
+    knowledge_update_conditioning: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4342,6 +4410,7 @@ def make_adapter_factory(
                 preference_conditioning=preference_conditioning,  # WS-7
                 temporal_conditioning=temporal_conditioning,  # WS-1
                 aggregation_v2=aggregation_v2,  # WS-2
+                knowledge_update_conditioning=knowledge_update_conditioning,  # WS-3
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4798,6 +4867,7 @@ async def main_async(args: argparse.Namespace) -> int:
         preference_conditioning=args.pref_conditioning,
         temporal_conditioning=args.temporal_conditioning,
         aggregation_v2=args.aggregation_v2,
+        knowledge_update_conditioning=args.ku_recency,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5322,6 +5392,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "the retrieved turns (recall ~93%%, the gap is application). "
             "Feature-flagged + gated; factual/temporal/etc. questions are "
             "never touched. A/B: run baseline vs this flag, judge, ablate."
+        ),
+    )
+    p.add_argument(
+        "--ku-recency",
+        action="store_true",
+        default=False,
+        help=(
+            "WS-3: for knowledge-update questions only, sort the current LTM "
+            "facts (superseded already removed) to the front, mark them "
+            "[CURRENT FACT], and prompt the reader to prefer the current state "
+            "/ latest statement over the stale raw turn still in context. Uses "
+            "the supersession layer directly. Off by default; A/B vs baseline."
         ),
     )
     p.add_argument(

@@ -227,9 +227,38 @@ expensive. Flag stays off (`--aggregation-v2`), kept as a documented negative.
 **Key learning: multi-session's bottleneck is NOT prompt-level aggregation —
 it's upstream (retrieval completeness / multi-hop). Prompt levers won't move it.**
 
-### Next levers (by expected value)
-- **WS-6 graph** — the dormant bi-temporal KG. Now the *indicated* lever for
-  multi-session (the bottleneck is retrieval/multi-hop, per WS-2's negative) AND
-  the differentiator. Top priority.
-- WS-3 knowledge-update (78 @ 60%) — recency/supersession prompting; cheap.
-- WS-4 reranker — needs the retriever over-fetch fix; recall lever, ties to WS-6.
+### Research verdict (external deep-dive) + strategy decision
+**90% is NOT reachable with gpt-oss-120b.** Independent + vendor evidence
+converges: every system clearing ~90% pairs strong retrieval with a *frontier
+reader* (GPT-5/Opus/Gemini-3/o3); at fixed retrieval a frontier reader is worth
++9–11pp. Recall (91.6%) is not the bottleneck — the gap is **reader capability**.
+gpt-oss-120b is GPT-4o/4.1-class → realistic ceiling ~**82–85%** after all
+additive memory levers; 90%+ only with a model swap.
+
+The research roadmap, **reconciled with our own A/Bs**:
+- It projects +3pp from multi-session enumerate prompting — **but that's our
+  WS-2, which we measured NET-NEGATIVE.** So we don't budget it (likely a
+  frontier-reader-only effect).
+- It deprioritises the **graph ("overkill"; RAG beats Zep's graph here)** — so
+  WS-6 is NOT a benchmark lever. Keep the graph as a *product differentiator*,
+  not a LongMemEval play. (Don't conflate the two.)
+
+**Decision: Game B — be the best memory layer, reported honestly at a fixed
+mid-tier model.** Optimise *Continuum-attributable* levers (the ones that work
+because of the schema); treat the frontier-reader swap as a documented
+experiment ("memory + best reader = ~90%"), not "Continuum's number."
+
+### WS-3 knowledge-update recency — **BUILT (the on-thesis lever)**
+`--ku-recency` (gated to KU questions): the current LTM facts are already
+superseded-filtered, but the stale RAW turn still distracts the reader.
+Verified data: KU rows carry ~240 live LTM facts (`source="ltm_fact"`) and
+supersession fires. WS-3 sorts current facts first, marks them `[CURRENT
+FACT]`, and prompts "prefer current state / latest statement." Uses the
+supersession moat directly → an attributable gain. 4 unit tests; A/B pending.
+
+### Remaining levers
+- **WS-4 reranker** — needs the retriever over-fetch fix (20–40 candidates);
+  recall lever, ~+2pp.
+- **WS-temporal-code** — deterministic date math for the temporal residual
+  (TReMu-style); extends the WS-1 win.
+- WS-6 graph — product differentiator, *not* a benchmark lever (per research).
