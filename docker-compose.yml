@@ -1,0 +1,41 @@
+# =============================================================================
+# Continuum — local development Postgres (pgvector)
+# =============================================================================
+# Brings up the one piece of infra the production path needs: PostgreSQL with
+# the pgvector extension. The demo, benchmarks, and unit tests all run WITHOUT
+# this — you only need it for the Postgres stores / integration tests.
+#
+#   make db-up        start Postgres in the background + wait until ready
+#   make db-down      stop and remove the container (data volume is kept)
+#   make db-logs      tail the Postgres logs
+#   make check-env    verify your .env can reach it (and your provider key)
+#
+# The credentials below match the default DSN in .env.example:
+#   CONTINUUM_DB_DSN=postgresql://postgres:postgres@localhost:5432/continuum
+# Override POSTGRES_* here (or via your shell) if you change that DSN.
+# =============================================================================
+
+services:
+  postgres:
+    # Same image the CI integration job pins — pgvector preinstalled.
+    image: pgvector/pgvector:pg16
+    container_name: continuum-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-continuum}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - continuum_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` returns 0 once the server accepts connections.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-continuum}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  continuum_pgdata:
+    name: continuum_pgdata

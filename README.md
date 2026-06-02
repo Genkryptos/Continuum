@@ -137,6 +137,18 @@ make repro-everything
 
 That's the complete loop. No Postgres needed for the demo or any of the benchmarks. The full production path with Postgres+pgvector is documented under [`continuum/stores/postgres/`](continuum/stores/postgres/) and exercised by the integration tests under `tests/integration/`.
 
+### Production path (Postgres) + verifying your `.env`
+
+```bash
+cp .env.example .env       # fill in a provider key and/or CONTINUUM_DB_DSN
+make db-up                 # start Postgres + pgvector (docker-compose), wait until ready
+make check-env             # ✓/✗ report: config loads, provider key, DB reachable, in-memory smoke
+```
+
+`make check-env` (i.e. `python -m continuum.doctor`) is the "did I set this up right?" command — it loads your config, detects which LLM provider key is present (in `.env` or your shell), probes the configured Postgres DSN for the `pgvector` extension, and runs one in-memory turn end-to-end. A missing key or unreachable DB is a **warning** (the offline path still works); a broken config or a session that won't start is a **failure** (non-zero exit, so it works in CI too). Add `--ping` to validate each provider key against a live read-only API call, or `--full` to actually load the embedder.
+
+> The compose defaults match `.env.example`'s DSN (`postgresql://postgres:postgres@localhost:5432/continuum`). If your `.env` uses different credentials, set `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` (env or shell) before `make db-up` so the two agree.
+
 ---
 
 ## Make targets
@@ -144,6 +156,8 @@ That's the complete loop. No Postgres needed for the demo or any of the benchmar
 | target | what |
 |---|---|
 | `make demo-chat` | scripted 60-second chat-agent walkthrough |
+| `make db-up` / `make db-down` | start / stop local Postgres+pgvector (docker-compose) |
+| `make check-env` | verify your `.env`: config, provider key, DB, in-memory smoke |
 | `make bench-ingest` | ingest throughput (Continuum vs raw list vs mem0) |
 | `make bench-retrieval` | retrieval recall@k vs naive cosine |
 | `make bench-supersession` | the killer feature — 100 % vs 38 % |

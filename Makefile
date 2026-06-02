@@ -17,6 +17,7 @@
 .PHONY: test test-fast test-integration test-cov benchmark \
         lint typecheck format check \
         install install-dev clean help \
+        db-up db-down db-logs db-reset check-env check-env-ping \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -91,6 +92,34 @@ install-dev: ## Install runtime + full developer toolchain
 	pip install \
 		pytest pytest-asyncio pytest-cov pytest-benchmark \
 		ruff mypy
+
+# ── Local infra + environment check ───────────────────────────────────────────
+
+COMPOSE := $(shell command -v docker-compose >/dev/null 2>&1 && echo docker-compose || echo "docker compose")
+
+db-up: ## Start local Postgres (pgvector) in the background and wait until ready
+	@$(COMPOSE) up -d postgres
+	@echo "waiting for Postgres to accept connections…"
+	@$(COMPOSE) exec -T postgres sh -c \
+		'until pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-continuum} >/dev/null 2>&1; do sleep 1; done' \
+		|| true
+	@echo "Postgres is up → postgresql://postgres:postgres@localhost:5432/continuum"
+	@echo "next:  make check-env    (verify your .env can reach it)"
+
+db-down: ## Stop the local Postgres container (named data volume is kept)
+	@$(COMPOSE) down
+
+db-logs: ## Tail the local Postgres logs
+	@$(COMPOSE) logs -f postgres
+
+db-reset: ## Stop Postgres AND delete its data volume (destructive)
+	@$(COMPOSE) down -v
+
+check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
+	@$(BENCH_PYTHON) -m continuum.doctor
+
+check-env-ping: ## Like check-env, but also validates each LLM provider key via a live API call
+	@$(BENCH_PYTHON) -m continuum.doctor --ping
 
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 
