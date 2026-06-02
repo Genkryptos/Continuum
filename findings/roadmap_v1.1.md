@@ -158,6 +158,27 @@ the description, so the pp contribution of every lever is on the record.
 
 ## 5 · Outcomes log (what actually happened)
 
+### v1.1 FINAL — locked (full 500, judged, both wins default-on)
+
+| category | n | v1.0 | **v1.1** |
+|---|---:|---:|---:|
+| single-session-assistant | 56 | 98.2% | 98.2% |
+| single-session-user | 70 | 94.3% | 95.7% |
+| temporal-reasoning | 133 | 41.4% | **72.9%** |
+| knowledge-update | 78 | 51.3% | **65.4%** |
+| multi-session | 133 | 54.9% | 57.9% |
+| single-session-preference | 30 | 50.0% | 56.7% |
+| **OVERALL** | 500 | **60.8%** | **72.8%** (+12.0pp) |
+
+Two **memory-attributable**, default-on levers: temporal date-surfacing (the
+driver, +32pp temporal, n=133 A/B) and supersession-recency (~+4.5pp KU, n=78
+A/B). Both verified to fire (133/133, 78/78) and stay gated (solved categories
+flat). Aggregation + preference levers tested and cut (net-neutral /
+unmeasurable). Honest ceiling: ~82–85% with gpt-oss-120b; 90%+ needs a frontier
+reader (research verdict). Game B: this is what the memory layer earns at a
+fixed mid-tier model.
+
+
 ### WS-5 — DONE
 `findings/charts/ablate.py` (per-category A/B + regression guard) + OpenRouter
 cost wiring shipped. The harness immediately earned its keep — see below.

@@ -26,9 +26,9 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 | benchmark | Continuum | baseline | delta |
 |---|---|---|---|
-| **LongMemEval-S** (500 Q, judged) — **v1.1** | **71.6 %** | 60.8 % (v1.0) · 34.4 % (May ceiling) | **+10.8 pp** over v1.0 |
-| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **73.7 %** | 41.4 % (v1.0) | **+32 pp** (n=133 A/B; noise 0.8 pp) |
-| ↳ knowledge-update (supersession) | 60.3 % | — | high recall |
+| **LongMemEval-S** (500 Q, judged) — **v1.1** | **72.8 %** | 60.8 % (v1.0) · 34.4 % (May ceiling) | **+12.0 pp** over v1.0 |
+| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **72.9 %** | 41.4 % (v1.0) | **+32 pp** (n=133 A/B; noise 0.8 pp) |
+| ↳ knowledge-update (supersession-recency) | **65.4 %** | 51.3 % (v1.0) | ~+4.5 pp attributable (n=78 A/B) |
 | **Supersession correctness** (50 scripted updates) | **100 %** | 38 % | **+62 pp** |
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % | **+25 pp** |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
@@ -36,14 +36,22 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
-> **v1.1 (in progress)** — **60.8% → 71.6% judged.** The driver is a single
-> scoped fix: temporal-reasoning questions were being answered with the turn
-> *dates stripped from the prompt* (the model literally replied "no dates
-> available"). Surfacing each turn's date + the reference "now" lifted
-> temporal **41.4% → 73.7% (+32pp)** — confirmed by an n=133 A/B (signal +33pp
-> vs a 0.8pp A/A noise floor). It's gated to temporal questions, so nothing
-> else regressed. No reasoning loop, no new model — just showing the model
-> data it already had. See [`findings/roadmap_v1.1.md`](findings/roadmap_v1.1.md).
+> **v1.1** — **60.8% → 72.8% judged** (confirmed full-500, gpt-oss-120b), from
+> two **memory-attributable** fixes — no new model, no reasoning loop, just
+> surfacing data the schema already had:
+> - **Temporal date-surfacing (the driver):** temporal questions were answered
+>   with the turn *dates stripped from the prompt* (the model literally replied
+>   "no dates available"). Surfacing each turn's date + the reference "now"
+>   lifted temporal **41.4% → 72.9% (+32pp)** — confirmed by an n=133 A/B
+>   (signal +33pp vs a 0.8pp A/A noise floor).
+> - **Supersession-recency:** mark the current (non-invalidated) LTM facts and
+>   prefer them over stale turns → knowledge-update **~+4.5pp** (n=78 A/B).
+>
+> Both gated to their categories, so the solved ones (single-session 96–98%)
+> didn't move. Honest note: 90%+ on this benchmark needs a *frontier reader* —
+> our gains are what the **memory layer** earns at a fixed mid-tier model. The
+> aggregation-prompt and preference levers were tested and **cut as net-neutral
+> / unmeasurable** (see [`findings/roadmap_v1.1.md`](findings/roadmap_v1.1.md)).
 
 > **v1.0.0** — Continuum broke the [May 2026 ~34% LongMemEval-S ceiling](findings/longmemeval_2026-05.md) to **60.8% judged** — and did it *without* the iterative reasoning we predicted we'd need. What actually moved the number (a stronger answerer + clean direct retrieval + honest scoring), and the reasoning loop we built and **cut** as net-negative, are documented in [**findings/reasoning_loop_2026-06.md**](findings/reasoning_loop_2026-06.md). A LOCOMO head-to-head vs Mem0 is preliminary (clean run pending) and not yet a published claim.
 
