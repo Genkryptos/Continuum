@@ -17,7 +17,7 @@
 .PHONY: test test-fast test-integration test-cov benchmark \
         lint typecheck format check \
         install install-dev clean help \
-        db-up db-down db-logs db-reset db-migrate db-migrate-dry check-env check-env-ping run run-mem \
+        db-up db-down db-logs db-reset db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -122,11 +122,14 @@ db-migrate: ## Apply migrations/*.sql to the configured DB (creates pgvector ext
 db-migrate-dry: ## Show which migrations would be applied, without applying them
 	@$(BENCH_PYTHON) -m continuum.db.migrate --dry-run
 
-run: ## Start the interactive chat REPL on a real Postgres-backed ContinuumSession
+run: ## Start the chat REPL (Postgres-backed; embedder off — no model download)
+	@$(BENCH_PYTHON) -m continuum.chat --no-embeddings $(ARGS)
+
+run-full: ## Like run, but WITH the embedder for dense recall (downloads bge-m3 ~2.3GB on first use)
 	@$(BENCH_PYTHON) -m continuum.chat $(ARGS)
 
 run-mem: ## Start the chat REPL with in-memory stores (no Postgres needed)
-	@$(BENCH_PYTHON) -m continuum.chat --in-memory $(ARGS)
+	@$(BENCH_PYTHON) -m continuum.chat --in-memory --no-embeddings $(ARGS)
 
 check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
 	@$(BENCH_PYTHON) -m continuum.doctor
