@@ -60,6 +60,7 @@ from tenacity import (
 from continuum.core.config import PromoterConfig
 from continuum.core.types import ScoredItem
 from continuum.extraction.fact_extractor import Fact
+from continuum.extraction.retraction import is_retraction
 
 log = logging.getLogger(__name__)
 
@@ -248,6 +249,41 @@ class Mem0Promoter:
 
     def _short_circuit(self, candidate: Fact, neighbors: list[ScoredItem]) -> Decision | None:
         max_c, best = self._max_cos(neighbors)
+
+        # Retraction: an explicit negation of a *prior* claim ("I was never in
+        # Bengaluru", "that was wrong"). Unlike a normal new fact, a retraction
+        # must RETIRE the contradicted memory — not be stored as its own fact,
+        # and not chronologically supersede it (which would leave it as a valid
+        # past state). Deterministic (no LLM), so the timeline reflects
+        # "never true". Gated on retrieval similarity so a stray negation can't
+        # delete an unrelated memory.
+        if is_retraction(candidate.text):
+            if best is not None and max_c >= self.config.add_threshold:
+                return Decision(
+                    op="DELETE",
+                    target_id=_coerce_uuid(best.item.id),
+                    rationale=(
+                        f"Retraction: candidate explicitly negates {best.item.id} "
+                        f"(cosine {max_c:.3f} ≥ {self.config.add_threshold}) → "
+                        f"retire the contradicted memory."
+                    ),
+                    candidate_text=candidate.text,
+                    short_circuited=True,
+                    model=None,
+                    metadata={"retraction": True},
+                )
+            # Retraction with no sufficiently-similar memory to retire → do not
+            # store a bare negation as a standalone fact.
+            return Decision(
+                op="NOOP",
+                target_id=None,
+                rationale="Retraction with no matching memory to retire → skip.",
+                candidate_text=candidate.text,
+                short_circuited=True,
+                model=None,
+                metadata={"retraction": True},
+            )
+
         if not neighbors or max_c < self.config.add_threshold:
             return Decision(
                 op="ADD",
