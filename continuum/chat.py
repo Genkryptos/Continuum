@@ -15,10 +15,12 @@ by hand after ``make db-up && make db-migrate``::
 What it wires (the real components):
   • ``PostgresSTM``  — every turn persists to ``stm_messages`` and survives
     restarts (re-run with the same ``--session`` and it remembers).
-  • ``PostgresLTM``  — each user turn is embedded + indexed into ``memory_nodes``
-    for cross-session semantic recall. (This is a deliberately simple "index
-    every turn" write — production uses extraction + the promotion pipeline,
-    not raw turns.)
+  • ``PostgresLTM``  — each user turn is routed through the **Mem0 decider**
+    (ADD / UPDATE / DELETE / NOOP) against its nearest LTM neighbors, so you can
+    SEE supersession and retraction happen: "I moved to Y" retires the old
+    location and stores the new; "I was never in Y" *retracts* — retires the
+    contradicted memory without storing the negation. (Light stand-in for the
+    full pipeline: one turn = one fact, no entity/atomic-fact extraction.)
   • ``Retriever``    — the full hybrid pipeline (LTM dense+sparse ⊕ STM recency),
     with the query embedded on the way in.
   • responder        — OpenRouter (your ``OPENROUTER_API_KEY``), default model
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import os
 import sys
 from dataclasses import replace
@@ -119,6 +122,50 @@ def build_mock_responder() -> Any:
     return respond
 
 
+def build_decider_completion(api_key: str) -> Any:
+    """
+    A litellm-style ``completion_fn`` for the Mem0 decider, backed by OpenRouter.
+
+    The decider calls it with ``model/messages/tools/tool_choice`` and reads
+    ``resp["choices"][0]["message"]["tool_calls"]`` — OpenRouter's chat API is
+    OpenAI-shaped, so returning the raw JSON dict is exactly what it expects.
+    """
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/Genkryptos/Continuum",
+        "X-Title": "Continuum chat",
+    }
+
+    async def complete(
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: Any = None,
+        tool_choice: Any = None,
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+        **_: Any,
+    ) -> Any:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if tools is not None:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.post(OPENROUTER_URL, json=payload, headers=headers)
+            r.raise_for_status()
+            return r.json()
+
+    return complete
+
+
 # ── embedding-aware retriever wrapper ──────────────────────────────────────────
 
 
@@ -143,6 +190,114 @@ class EmbeddingRetriever:
 # ── component wiring ───────────────────────────────────────────────────────────
 
 
+def _cosine(a: list[float] | None, b: list[float] | None) -> float:
+    if not a or not b:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def _neighbor_text(neighbors: list[Any], tid: Any) -> str:
+    for si in neighbors:
+        if str(si.item.id) == str(tid):
+            return (si.item.content or "").strip()
+    return str(tid)
+
+
+async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
+    """
+    Decider-driven LTM write. Returns a short human note of what memory did:
+    ADD (new), UPDATE (revise), DELETE (retire/retract a contradicted fact),
+    or NOOP (already known). Best-effort — never raises into the REPL.
+    """
+    import uuid as _uuid
+
+    from continuum.extraction.fact_extractor import Fact
+
+    ltm, embedder, decider = info["ltm"], info["embedder"], info["decider"]
+    vec = await _embed_one(embedder, text)
+
+    neighbors: list[Any] = []
+    try:
+        q = Query(text=text, embedding=vec, top_k=8,
+                  tiers=[MemoryTier.LTM], session_id=session_id)
+        neighbors = list(await ltm.search_hybrid(q, 8))
+    except Exception:
+        pass
+
+    # search_hybrid scores neighbors by RRF (~0.03), but the decider's
+    # ADD/NOOP/retraction thresholds are calibrated for cosine. Re-score the
+    # top neighbors by true cosine (query vec ⊕ neighbor embedding) so those
+    # thresholds mean what they should. Needs embeddings on (`make run-full`).
+    if vec is not None and neighbors:
+        from continuum.core.types import ScoreBreakdown, ScoredItem
+
+        rescored: list[Any] = []
+        for si in neighbors[:6]:
+            nvec = await _embed_one(embedder, si.item.content or "")
+            cos = _cosine(vec, nvec)
+            rescored.append(
+                ScoredItem(
+                    item=si.item,
+                    scores=ScoreBreakdown(
+                        relevance=cos, importance=0.0, recency=0.0,
+                        confidence=1.0, composite=cos,
+                    ),
+                )
+            )
+        neighbors = rescored
+
+    def _node(content: str, embedding: list[float] | None) -> MemoryItem:
+        return MemoryItem(
+            content=content, tier=MemoryTier.LTM, embedding=embedding,
+            session_id=session_id, metadata={"role": "user", "source": "chat"},
+        )
+
+    try:
+        fact = Fact(text=text, confidence=0.9, entities_mentioned=[],
+                    source_block_id=_uuid.uuid4())
+        decision = await decider.decide_operation(fact, neighbors)
+    except Exception:
+        # Decider unavailable → fall back to a plain ADD so memory still accrues.
+        try:
+            await ltm.upsert(_node(text, vec))
+            return "[memory] ADD (fallback)"
+        except Exception as exc:
+            return f"[memory] skipped: {exc}"
+
+    op, tid = decision.op, decision.target_id
+    try:
+        if op == "ADD":
+            await ltm.upsert(_node(text, vec))
+            return "[memory] ADD → stored new memory"
+        if op == "UPDATE" and tid is not None:
+            merged = decision.merged_text or text
+            await ltm.update(tid, {"text": merged, "embedding": await _embed_one(embedder, merged)})
+            return f'[memory] UPDATE → revised "{_neighbor_text(neighbors, tid)[:60]}"'
+        if op == "DELETE" and tid is not None:
+            old = _neighbor_text(neighbors, tid)[:60]
+            await ltm.invalidate(tid)
+            if decision.metadata.get("retraction"):
+                # Retraction: the prior claim was never true → retire only,
+                # do NOT store the bare negation.
+                return f'[memory] DELETE (retraction) → retired "{old}"'
+            # Non-retraction contradiction = supersession: retire the old fact
+            # AND store the new one (single-turn stand-in for extract-then-add).
+            await ltm.upsert(_node(text, vec))
+            return f'[memory] SUPERSEDE → retired "{old}", stored new'
+        # An ambiguous-band decision needs the LLM tie-breaker. Without one
+        # (mock / no key), the decider degrades to NOOP — but that silently
+        # drops the turn, so store it instead (don't lose data offline).
+        if op == "NOOP" and not decision.short_circuited and not info.get("decider_llm"):
+            await ltm.upsert(_node(text, vec))
+            return "[memory] ADD → stored new memory (no LLM tie-breaker)"
+        return "[memory] NOOP → already known / nothing to change"
+    except Exception as exc:
+        return f"[memory] {op} skipped: {exc}"
+
+
 async def _embed_one(embedder: Any, text: str) -> list[float] | None:
     if embedder is None:
         return None
@@ -154,8 +309,11 @@ async def _embed_one(embedder: Any, text: str) -> list[float] | None:
 
 def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[str, Any]:
     """Construct stores + retriever + responder per the flags."""
+    # The embedder is a *local* model (no network), independent of the
+    # responder — so --mock can still use dense embeddings (retraction/
+    # supersession matching needs them). Only --no-embeddings turns it off.
     embedder = None
-    if not args.no_embeddings and not args.mock:
+    if not args.no_embeddings:
         from continuum.embeddings import EmbeddingService
 
         embedder = EmbeddingService(cfg.embedding)
@@ -179,19 +337,38 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
         inner = Retriever(ltm=ltm, stm=stm, session_id=args.session)
         retriever = EmbeddingRetriever(inner, embedder)
 
+    # Resolve the OpenRouter key once (used by both the responder and the
+    # memory decider). .env wins nothing over the shell; shell wins.
+    env = {**load_dotenv(Path.cwd()), **os.environ}
+    key = (env.get("OPENROUTER_API_KEY") or "").strip()
+    have_key = bool(key) and not key.endswith("...") and not args.mock
+
     # Responder selection.
-    if args.mock:
-        responder = build_mock_responder()
-        responder_label = "mock"
+    if have_key:
+        responder = build_openrouter_responder(key, args.model)
+        responder_label = f"openrouter:{args.model}"
     else:
-        env = {**load_dotenv(Path.cwd()), **os.environ}
-        key = (env.get("OPENROUTER_API_KEY") or "").strip()
-        if key and not key.endswith("..."):
-            responder = build_openrouter_responder(key, args.model)
-            responder_label = f"openrouter:{args.model}"
-        else:
-            responder = build_mock_responder()
-            responder_label = "mock (no OPENROUTER_API_KEY found)"
+        responder = build_mock_responder()
+        responder_label = "mock" if args.mock else "mock (no OPENROUTER_API_KEY found)"
+
+    # Memory decider (Mem0 ADD/UPDATE/DELETE/NOOP) — only on the Postgres path.
+    # Routes each turn's LTM write through conflict resolution + retraction
+    # instead of a blind upsert. The LLM tie-breaker (for the ambiguous
+    # similarity band) uses OpenRouter when a key is present; without one it
+    # degrades to the deterministic ops (ADD / NOOP / retraction-DELETE).
+    decider = None
+    if ltm is not None:
+        from continuum.core.config import PromoterConfig
+        from continuum.promotion.mem0_promoter import Mem0Promoter
+
+        decider_fn = build_decider_completion(key) if have_key else None
+        decider = Mem0Promoter(PromoterConfig(llm_model=args.model), completion_fn=decider_fn)
+        if not have_key:
+            # No tie-breaker LLM → the decider logs an expected failure for
+            # ambiguous-band turns (we ADD-fallback those). Hush that noise.
+            import logging
+
+            logging.getLogger("continuum.promotion.mem0_promoter").setLevel(logging.CRITICAL)
 
     return {
         "embedder": embedder,
@@ -200,6 +377,8 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
         "retriever": retriever,
         "responder": responder,
         "responder_label": responder_label,
+        "decider": decider,
+        "decider_llm": have_key,
     }
 
 
@@ -233,6 +412,9 @@ async def _handle_command(line: str, session: ContinuumSession, info: dict[str, 
         print(f"  backend   : {backend}")
         print(f"  responder : {info['responder_label']}")
         print(f"  embedder  : {'off' if info['embedder'] is None else info['embedder'].config.model_name}")
+        if info.get("decider") is not None:
+            tie = "LLM" if info["responder_label"].startswith("openrouter") else "deterministic-only"
+            print(f"  memory    : Mem0 decider (ADD/UPDATE/DELETE/NOOP; tie-break={tie})")
     elif head == "/search":
         if not rest:
             print("  usage: /search <query>")
@@ -296,21 +478,12 @@ async def _amain(argv: list[str]) -> int:
             reply = await session.process_turn(line)
             print(f"\nbot> {reply}")
 
-            # Best-effort: index the user turn into LTM for cross-session recall.
-            if info["ltm"] is not None:
-                vec = await _embed_one(info["embedder"], line)
-                try:
-                    await info["ltm"].upsert(
-                        MemoryItem(
-                            content=line,
-                            tier=MemoryTier.LTM,
-                            embedding=vec,
-                            session_id=session.session_id,
-                            metadata={"role": "user", "source": "chat"},
-                        )
-                    )
-                except Exception as exc:
-                    print(f"  [note: LTM index skipped: {exc}]")
+            # Route the turn's LTM write through the memory decider so the user
+            # can SEE supersession / retraction happen (not a blind upsert).
+            if info["ltm"] is not None and info["decider"] is not None:
+                note = await _remember(info, session.session_id, line)
+                if note:
+                    print(f"  {note}")
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
