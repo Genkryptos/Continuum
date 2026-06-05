@@ -34,8 +34,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import math
 import os
+import re
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -50,8 +52,11 @@ DEFAULT_MODEL = "openai/gpt-4o-mini"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _SYSTEM_PREAMBLE = (
     "You are Continuum, a helpful assistant with persistent long-term memory. "
-    "When the remembered context below is relevant to the user's message, use "
-    "it; otherwise answer normally. Do not invent memories."
+    "Use the remembered context below when relevant; do not invent memories. "
+    "IMPORTANT: when the RECENT CONVERSATION conflicts with CURRENT MEMORY, "
+    "trust CURRENT MEMORY — the user may have corrected or retracted earlier "
+    "statements. Treat EARLIER (PAST) facts as no longer true now; use them "
+    "only to answer questions about the past (e.g. 'where did I used to live')."
 )
 
 
@@ -59,27 +64,48 @@ _SYSTEM_PREAMBLE = (
 
 
 def format_context(ctx: ContextBundle | None, *, skip: str = "", limit: int = 12) -> str:
-    """Render retrieved memory into a compact block for the system prompt."""
+    """
+    Render retrieved memory for the system prompt, partitioned into CURRENT
+    MEMORY (live LTM facts — authoritative) vs RECENT CONVERSATION (raw STM
+    turns, which may contain statements the user later changed or retracted).
+    The split lets the reader prefer current structured memory over stale chat.
+    """
     items = list(getattr(ctx, "items", []) or []) if ctx is not None else []
-    lines: list[str] = []
+    current: list[str] = []
+    recent: list[str] = []
     for it in items:
         content = (it.content or "").strip()
         if not content or content == skip:
             continue
-        role = str(it.metadata.get("role", it.tier.value if it.tier else "memory"))
-        lines.append(f"- [{role}] {content}")
-        if len(lines) >= limit:
-            break
-    if not lines:
-        return "Remembered context: (nothing relevant yet)"
-    return "Remembered context:\n" + "\n".join(lines)
+        if it.tier == MemoryTier.LTM:
+            current.append(f"  • {content}")
+        else:
+            role = str(it.metadata.get("role", it.tier.value if it.tier else "msg"))
+            recent.append(f"  - [{role}] {content}")
+
+    blocks: list[str] = []
+    if current:
+        blocks.append(
+            "CURRENT MEMORY (the user's latest known facts — authoritative):\n"
+            + "\n".join(current[:limit])
+        )
+    if recent:
+        blocks.append("RECENT CONVERSATION:\n" + "\n".join(recent[:limit]))
+    return "\n\n".join(blocks) if blocks else "Remembered context: (nothing relevant yet)"
 
 
 # ── responders ─────────────────────────────────────────────────────────────────
 
 
-def build_openrouter_responder(api_key: str, model: str) -> Any:
-    """A ``Responder`` that calls OpenRouter with the retrieved context."""
+def build_openrouter_responder(api_key: str, model: str, history_fn: Any = None) -> Any:
+    """
+    A ``Responder`` that calls OpenRouter with the retrieved context.
+
+    ``history_fn`` (optional ``async () -> list[str]``) supplies *superseded but
+    not retracted* past facts — valid past states the user has since moved on
+    from — so the reader can answer "where did I used to live?" / "which city
+    did I move from?" without resurrecting them as current truth.
+    """
     import httpx
 
     headers = {
@@ -90,6 +116,24 @@ def build_openrouter_responder(api_key: str, model: str) -> Any:
 
     async def respond(user_message: str, ctx: ContextBundle | None) -> str:
         system = f"{_SYSTEM_PREAMBLE}\n\n{format_context(ctx, skip=user_message)}"
+        if history_fn is not None:
+            try:
+                past, retracted = await history_fn()
+            except Exception:
+                past, retracted = [], []
+            if past:
+                system += (
+                    "\n\nEARLIER (PAST) facts — true before, now superseded "
+                    "(use ONLY for questions about the past, e.g. a previous city):\n"
+                    + "\n".join(f"  · {p}" for p in past)
+                )
+            if retracted:
+                system += (
+                    "\n\nRETRACTED — the user said these NEVER happened. Treat them "
+                    "as false and IGNORE them entirely; never name a retracted place "
+                    "as somewhere the user lived, visited, or moved from:\n"
+                    + "\n".join(f"  ✗ {r}" for r in retracted)
+                )
         payload = {
             "model": model,
             "messages": [
@@ -206,11 +250,34 @@ def _neighbor_text(neighbors: list[Any], tid: Any) -> str:
     return str(tid)
 
 
-async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
+_CLAUSE_SPLIT_RE = re.compile(r"(?i)(?:[.!?;]+|\bactually\b|\bbut\b|\bhowever\b)")
+
+
+def _split_clauses(text: str) -> list[str]:
     """
-    Decider-driven LTM write. Returns a short human note of what memory did:
-    ADD (new), UPDATE (revise), DELETE (retire/retract a contradicted fact),
-    or NOOP (already known). Best-effort — never raises into the REPL.
+    Split a turn into clauses so a combined statement is handled as multiple
+    facts — e.g. "I'm in Bhilai, actually I never went to Bangalore" becomes
+    ["I'm in Bhilai", "I never went to Bangalore"], letting the first ADD and
+    the second retract. Conservative (sentence punctuation + a few discourse
+    markers); short fragments are dropped. Light stand-in for atomic-fact
+    extraction — falls back to the whole text if nothing splits cleanly.
+    """
+    parts = [p.strip(" ,.;:-") for p in _CLAUSE_SPLIT_RE.split(text)]
+    parts = [p for p in parts if len(p.split()) >= 2]
+    return parts or [text.strip()]
+
+
+async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
+    """Split the turn into clauses and run each through the decider; join notes."""
+    notes = [n for c in _split_clauses(text) if (n := await _remember_one(info, session_id, c))]
+    return "  ".join(notes)
+
+
+async def _remember_one(info: dict[str, Any], session_id: str, text: str) -> str:
+    """
+    Decider-driven LTM write for one clause. Returns a short human note of what
+    memory did: ADD (new), UPDATE (revise), SUPERSEDE / DELETE-retraction
+    (retire a contradicted fact), or NOOP. Best-effort — never raises.
     """
     import uuid as _uuid
 
@@ -278,13 +345,18 @@ async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
             return f'[memory] UPDATE → revised "{_neighbor_text(neighbors, tid)[:60]}"'
         if op == "DELETE" and tid is not None:
             old = _neighbor_text(neighbors, tid)[:60]
-            await ltm.invalidate(tid)
             if decision.metadata.get("retraction"):
-                # Retraction: the prior claim was never true → retire only,
-                # do NOT store the bare negation.
+                # Retraction: the prior claim was never true. Mark it erroneous
+                # so /history and the reader EXCLUDE it (a retracted fact is not
+                # a valid past state), then retire it. The bare negation is not
+                # stored.
+                with contextlib.suppress(Exception):
+                    await ltm.update(tid, {"tags": {"retracted": True}})
+                await ltm.invalidate(tid)
                 return f'[memory] DELETE (retraction) → retired "{old}"'
             # Non-retraction contradiction = supersession: retire the old fact
-            # AND store the new one (single-turn stand-in for extract-then-add).
+            # (kept as a valid PAST state for history) AND store the new one.
+            await ltm.invalidate(tid)
             await ltm.upsert(_node(text, vec))
             return f'[memory] SUPERSEDE → retired "{old}", stored new'
         # An ambiguous-band decision needs the LLM tie-breaker. Without one
@@ -296,6 +368,46 @@ async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
         return "[memory] NOOP → already known / nothing to change"
     except Exception as exc:
         return f"[memory] {op} skipped: {exc}"
+
+
+def _fetch_superseded_sync(dsn: str, *, include_retracted: bool, limit: int) -> list[str]:
+    """Invalidated LTM facts. By default excludes retracted ones (never-true)."""
+    import psycopg
+
+    where = "layer='LTM' AND invalidated_at IS NOT NULL"
+    if not include_retracted:
+        where += " AND COALESCE(tags->>'retracted','') <> 'true'"
+    out: list[str] = []
+    try:
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            rows = conn.execute(
+                f'SELECT "text" FROM memory_nodes WHERE {where} '
+                f"ORDER BY invalidated_at DESC LIMIT {int(limit)}"
+            ).fetchall()
+            out = [str(r[0]) for r in rows]
+    except Exception:
+        pass
+    return out
+
+
+def make_history_fn(dsn: str, *, limit: int = 6) -> Any:
+    """
+    ``async () -> tuple[past, retracted]`` where *past* are superseded-but-valid
+    past states (e.g. a former city) and *retracted* are facts the user said
+    were never true (so the reader can be told to ignore them outright).
+    """
+
+    async def history() -> tuple[list[str], list[str]]:
+        all_gone = await asyncio.to_thread(
+            _fetch_superseded_sync, dsn, include_retracted=True, limit=limit * 3
+        )
+        past = await asyncio.to_thread(
+            _fetch_superseded_sync, dsn, include_retracted=False, limit=limit
+        )
+        retracted = [g for g in all_gone if g not in past][:limit]
+        return past, retracted
+
+    return history
 
 
 async def _embed_one(embedder: Any, text: str) -> list[float] | None:
@@ -343,9 +455,12 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
     key = (env.get("OPENROUTER_API_KEY") or "").strip()
     have_key = bool(key) and not key.endswith("...") and not args.mock
 
+    # History provider (superseded-but-not-retracted past facts) — Postgres only.
+    history_fn = make_history_fn(str(cfg.database.dsn)) if ltm is not None else None
+
     # Responder selection.
     if have_key:
-        responder = build_openrouter_responder(key, args.model)
+        responder = build_openrouter_responder(key, args.model, history_fn)
         responder_label = f"openrouter:{args.model}"
     else:
         responder = build_mock_responder()
@@ -379,6 +494,7 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
         "responder_label": responder_label,
         "decider": decider,
         "decider_llm": have_key,
+        "dsn": str(cfg.database.dsn) if ltm is not None else None,
     }
 
 
@@ -388,7 +504,8 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
 _HELP = """\
 commands:
   /help              show this help
-  /search <query>    search memory (hybrid) and print the top hits
+  /search <query>    search current memory (hybrid) and print the top hits
+  /history           show retired memory — superseded (past) + retracted (never-true)
   /stats             show session + backend info
   /session <id>      switch to a different (persistent) session
   /exit              quit
@@ -425,6 +542,24 @@ async def _handle_command(line: str, session: ContinuumSession, info: dict[str, 
             for h in hits:
                 role = h.metadata.get("role", h.tier.value if h.tier else "?")
                 print(f"  · [{role}] {(h.content or '').strip()[:140]}")
+    elif head == "/history":
+        dsn = info.get("dsn")
+        if not dsn:
+            print("  (history needs the Postgres backend)")
+        else:
+            past = await asyncio.to_thread(
+                _fetch_superseded_sync, dsn, include_retracted=False, limit=20
+            )
+            gone = await asyncio.to_thread(
+                _fetch_superseded_sync, dsn, include_retracted=True, limit=40
+            )
+            retracted = [g for g in gone if g not in past]
+            if not past and not retracted:
+                print("  (no retired memory yet)")
+            for p in past:
+                print(f"  · past (superseded): {p[:120]}")
+            for r in retracted:
+                print(f"  ✗ retracted (never true): {r[:120]}")
     elif head == "/session":
         if not rest:
             print("  usage: /session <id>")

@@ -14,11 +14,28 @@ from typing import Any
 
 import pytest
 
-from continuum.chat import _cosine, _neighbor_text, _remember
+from continuum.chat import _cosine, _neighbor_text, _remember, _split_clauses
 from continuum.core.types import MemoryItem, MemoryTier
 from continuum.promotion.mem0_promoter import Decision
 
 pytestmark = pytest.mark.unit
+
+
+def test_split_clauses_separates_assertion_and_retraction() -> None:
+    # The combined turn must split so "Bhilai" can be stored AND Bangalore retracted.
+    parts = _split_clauses("I live in Bhilai actually I never went to Bangalore")
+    assert any("Bhilai" in p for p in parts)
+    assert any("never went to Bangalore" in p for p in parts)
+    assert len(parts) == 2
+
+
+def test_split_clauses_single_sentence_is_unchanged() -> None:
+    assert _split_clauses("My name is Mayank") == ["My name is Mayank"]
+
+
+def test_split_clauses_drops_tiny_fragments() -> None:
+    parts = _split_clauses("I live in Pune. Ok.")
+    assert parts == ["I live in Pune"]  # "Ok" (1 word) dropped
 
 
 def test_cosine_basic() -> None:

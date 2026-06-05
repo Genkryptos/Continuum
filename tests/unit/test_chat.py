@@ -23,8 +23,8 @@ from continuum.core.types import MemoryItem, MemoryTier, Query
 pytestmark = pytest.mark.unit
 
 
-def _item(content: str, role: str = "user") -> MemoryItem:
-    return MemoryItem(content=content, tier=MemoryTier.LTM, metadata={"role": role})
+def _item(content: str, role: str = "user", tier: MemoryTier = MemoryTier.LTM) -> MemoryItem:
+    return MemoryItem(content=content, tier=tier, metadata={"role": role})
 
 
 def _ctx(*contents: str) -> SimpleNamespace:
@@ -34,11 +34,24 @@ def _ctx(*contents: str) -> SimpleNamespace:
 # ── format_context ─────────────────────────────────────────────────────────
 
 
-def test_format_context_lists_items_with_roles() -> None:
+def test_format_context_lists_current_facts() -> None:
     out = format_context(_ctx("likes hiking", "lives in Pune"))
-    assert "Remembered context:" in out
-    assert "- [user] likes hiking" in out
-    assert "- [user] lives in Pune" in out
+    assert "CURRENT MEMORY" in out
+    assert "• likes hiking" in out
+    assert "• lives in Pune" in out
+
+
+def test_format_context_partitions_current_vs_recent() -> None:
+    # LTM → CURRENT MEMORY (authoritative); STM → RECENT CONVERSATION.
+    items = [
+        _item("user lives in Bhilai", tier=MemoryTier.LTM),
+        _item("I live in Bengaluru", role="user", tier=MemoryTier.STM),
+    ]
+    out = format_context(SimpleNamespace(items=items))
+    assert "CURRENT MEMORY" in out and "RECENT CONVERSATION" in out
+    cur, _, rec = out.partition("RECENT CONVERSATION")
+    assert "Bhilai" in cur          # live fact under CURRENT
+    assert "Bengaluru" in rec       # raw stale turn under RECENT
 
 
 def test_format_context_empty_or_none() -> None:
@@ -54,7 +67,7 @@ def test_format_context_skips_the_current_message() -> None:
 
 def test_format_context_respects_limit() -> None:
     out = format_context(_ctx(*[f"fact {i}" for i in range(20)]), limit=3)
-    assert out.count("- [") == 3
+    assert out.count("•") == 3
 
 
 # ── mock responder ───────────────────────────────────────────────────────────
