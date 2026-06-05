@@ -150,3 +150,46 @@ async def test_genuine_noop_with_llm_is_respected() -> None:
     note = await _remember(_info(ltm, dec, decider_llm=True), "s", "dup")
     assert "NOOP" in note
     assert ltm.upserted == []
+
+
+# ── LLM fact-splitter path ───────────────────────────────────────────────────
+
+
+async def test_remember_uses_llm_splitter_for_multi_fact() -> None:
+    # A combined turn → two atomic facts → two writes (the multi-fact fix).
+    ltm = _FakeLTM()
+    info = _info(ltm, Decision(op="ADD", target_id=None, rationale=""))
+
+    async def splitter(text: str) -> list[str]:
+        return ["User lives in Bhilai", "User never went to Bangalore"]
+
+    info["fact_splitter"] = splitter
+    await _remember(info, "s", "I'm in Bhilai, actually never went to Bangalore")
+    assert ltm.upserted == ["User lives in Bhilai", "User never went to Bangalore"]
+
+
+async def test_remember_skips_questions_when_splitter_returns_empty() -> None:
+    # Splitter returns [] (a question / no durable fact) → store nothing.
+    ltm = _FakeLTM()
+    info = _info(ltm, Decision(op="ADD", target_id=None, rationale=""))
+
+    async def splitter(text: str) -> list[str]:
+        return []
+
+    info["fact_splitter"] = splitter
+    note = await _remember(info, "s", "where do I live?")
+    assert note == ""
+    assert ltm.upserted == []
+
+
+async def test_remember_falls_back_to_regex_on_splitter_error() -> None:
+    # Splitter returns None (error) → regex clause split still stores the turn.
+    ltm = _FakeLTM()
+    info = _info(ltm, Decision(op="ADD", target_id=None, rationale=""))
+
+    async def splitter(text: str) -> None:
+        return None
+
+    info["fact_splitter"] = splitter
+    await _remember(info, "s", "I live in Pune")
+    assert ltm.upserted == ["I live in Pune"]

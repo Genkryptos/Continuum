@@ -210,6 +210,63 @@ def build_decider_completion(api_key: str) -> Any:
     return complete
 
 
+_FACT_EXTRACT_SYS = (
+    "Extract atomic, self-contained facts about the USER from their message. "
+    "Rewrite each as a short third-person statement, e.g. 'User lives in Paris', "
+    "'User's name is Sam', 'User never visited Tokyo'. Resolve pronouns and "
+    "normalize verbs ('I moved to X' -> 'User lives in X'). PRESERVE negations "
+    "and retractions exactly ('User was never in X', 'User never went to X'). "
+    "Output one fact per line, no bullets or numbering. If the message is a "
+    "question or contains no durable fact about the user, output exactly: NONE"
+)
+
+
+def build_fact_splitter(api_key: str, model: str) -> Any:
+    """
+    ``async (text) -> list[str] | None`` — LLM atomic-fact extraction.
+
+    Returns the extracted facts (``[]`` if the turn is a question / has none),
+    or ``None`` on error so the caller falls back to the regex clause split.
+    Normalizing to "User <verb> X" form is what makes multi-fact turns split,
+    the decider's cosine matching reliable, and questions not get stored.
+    """
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/Genkryptos/Continuum",
+        "X-Title": "Continuum chat",
+    }
+
+    async def split(text: str) -> list[str] | None:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": _FACT_EXTRACT_SYS},
+                {"role": "user", "content": text},
+            ],
+            "temperature": 0.0,
+            "max_tokens": 200,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(OPENROUTER_URL, json=payload, headers=headers)
+                r.raise_for_status()
+                out = str(r.json()["choices"][0]["message"]["content"]).strip()
+        except Exception:
+            return None  # → caller falls back to regex split
+        if not out or out.upper().strip(" .") == "NONE":
+            return []
+        facts = [
+            ln.strip(" -•\t0123456789.")
+            for ln in out.splitlines()
+            if ln.strip() and ln.strip().upper().strip(" .") != "NONE"
+        ]
+        return [f for f in facts if len(f.split()) >= 2]
+
+    return split
+
+
 # ── embedding-aware retriever wrapper ──────────────────────────────────────────
 
 
@@ -268,8 +325,21 @@ def _split_clauses(text: str) -> list[str]:
 
 
 async def _remember(info: dict[str, Any], session_id: str, text: str) -> str:
-    """Split the turn into clauses and run each through the decider; join notes."""
-    notes = [n for c in _split_clauses(text) if (n := await _remember_one(info, session_id, c))]
+    """
+    Break the turn into atomic facts and run each through the decider; join
+    notes. Prefers LLM extraction (info['fact_splitter']) — which normalizes
+    phrasing, separates multi-fact turns, and drops questions — and falls back
+    to the regex clause split when there's no LLM or it errors.
+    """
+    facts: list[str] | None = None
+    splitter = info.get("fact_splitter")
+    if splitter is not None:
+        facts = await splitter(text)  # [] = no durable fact; None = error → fallback
+    if facts is None:
+        facts = _split_clauses(text)
+    if not facts:
+        return ""  # nothing worth storing (e.g. a question)
+    notes = [n for c in facts if (n := await _remember_one(info, session_id, c))]
     return "  ".join(notes)
 
 
@@ -472,12 +542,14 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
     # similarity band) uses OpenRouter when a key is present; without one it
     # degrades to the deterministic ops (ADD / NOOP / retraction-DELETE).
     decider = None
+    fact_splitter = None
     if ltm is not None:
         from continuum.core.config import PromoterConfig
         from continuum.promotion.mem0_promoter import Mem0Promoter
 
         decider_fn = build_decider_completion(key) if have_key else None
         decider = Mem0Promoter(PromoterConfig(llm_model=args.model), completion_fn=decider_fn)
+        fact_splitter = build_fact_splitter(key, args.model) if have_key else None
         if not have_key:
             # No tie-breaker LLM → the decider logs an expected failure for
             # ambiguous-band turns (we ADD-fallback those). Hush that noise.
@@ -494,6 +566,7 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
         "responder_label": responder_label,
         "decider": decider,
         "decider_llm": have_key,
+        "fact_splitter": fact_splitter,
         "dsn": str(cfg.database.dsn) if ltm is not None else None,
     }
 
