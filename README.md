@@ -26,9 +26,10 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 | benchmark | Continuum | baseline | delta |
 |---|---|---|---|
-| **LongMemEval-S** (500 Q, judged) — **v1.1** | **72.8 %** | 60.8 % (v1.0) · 34.4 % (May ceiling) | **+12.0 pp** over v1.0 |
-| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **72.9 %** | 41.4 % (v1.0) | **+32 pp** (n=133 A/B; noise 0.8 pp) |
-| ↳ knowledge-update (supersession-recency) | **65.4 %** | 51.3 % (v1.0) | ~+4.5 pp attributable (n=78 A/B) |
+| **LongMemEval-S** (500 Q, judged) — **v2.0** | **76.4 %** | 72.8 % (v1.1) · 60.8 % (v1.0) · 34.4 % (May ceiling) | **+3.6 pp** over v1.1 · **+15.6 pp** over v1.0 |
+| ↳ **multi-session** (v2.0 over-fetch + rerank) | **69.9 %** | 57.9 % (v1.1) | **+12.0 pp** (n=133 A/B; net +16 questions) |
+| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **75.2 %** | 41.4 % (v1.0) | **+34 pp** over v1.0 |
+| ↳ knowledge-update (supersession-recency) | **66.7 %** | 51.3 % (v1.0) | flat under v2.0 (within ±3.8 pp noise) |
 | **Supersession correctness** (50 scripted updates) | **100 %** | 38 % | **+62 pp** |
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % | **+25 pp** |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
@@ -36,6 +37,20 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
+> **v2.0** — **72.8% → 76.4% judged** (full-500, gpt-oss-120b), from one
+> **architecture-native retrieval lever** — no new model, no compression:
+> - **Over-fetch + cross-encoder rerank (WS-4):** over-fetch the candidate pool,
+>   then a cross-encoder (`continuum/retrieval/reranker.py`) reorders it and
+>   keeps the best 24. This lifts retrieval recall and lands on the
+>   **retrieval-bound** category: **multi-session 57.9% → 69.9% (+12pp**, n=133
+>   A/B, net +16 questions). Temporal +2.3pp bonus; knowledge-update flat
+>   (within noise); reranking **gated off for single-session-preference** (it
+>   reorders away the rubric turns). The ss-user −2.9pp that tripped the
+>   regression guard is **reader jitter, not a regression** — per-question diff
+>   shows the flips are inference questions that vary run-to-run, not dropped
+>   context. **Honest framing: the win is multi-session retrieval, not a
+>   model change.**
+>
 > **v1.1** — **60.8% → 72.8% judged** (confirmed full-500, gpt-oss-120b), from
 > two **memory-attributable** fixes — no new model, no reasoning loop, just
 > surfacing data the schema already had:

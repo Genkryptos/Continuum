@@ -135,7 +135,7 @@ run-mem: ## Start the chat REPL with in-memory stores (no Postgres needed)
 	@$(BENCH_PYTHON) -m continuum.chat --in-memory --no-embeddings $(ARGS)
 
 check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
-	@$(BENCH_PYTHON) -m continuum.doctor
+	@$(BENCH_PYTHON) -m continuum.doctor--------
 
 check-env-ping: ## Like check-env, but also validates each LLM provider key via a live API call
 	@$(BENCH_PYTHON) -m continuum.doctor --ping
@@ -156,21 +156,23 @@ clean: ## Remove caches, coverage artefacts, and build output
 repro-longmemeval: ## Reproduce the LongMemEval-S headline numbers from findings/longmemeval_2026-05.md
 	@bash findings/longmemeval/repro/run_repro.sh
 
-repro-everything: ## Reproduce the v1 headline: full LongMemEval-S (direct mode) + judged rescore + LOCOMO smoke (needs OPENROUTER_API_KEY; ~<2h, <$5)
+repro-everything: ## Reproduce the v2.0 headline (76.4%): full LongMemEval-S (direct + over-fetch + rerank) + judged rescore + LOCOMO smoke (needs OPENROUTER_API_KEY; ~<2h, <$5)
 	@test -n "$$OPENROUTER_API_KEY" || ( echo "ERROR: export OPENROUTER_API_KEY first" && exit 1 )
-	@echo "==> [1/3] LongMemEval-S v1 full run (direct mode)…"
+	@echo "==> [1/3] LongMemEval-S v2.0 full run (direct + over-fetch + cross-encoder rerank)…"
 	@$(BENCH_PYTHON) -m evals.longmemeval.bootstrap_ollama \
 		--provider openrouter --model openai/gpt-oss-120b \
-		--reasoner direct --use-ltm --no-llm-promoter --retriever hybrid \
+		--openrouter-provider DeepInfra --seed 0 \
+		--reasoner direct --use-ltm --ltm-backend in_memory --no-llm-promoter --retriever hybrid \
 		--session-aware-retrieval --session-top-k 12 --turns-per-session 6 \
-		--top-k 80 --max-context-chars 64000 --answer-max-tokens 2048 \
-		--full --yes --no-smoke --output results/v1_final
+		--top-k 80 --max-context-chars 64000 --answer-max-tokens 2048 --span-fallback \
+		--decompose-max-items 60 --rerank --rerank-to 24 \
+		--full --yes --no-smoke --output results/v2_final
 	@echo "==> [2/3] judged rescore (non-reasoning judge)…"
 	@$(BENCH_PYTHON) -m evals.longmemeval.rescore_with_judge \
-		--input $$(ls -t results/v1_final/baseline_*.json | head -1) \
-		--output results/v1_final/judged.json \
+		--input $$(ls -t results/v2_final/baseline_*.json | head -1) \
+		--output results/v2_final/judged.json \
 		--provider openrouter --judge-model meta-llama/llama-3.3-70b-instruct
-	@$(BENCH_PYTHON) findings/charts/v1_summary.py results/v1_final/judged.json
+	@$(BENCH_PYTHON) findings/charts/v1_summary.py results/v2_final/judged.json
 	@echo "==> [3/3] LOCOMO smoke (continuum side, 50 q)…"
 	@test -f evals/locomo/data/locomo10.json || ( mkdir -p evals/locomo/data && \
 		curl -L -o evals/locomo/data/locomo10.json \
