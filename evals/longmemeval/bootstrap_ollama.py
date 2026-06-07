@@ -2900,7 +2900,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # counts ("User has 5 tops") that are injected into the prompt for
         # counting questions — the reader reads the count instead of miscounting.
         self._synthesis_fn = synthesis_fn
-        self._synthesis_summaries: list[str] = []
+        self._synthesis_facts: list[Any] = []  # DerivedFacts from ingest-time aggregation
         self._max_context_chars = max_context_chars
         # WS-7: when on, preference-type questions get a prompt that tells the
         # model to identify and APPLY a stated user preference from the
@@ -2979,11 +2979,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 )
             except Exception:
                 log.exception("synthesis extraction failed for session %s", sid)
-        derived = aggregate(facts)
-        self._synthesis_summaries = [d.text for d in derived]
+        self._synthesis_facts = aggregate(facts)
         log.info(
             "synthesis: %d entity_summaries from %d facts",
-            len(derived), len(facts),
+            len(self._synthesis_facts), len(facts),
         )
 
     async def answer_question(self, question: str) -> str:
@@ -3082,18 +3081,25 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             else:
                 lines.append(f"[{role}] {content}" if role else content)
         context = "\n".join(lines)[: self._max_context_chars]
-        # v3 synthesis: prepend code-computed per-entity counts on counting
-        # questions, so the reader reads the count instead of (mis)computing it.
-        from continuum.promotion.synthesis import is_counting_question
-
-        synthesis_injected = bool(self._synthesis_summaries) and is_counting_question(
-            question
+        # v3 synthesis: on counting questions, inject ONLY the relevant
+        # code-computed aggregate(s) (v3.1: relevance-filtered — v3.0 dumped all
+        # ~40 and buried the answer), so the reader reads the count/total.
+        from continuum.promotion.synthesis import (
+            is_counting_question,
+            relevant_summaries,
         )
-        if synthesis_injected:
+
+        chosen = (
+            relevant_summaries(self._synthesis_facts, question)
+            if (self._synthesis_facts and is_counting_question(question))
+            else []
+        )
+        synthesis_injected = bool(chosen)
+        if chosen:
             block = (
-                "COMPUTED FACTS (counts already calculated by the memory system — "
-                "trust these for 'how many / how much / how long' questions):\n"
-                + "\n".join(f"- {s}" for s in self._synthesis_summaries)
+                "COMPUTED FACTS (counts/totals already calculated by the memory "
+                "system — trust these for 'how many / how much / how long' "
+                "questions):\n" + "\n".join(f"- {f.text}" for f in chosen)
             )
             context = block + "\n\n" + context
         if temporal:
@@ -3234,7 +3240,8 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 self._reranker is not None and _is_pref_early
             ),
             "synthesis_injected": synthesis_injected,
-            "synthesis_summaries": len(self._synthesis_summaries),
+            "synthesis_summaries": len(self._synthesis_facts),
+            "synthesis_injected_n": len(chosen),
         }
         return answer
 

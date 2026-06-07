@@ -21,6 +21,7 @@ from continuum.promotion.synthesis import (
     aggregate,
     extract_structured_facts,
     is_counting_question,
+    relevant_summaries,
     to_memory_item,
 )
 
@@ -117,6 +118,62 @@ def test_no_dedup_option_counts_raw() -> None:
 
 def test_empty_input() -> None:
     assert aggregate([]) == []
+
+
+# ── v3.1: SUM aggregation (the "how many hours total" failures) ────────────────
+
+
+def _q(pred: str, obj: str, qty: float, unit: str) -> StructuredFact:
+    return StructuredFact(subject="user", predicate=pred, obj=obj, quantity=qty, unit=unit)
+
+
+def test_sums_quantities() -> None:
+    # "how many hours total playing games" → 140, not a count of sessions.
+    facts = [
+        _q("gaming session", "Mon", 40, "hours"),
+        _q("gaming session", "Tue", 60, "hours"),
+        _q("gaming session", "Wed", 40, "hours"),
+    ]
+    (d,) = aggregate(facts)
+    assert d.count == 3
+    assert d.total == 140
+    assert d.text == "User has 3 gaming sessions totaling 140 hours."
+
+
+def test_no_quantity_no_total() -> None:
+    (d,) = aggregate([_f("tank", "a"), _f("tank", "b")])
+    assert d.total is None
+    assert "totaling" not in d.text
+
+
+# ── v3.1: relevance filtering (the "40-summary flood" fix) ─────────────────────
+
+
+def test_relevant_summaries_matches_predicate() -> None:
+    facts = aggregate(
+        [_f("tank", "a"), _f("tank", "b"), _f("coin", "x"), _f("coin", "y"), _f("book", "z")]
+    )
+    chosen = relevant_summaries(facts, "How many tanks do I have?")
+    assert [f.predicate for f in chosen] == ["tank"]  # only the relevant one
+
+
+def test_relevant_summaries_multiword_predicate() -> None:
+    facts = aggregate([_f("citrus fruit", "lemon"), _f("citrus fruit", "lime")])
+    chosen = relevant_summaries(facts, "How many citrus fruits have I used?")
+    assert len(chosen) == 1 and chosen[0].predicate == "citrus fruit"
+
+
+def test_relevant_summaries_fallback_when_no_match() -> None:
+    # nothing matches by name → fall back to the largest count>=2 groups.
+    facts = aggregate([_f("tank", "a"), _f("tank", "b"), _f("coin", "x")])
+    chosen = relevant_summaries(facts, "How many widgets do I own?")
+    assert [f.predicate for f in chosen] == ["tank"]  # count 2; 'coin' (1) dropped
+
+
+async def test_extract_carries_quantity() -> None:
+    reply = '{"facts": [{"predicate": "session", "object": "Mon", "quantity": 2.5, "unit": "hours"}]}'
+    facts = await extract_structured_facts("played 2.5h", completion_fn=_fake_llm(reply))
+    assert facts[0].quantity == 2.5 and facts[0].unit == "hours"
 
 
 def test_derived_fact_is_constructable() -> None:

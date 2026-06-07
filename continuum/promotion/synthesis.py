@@ -2,24 +2,22 @@
 continuum.promotion.synthesis
 =============================
 The v3 **synthesis (aggregation) layer** — derive *aggregate* facts so the
-reader *reads* a count instead of *computing* one.
+reader *reads* a count/total instead of *computing* one.
 
-Why this exists (measured, not assumed): on LongMemEval-S v2.0, ~49% of the
-residual failures are counting/aggregation questions ("how many X", "how long"),
-and **the reader miscounts over both raw turns AND atomic facts** — fact
-extraction surfaces individual items but does not aggregate, so gpt-oss-120b
-still produces the same wrong count (e.g. "3 tops" when the answer is 5). See
-``findings/roadmap_v3.md``.
+Why (measured): ~49% of LongMemEval-S v2.0 residual failures are
+counting/aggregation questions, and the reader miscounts over both raw turns and
+atomic facts. So we aggregate in CODE — correct by construction.
 
-The fix: at promotion time, group atomic facts by (subject, predicate) and count
-**distinct** members **in code**. A code-computed count is correct by
-construction — it removes both the reader's and an LLM-synthesizer's
-miscount. The LLM's only job upstream is to emit structured
-``(subject, predicate, object)`` triples; the counting is deterministic here.
+v3.1 (after the first A/B — 14% recovery, diagnosed):
+- **SUM**, not just COUNT — "how many hours/days total" needs summing numeric
+  quantities, not counting members.
+- **Relevance filtering** — the first cut injected *all* ~40 aggregates per
+  question, burying the relevant one. ``relevant_summaries()`` returns only the
+  aggregate(s) whose predicate matches the question.
+- Tighter extraction prompt (consistent predicates + quantities).
 
-This module is pure (no LLM, no DB) so the aggregation logic is unit-testable in
-isolation. Converting a ``DerivedFact`` into an LTM ``entity_summary`` item and
-wiring it into the promoter happen in separate steps.
+Pure (no LLM/DB) so the aggregation logic is unit-testable in isolation; the LLM
+only lists items (and their quantities); the counting/summing happens here.
 """
 
 from __future__ import annotations
@@ -40,21 +38,27 @@ log = logging.getLogger(__name__)
 #: ``async (prompt) -> json_text`` — injected so extraction is testable w/o an LLM.
 CompletionFn = Callable[[str], Awaitable[str]]
 
+#: ``metadata["kind"]`` marker for synthesized aggregate facts in LTM.
+ENTITY_SUMMARY_KIND = "entity_summary"
+
 
 @dataclass(frozen=True)
 class StructuredFact:
     """
-    One atomic membership fact, e.g. ``(user, tank, "goldfish tank")``.
+    One atomic membership fact, e.g. ``(user, tank, "goldfish tank")`` — or a
+    measurement, ``(user, "gaming session", "Mon", quantity=2, unit="hours")``.
 
-    ``predicate`` is the *collection* being counted (a singular count-noun:
-    "tank", "postcard", "top from H&M"); ``obj`` is the member. ``occurred_at``
-    enables time-scoped aggregates ("since I started", "in the first 3 months").
+    ``predicate`` is the *collection* (singular count-noun, normalized +
+    CONSISTENT); ``obj`` is the member. ``quantity``/``unit`` carry a number to
+    SUM (hours, days, dollars). ``occurred_at`` enables time-scoped aggregates.
     """
 
     subject: str
     predicate: str
     obj: str
     occurred_at: datetime | None = None
+    quantity: float | None = None
+    unit: str = ""
     source_id: str = ""
 
 
@@ -68,10 +72,12 @@ class DerivedFact:
     members: list[str] = field(default_factory=list)
     since: datetime | None = None
     until: datetime | None = None
+    total: float | None = None  # sum of member quantities (SUM questions)
+    unit: str = ""
 
     @property
     def text(self) -> str:
-        """Natural-language rendering for the reader, e.g. 'User has 3 tanks'."""
+        """E.g. 'User has 3 tanks' / 'User has 4 sessions totaling 140 hours'."""
         noun = _pluralize(self.predicate, self.count)
         scope = ""
         if self.since is not None:
@@ -79,26 +85,41 @@ class DerivedFact:
         elif self.until is not None:
             scope = f" as of {self.until.date().isoformat()}"
         subj = self.subject[:1].upper() + self.subject[1:] if self.subject else "User"
-        return f"{subj} has {self.count} {noun}{scope}."
+        out = f"{subj} has {self.count} {noun}{scope}"
+        if self.total is not None and self.unit:
+            out += f" totaling {_fmt_num(self.total)} {self.unit}"
+        return out + "."
 
 
-# ── normalization / pluralization ─────────────────────────────────────────────
+# ── normalization / formatting ────────────────────────────────────────────────
 
 
 def _normalize(s: str) -> str:
-    """Lowercase, strip, collapse whitespace — for distinct-member dedup."""
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
 
+def _fmt_num(x: float) -> str:
+    return str(int(x)) if float(x).is_integer() else f"{x:g}"
+
+
+_PREPS = {"from", "of", "in", "on", "with", "for", "at", "to", "by"}
+
+
 def _pluralize(noun: str, count: int) -> str:
-    """Minimal English pluralization sufficient for count-noun predicates."""
     noun = (noun or "item").strip()
     if count == 1:
         return noun
-    # phrase like "top from H&M" → pluralize the head noun ("tops from H&M")
-    head, sep, tail = noun.partition(" ")
-    plural_head = _plural_word(head)
-    return plural_head + sep + tail if sep else plural_head
+    words = noun.split()
+    if len(words) == 1:
+        return _plural_word(words[0])
+    # "top from H&M" → pluralize the word before the preposition ("tops from …");
+    # "gaming session" (no prep) → pluralize the LAST word, the compound head.
+    for i, w in enumerate(words):
+        if i > 0 and w.lower() in _PREPS:
+            words[i - 1] = _plural_word(words[i - 1])
+            return " ".join(words)
+    words[-1] = _plural_word(words[-1])
+    return " ".join(words)
 
 
 def _plural_word(w: str) -> str:
@@ -110,7 +131,7 @@ def _plural_word(w: str) -> str:
     return w + "s"
 
 
-# ── the aggregator (deterministic count) ──────────────────────────────────────
+# ── the aggregator (deterministic count + sum) ────────────────────────────────
 
 
 def aggregate(
@@ -122,19 +143,14 @@ def aggregate(
     min_count: int = 1,
 ) -> list[DerivedFact]:
     """
-    Group *facts* by (subject, predicate) and count distinct members in code.
-
-    ``since`` / ``until`` scope by ``occurred_at`` (facts with no timestamp are
-    kept only when no window is given — an unscoped count). ``dedup`` counts
-    distinct normalized members (so the same item mentioned twice counts once).
-    Returns one :class:`DerivedFact` per group with ``count >= min_count``,
-    sorted by (subject, predicate) for stable output.
+    Group *facts* by (subject, predicate); count distinct members, and SUM their
+    quantities where present — both in code. Time-scoped via ``occurred_at``.
     """
     groups: dict[tuple[str, str], list[StructuredFact]] = {}
     for f in facts:
         if since is not None or until is not None:
             if f.occurred_at is None:
-                continue  # can't place it in the window → exclude from scoped count
+                continue
             if since is not None and f.occurred_at < since:
                 continue
             if until is not None and f.occurred_at > until:
@@ -143,23 +159,31 @@ def aggregate(
 
     out: list[DerivedFact] = []
     for (subject, predicate), members in sorted(groups.items()):
+        # distinct members → (object, quantity, unit), first occurrence wins.
+        entries: list[tuple[str, float | None, str]] = []
         if dedup:
-            seen: dict[str, str] = {}
+            seen: dict[str, tuple[str, float | None, str]] = {}
             for m in members:
-                seen.setdefault(_normalize(m.obj), m.obj)
-            member_objs = list(seen.values())
+                seen.setdefault(_normalize(m.obj), (m.obj, m.quantity, m.unit))
+            entries = list(seen.values())
         else:
-            member_objs = [m.obj for m in members]
-        if len(member_objs) < min_count:
+            entries = [(m.obj, m.quantity, m.unit) for m in members]
+        if len(entries) < min_count:
             continue
+
+        qs = [(q, u) for (_, q, u) in entries if q is not None]
+        total = sum(q for q, _ in qs) if qs else None
+        unit = next((u for _, u in qs if u), "") if qs else ""
         out.append(
             DerivedFact(
                 subject=subject,
                 predicate=predicate,
-                count=len(member_objs),
-                members=member_objs,
+                count=len(entries),
+                members=[o for o, _, _ in entries],
                 since=since,
                 until=until,
+                total=total,
+                unit=unit,
             )
         )
     return out
@@ -169,20 +193,23 @@ def aggregate(
 
 _EXTRACT_PROMPT = """\
 Extract COUNTABLE membership facts about the user from the text below. A fact is
-one specific item that belongs to a collection the user counts, collects, owns,
-buys, visits, or completes.
+one specific item the user counts, collects, owns, buys, visits, or completes —
+or a measurement (time/money the user spent).
 
-Output ONLY JSON: {"facts": [{"predicate": "<collection>", "object": "<item>"}]}
+Output ONLY JSON: {"facts": [{"predicate": "<collection>", "object": "<item>",
+"quantity": <number or null>, "unit": "<unit or "">"}]}
 
 Rules:
-- "predicate" is the SINGULAR collection noun, normalized and CONSISTENT: use the
-  same predicate for the same kind of thing across all mentions (e.g. always
-  "tank" for any aquarium/fish tank; "postcard" for postcards; "top" for
-  tops/shirts/blouses; "coin" for coins). Generic over specific.
-- "object" is the specific item (e.g. "goldfish tank", "vintage NYC postcard").
-- One entry per distinct item. Do NOT count or aggregate — just list items.
-- Ignore preferences, opinions, and non-countable statements.
-- If there are no countable items, output {"facts": []}.
+- "predicate": SINGULAR collection noun, normalized and CONSISTENT — use the
+  SAME predicate for the same kind of thing everywhere (e.g. always "tank" for
+  any aquarium/fish tank; "citrus fruit" for any lemon/lime/orange; "top" for
+  tops/shirts/blouses; "road trip" for trips). Generic over specific.
+- "object": the specific item (e.g. "goldfish tank", "lemon", "Tokyo trip").
+- "quantity"/"unit": ONLY for measurements (e.g. {"predicate":"gaming session",
+  "object":"Monday","quantity":2,"unit":"hours"}). Otherwise quantity=null.
+- One entry per distinct item. Do NOT count, sum, or aggregate — just list.
+- Ignore preferences/opinions and non-countable statements.
+- If nothing countable, output {"facts": []}.
 
 Text:
 \"\"\"
@@ -192,12 +219,21 @@ Text:
 
 
 def _strip_json(raw: str) -> str:
-    """Strip markdown fences / prose around a JSON object."""
     s = (raw or "").strip()
     s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.IGNORECASE).strip()
-    # keep from the first { to the last } if there's surrounding prose
     i, j = s.find("{"), s.rfind("}")
     return s[i : j + 1] if i != -1 and j != -1 and j > i else s
+
+
+def _coerce_qty(v: object) -> float | None:
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, int | float):
+        return float(v)
+    if isinstance(v, str):
+        m = re.search(r"-?\d+(?:\.\d+)?", v)
+        return float(m.group()) if m else None
+    return None
 
 
 async def extract_structured_facts(
@@ -207,15 +243,7 @@ async def extract_structured_facts(
     subject: str = "user",
     occurred_at: datetime | None = None,
 ) -> list[StructuredFact]:
-    """
-    LLM-extract countable membership triples from *text*.
-
-    The model lists items with a consistent collection ``predicate``; the
-    counting happens later in :func:`aggregate` (deterministic). Graceful: any
-    LLM/parse failure returns ``[]`` (never raises into the caller). Predicate
-    *consistency* is the quality risk — validate on real data via the eval A/B,
-    not just these unit tests.
-    """
+    """LLM-extract countable membership triples (+ optional quantity). Graceful → []."""
     if not (text or "").strip():
         return []
     try:
@@ -231,22 +259,23 @@ async def extract_structured_facts(
             continue
         pred = _normalize(str(item.get("predicate", "")))
         obj = str(item.get("object", "")).strip()
-        if pred and obj:
-            facts.append(
-                StructuredFact(
-                    subject=subject, predicate=pred, obj=obj, occurred_at=occurred_at
-                )
+        if not (pred and obj):
+            continue
+        facts.append(
+            StructuredFact(
+                subject=subject,
+                predicate=pred,
+                obj=obj,
+                occurred_at=occurred_at,
+                quantity=_coerce_qty(item.get("quantity")),
+                unit=str(item.get("unit", "") or "").strip(),
             )
+        )
     return facts
 
 
-# ── LTM representation + query-side detection ─────────────────────────────────
+# ── query-side: relevance filtering + detection + LTM item ────────────────────
 
-#: ``metadata["kind"]`` marker for synthesized aggregate facts in LTM.
-ENTITY_SUMMARY_KIND = "entity_summary"
-
-# Counting / aggregation questions — where a precomputed entity_summary should be
-# surfaced to the reader. Deliberately tight (the v3 failure-set shape).
 _COUNTING_RE = re.compile(
     r"\bhow many\b|\bhow much\b|\bhow long\b|\bhow often\b"
     r"|\b(?:total|number)\s+(?:of|number)\b|\bnumber of\b",
@@ -259,19 +288,40 @@ def is_counting_question(text: str) -> bool:
     return bool(text) and _COUNTING_RE.search(text) is not None
 
 
+def _predicate_in_question(predicate: str, question_lower: str) -> bool:
+    """Does any (3+ char) word of the predicate appear as a word in the question?"""
+    for w in re.findall(r"[a-z]+", predicate.lower()):
+        if len(w) < 3:
+            continue
+        stem = w[:-1] if w.endswith("s") else w
+        if re.search(rf"\b{re.escape(stem)}s?\b", question_lower):
+            return True
+    return False
+
+
+def relevant_summaries(
+    facts: list[DerivedFact], question: str, *, fallback_max: int = 6
+) -> list[DerivedFact]:
+    """
+    The aggregate(s) relevant to *question* — only those whose predicate matches
+    the question's words. The v3.0 flaw was injecting *all* ~40 aggregates; this
+    hands the reader just the count it needs. Falls back to the largest count>=2
+    groups (capped) when nothing matches by name.
+    """
+    ql = (question or "").lower()
+    matched = [f for f in facts if _predicate_in_question(f.predicate, ql)]
+    if matched:
+        return matched
+    return sorted((f for f in facts if f.count >= 2), key=lambda f: -f.count)[:fallback_max]
+
+
 def to_memory_item(
     derived: DerivedFact,
     *,
     session_id: str | None = None,
     embedding: list[float] | None = None,
 ) -> MemoryItem:
-    """
-    Render a :class:`DerivedFact` as an LTM ``entity_summary`` item.
-
-    Tagged ``kind=entity_summary`` (so retrieval can prioritize it on counting
-    questions) and ``source=synthesis``; high importance because an aggregate is
-    a durable, derived answer. The count/members ride in metadata for audit.
-    """
+    """Render a :class:`DerivedFact` as an LTM ``entity_summary`` item."""
     from continuum.core.types import MemoryItem, MemoryTier
 
     return MemoryItem(
@@ -287,6 +337,8 @@ def to_memory_item(
             "predicate": derived.predicate,
             "subject": derived.subject,
             "count": derived.count,
+            "total": derived.total,
+            "unit": derived.unit,
             "members": list(derived.members),
         },
     )
@@ -297,6 +349,7 @@ __all__ = [
     "DerivedFact",
     "aggregate",
     "extract_structured_facts",
+    "relevant_summaries",
     "to_memory_item",
     "is_counting_question",
     "ENTITY_SUMMARY_KIND",

@@ -89,7 +89,7 @@ _MSGS = [
 async def test_synthesis_builds_counts_at_ingest() -> None:
     a = _adapter(_triples_llm(_THREE_TANKS))
     await a.process_conversation(_MSGS)
-    assert a._synthesis_summaries == ["User has 3 tanks."]
+    assert [f.text for f in a._synthesis_facts] == ["User has 3 tanks."]
     assert len(a.session.stm.items) == 3  # normal ingest still happened
 
 
@@ -117,6 +117,6 @@ async def test_no_synthesis_fn_is_inert() -> None:
     await a.process_conversation(_MSGS)
     await a.answer_question("How many tanks do I have?")
     prompt = a.llm.prompt  # type: ignore[attr-defined]
-    assert a._synthesis_summaries == []
+    assert a._synthesis_facts == []
     assert "COMPUTED FACTS" not in prompt
     assert a.last_telemetry["synthesis_injected"] is False

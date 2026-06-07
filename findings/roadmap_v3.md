@@ -168,3 +168,42 @@ the headline clean.
   failures (the v3 test set).
 - `results/reader_4omini_fails/` — gpt-4o-mini reader recovery (27%).
 - `results/extract_micro/` — the §3 atomic-extraction-doesn't-aggregate proof.
+
+---
+
+## 7. v3.0 A/B result + the v3.1 fixes
+
+**Built & wired** the synthesis layer (`continuum/promotion/synthesis.py` +
+`bootstrap_ollama --synthesis`) and ran the A/B: `--synthesis` on the 58 counting
+failures, answerer **fixed at gpt-oss-120b** (the 58 were 0/58 over raw turns).
+
+**v3.0 result: 9/58 recovered (8 genuine, 1 rerun-noise) = ~14%** — below the
+20% bar. But the mechanism is sound, not broken:
+- synthesis **fired on 57/58** rows (extract → aggregate → inject all worked).
+- **8 genuine recoveries** caused by synthesis.
+
+Diagnosis of the gap (this is the value of the run):
+1. **Summary flood (biggest).** Median **40 aggregates injected per question**
+   (up to 57) — we dumped *every* group including `count=1` singletons, burying
+   the one relevant count in a 40-line wall.
+2. **No SUM.** Several failures are *summing* questions ("how many hours total"
+   → 135 vs 140; "hours driving" → 6 vs 15). The aggregator only COUNTed
+   distinct members; it didn't sum numeric quantities.
+3. **Predicate inconsistency.** "citrus fruits" → 2 vs 3 (extractor split/missed
+   a fruit). LLM-quality-bound.
+
+**v3.1 fixes (built, hermetically tested):**
+- **Relevance filtering** — `relevant_summaries(facts, question)` injects ONLY
+  the aggregate(s) whose predicate matches the question's words (fallback: the
+  largest `count>=2` groups). Hands the reader *the* count, not 40.
+- **SUM aggregation** — `StructuredFact.quantity/unit` + `DerivedFact.total`;
+  aggregate() now sums quantities ("User has 3 sessions totaling 140 hours").
+  Extractor prompt asks for quantity/unit on measurements.
+- **Tighter extraction prompt** (consistent predicates, explicit examples).
+
+35 synthesis tests (count + SUM + relevance + extraction + wiring).
+
+**Next:** re-run the A/B with v3.1 — expect the relevance-filter alone to move it
+well above 20% (v3.0 was diluting a working signal across 40 lines). If it
+clears the bar, project to full-500 and ship; predicate-consistency (#3) is the
+remaining LLM-quality ceiling.
