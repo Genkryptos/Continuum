@@ -2890,11 +2890,17 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         aggregation_v2: bool = False,
         knowledge_update_conditioning: bool = False,
         temporal_codemath: bool = False,
+        synthesis_fn: Any = None,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
+        # v3 synthesis: when wired, ingest-time aggregation produces per-entity
+        # counts ("User has 5 tops") that are injected into the prompt for
+        # counting questions — the reader reads the count instead of miscounting.
+        self._synthesis_fn = synthesis_fn
+        self._synthesis_summaries: list[str] = []
         self._max_context_chars = max_context_chars
         # WS-7: when on, preference-type questions get a prompt that tells the
         # model to identify and APPLY a stated user preference from the
@@ -2932,6 +2938,53 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._reranker = reranker
         self._rerank_to = rerank_to
         self.last_telemetry: dict[str, Any] = {}
+
+    async def process_conversation(self, messages: Iterable[dict[str, Any]]) -> None:
+        """Normal ingest, then (v3) build per-entity aggregate counts."""
+        msgs = list(messages)
+        await super().process_conversation(msgs)
+        if self._synthesis_fn is None:
+            return
+        from continuum.promotion.synthesis import aggregate, extract_structured_facts
+
+        # Group user turns by session; extract countable triples per session
+        # (bounded prompts), keeping the session date for scoped aggregates.
+        sessions: dict[str, list[str]] = {}
+        dates: dict[str, str] = {}
+        for m in msgs:
+            if str(m.get("role", "")) != "user":
+                continue
+            content = str(m.get("content", "")).strip()
+            if not content:
+                continue
+            sid = str(m.get("session_id", ""))
+            sessions.setdefault(sid, []).append(content)
+            d = str(m.get("date", "") or "")
+            if d and sid not in dates:
+                dates[sid] = d
+
+        facts: list[Any] = []
+        for sid, turns in sessions.items():
+            occurred = None
+            if dates.get(sid):
+                with contextlib.suppress(ValueError):
+                    occurred = dt.datetime.fromisoformat(dates[sid])
+            try:
+                facts.extend(
+                    await extract_structured_facts(
+                        "\n".join(turns),
+                        completion_fn=self._synthesis_fn,
+                        occurred_at=occurred,
+                    )
+                )
+            except Exception:
+                log.exception("synthesis extraction failed for session %s", sid)
+        derived = aggregate(facts)
+        self._synthesis_summaries = [d.text for d in derived]
+        log.info(
+            "synthesis: %d entity_summaries from %d facts",
+            len(derived), len(facts),
+        )
 
     async def answer_question(self, question: str) -> str:
         retriever = getattr(self.session, "retriever", None)
@@ -3029,6 +3082,20 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             else:
                 lines.append(f"[{role}] {content}" if role else content)
         context = "\n".join(lines)[: self._max_context_chars]
+        # v3 synthesis: prepend code-computed per-entity counts on counting
+        # questions, so the reader reads the count instead of (mis)computing it.
+        from continuum.promotion.synthesis import is_counting_question
+
+        synthesis_injected = bool(self._synthesis_summaries) and is_counting_question(
+            question
+        )
+        if synthesis_injected:
+            block = (
+                "COMPUTED FACTS (counts already calculated by the memory system — "
+                "trust these for 'how many / how much / how long' questions):\n"
+                + "\n".join(f"- {s}" for s in self._synthesis_summaries)
+            )
+            context = block + "\n\n" + context
         if temporal:
             # The turns above are date-stamped. Give "now" and ask for an
             # explicit, scoped date calculation (NOT a general reasoning loop).
@@ -3166,6 +3233,8 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "rerank_skipped_preference": bool(
                 self._reranker is not None and _is_pref_early
             ),
+            "synthesis_injected": synthesis_injected,
+            "synthesis_summaries": len(self._synthesis_summaries),
         }
         return answer
 
@@ -4395,6 +4464,7 @@ def make_adapter_factory(
     chain: OptimizerChain | None = None,
     reranker: CrossEncoderReranker | None = None,
     rerank_to: int = 4,
+    synthesis_fn: Any = None,
     retrieval_mode: str = "topk",
     retriever_kind: str = "cosine",
     rrf_k: int = 60,
@@ -4543,6 +4613,7 @@ def make_adapter_factory(
                 aggregation_v2=aggregation_v2,  # WS-2
                 knowledge_update_conditioning=knowledge_update_conditioning,  # WS-3
                 temporal_codemath=temporal_codemath,  # WS-date-math
+                synthesis_fn=synthesis_fn,  # v3 aggregation
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4875,6 +4946,24 @@ async def main_async(args: argparse.Namespace) -> int:
             args.rerank_model, args.top_k, args.rerank_to,
         )
 
+    # v3 synthesis: an LLM completion (prompt -> JSON text) for the triple
+    # extractor. litellm routes args.synthesis_model (default openrouter gpt-4o-mini).
+    synthesis_fn: Any = None
+    if args.synthesis:
+        import litellm
+
+        async def _synth(prompt: str) -> str:
+            resp = await litellm.acompletion(
+                model=args.synthesis_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=1024,
+            )
+            return str(resp["choices"][0]["message"]["content"])
+
+        synthesis_fn = _synth
+        log.info("v3 synthesis ENABLED — extractor=%s", args.synthesis_model)
+
     # When the optimizer is on, retrieve a larger pool so the chain has
     # something to compress. Without the optimizer we keep the small
     # baseline top-k for an apples-to-apples context size.
@@ -4988,6 +5077,7 @@ async def main_async(args: argparse.Namespace) -> int:
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
         answer_max_tokens=args.answer_max_tokens,
         reranker=reranker, rerank_to=args.rerank_to,
+        synthesis_fn=synthesis_fn,
         retrieval_mode=args.retrieval_mode,
         retriever_kind=args.retriever,
         store_factory=store_factory,
@@ -5690,6 +5780,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--rerank-model",
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",
         help="HuggingFace cross-encoder model id.",
+    )
+    p.add_argument(
+        "--synthesis", action="store_true",
+        help=(
+            "v3: at ingest, LLM-extract countable membership triples and "
+            "code-compute per-entity counts; surface them to the reader on "
+            "counting questions ('how many / how much'). Targets the "
+            "aggregation gap (see findings/roadmap_v3.md)."
+        ),
+    )
+    p.add_argument(
+        "--synthesis-model",
+        default="openrouter/openai/gpt-4o-mini",
+        help="litellm model id for the synthesis triple-extractor (default gpt-4o-mini).",
     )
     p.add_argument(
         "--question-ids-file",
