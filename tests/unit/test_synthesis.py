@@ -13,7 +13,15 @@ from datetime import datetime
 
 import pytest
 
-from continuum.promotion.synthesis import DerivedFact, StructuredFact, aggregate
+from continuum.core.types import MemoryTier
+from continuum.promotion.synthesis import (
+    ENTITY_SUMMARY_KIND,
+    DerivedFact,
+    StructuredFact,
+    aggregate,
+    is_counting_question,
+    to_memory_item,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -106,3 +114,38 @@ def test_empty_input() -> None:
 def test_derived_fact_is_constructable() -> None:
     d = DerivedFact(subject="user", predicate="book", count=3, members=["a", "b", "c"])
     assert d.text == "User has 3 books."
+
+
+# ── LTM item + counting-question detection ────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        "How many tanks do I have?",
+        "How much time do I dedicate to coding each day?",
+        "How long have I lived in Harajuku?",
+        "What is the total number of coins in my collection?",
+    ],
+)
+def test_is_counting_question_positive(q: str) -> None:
+    assert is_counting_question(q) is True
+
+
+@pytest.mark.parametrize(
+    "q",
+    ["What is my favorite rice?", "Where do I live now?", "Did I move to Boston?", ""],
+)
+def test_is_counting_question_negative(q: str) -> None:
+    assert is_counting_question(q) is False
+
+
+def test_to_memory_item_tags_entity_summary() -> None:
+    d = DerivedFact(subject="user", predicate="tank", count=3, members=["a", "b", "c"])
+    item = to_memory_item(d, session_id="s", embedding=[0.1, 0.2])
+    assert item.tier == MemoryTier.LTM
+    assert item.content == "User has 3 tanks."
+    assert item.metadata["kind"] == ENTITY_SUMMARY_KIND
+    assert item.metadata["count"] == 3
+    assert item.metadata["source"] == "synthesis"
+    assert item.embedding == [0.1, 0.2]

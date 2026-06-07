@@ -27,6 +27,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from continuum.core.types import MemoryItem
 
 
 @dataclass(frozen=True)
@@ -153,4 +157,63 @@ def aggregate(
     return out
 
 
-__all__ = ["StructuredFact", "DerivedFact", "aggregate"]
+# ── LTM representation + query-side detection ─────────────────────────────────
+
+#: ``metadata["kind"]`` marker for synthesized aggregate facts in LTM.
+ENTITY_SUMMARY_KIND = "entity_summary"
+
+# Counting / aggregation questions — where a precomputed entity_summary should be
+# surfaced to the reader. Deliberately tight (the v3 failure-set shape).
+_COUNTING_RE = re.compile(
+    r"\bhow many\b|\bhow much\b|\bhow long\b|\bhow often\b"
+    r"|\b(?:total|number)\s+(?:of|number)\b|\bnumber of\b",
+    re.IGNORECASE,
+)
+
+
+def is_counting_question(text: str) -> bool:
+    """True for 'how many / how much / how long / number of …' questions."""
+    return bool(text) and _COUNTING_RE.search(text) is not None
+
+
+def to_memory_item(
+    derived: DerivedFact,
+    *,
+    session_id: str | None = None,
+    embedding: list[float] | None = None,
+) -> MemoryItem:
+    """
+    Render a :class:`DerivedFact` as an LTM ``entity_summary`` item.
+
+    Tagged ``kind=entity_summary`` (so retrieval can prioritize it on counting
+    questions) and ``source=synthesis``; high importance because an aggregate is
+    a durable, derived answer. The count/members ride in metadata for audit.
+    """
+    from continuum.core.types import MemoryItem, MemoryTier
+
+    return MemoryItem(
+        content=derived.text,
+        tier=MemoryTier.LTM,
+        embedding=embedding,
+        session_id=session_id,
+        importance=0.7,
+        metadata={
+            "kind": ENTITY_SUMMARY_KIND,
+            "role": "memory",
+            "source": "synthesis",
+            "predicate": derived.predicate,
+            "subject": derived.subject,
+            "count": derived.count,
+            "members": list(derived.members),
+        },
+    )
+
+
+__all__ = [
+    "StructuredFact",
+    "DerivedFact",
+    "aggregate",
+    "to_memory_item",
+    "is_counting_question",
+    "ENTITY_SUMMARY_KIND",
+]
