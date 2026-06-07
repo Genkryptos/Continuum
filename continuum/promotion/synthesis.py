@@ -24,13 +24,21 @@ wiring it into the promoter happen in separate steps.
 
 from __future__ import annotations
 
+import json
+import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from continuum.core.types import MemoryItem
+
+log = logging.getLogger(__name__)
+
+#: ``async (prompt) -> json_text`` — injected so extraction is testable w/o an LLM.
+CompletionFn = Callable[[str], Awaitable[str]]
 
 
 @dataclass(frozen=True)
@@ -157,6 +165,81 @@ def aggregate(
     return out
 
 
+# ── structured-triple extraction (LLM → StructuredFact) ───────────────────────
+
+_EXTRACT_PROMPT = """\
+Extract COUNTABLE membership facts about the user from the text below. A fact is
+one specific item that belongs to a collection the user counts, collects, owns,
+buys, visits, or completes.
+
+Output ONLY JSON: {"facts": [{"predicate": "<collection>", "object": "<item>"}]}
+
+Rules:
+- "predicate" is the SINGULAR collection noun, normalized and CONSISTENT: use the
+  same predicate for the same kind of thing across all mentions (e.g. always
+  "tank" for any aquarium/fish tank; "postcard" for postcards; "top" for
+  tops/shirts/blouses; "coin" for coins). Generic over specific.
+- "object" is the specific item (e.g. "goldfish tank", "vintage NYC postcard").
+- One entry per distinct item. Do NOT count or aggregate — just list items.
+- Ignore preferences, opinions, and non-countable statements.
+- If there are no countable items, output {"facts": []}.
+
+Text:
+\"\"\"
+%s
+\"\"\"
+"""
+
+
+def _strip_json(raw: str) -> str:
+    """Strip markdown fences / prose around a JSON object."""
+    s = (raw or "").strip()
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.IGNORECASE).strip()
+    # keep from the first { to the last } if there's surrounding prose
+    i, j = s.find("{"), s.rfind("}")
+    return s[i : j + 1] if i != -1 and j != -1 and j > i else s
+
+
+async def extract_structured_facts(
+    text: str,
+    *,
+    completion_fn: CompletionFn,
+    subject: str = "user",
+    occurred_at: datetime | None = None,
+) -> list[StructuredFact]:
+    """
+    LLM-extract countable membership triples from *text*.
+
+    The model lists items with a consistent collection ``predicate``; the
+    counting happens later in :func:`aggregate` (deterministic). Graceful: any
+    LLM/parse failure returns ``[]`` (never raises into the caller). Predicate
+    *consistency* is the quality risk — validate on real data via the eval A/B,
+    not just these unit tests.
+    """
+    if not (text or "").strip():
+        return []
+    try:
+        raw = await completion_fn(_EXTRACT_PROMPT % text)
+        data = json.loads(_strip_json(raw))
+    except Exception:
+        log.exception("structured-fact extraction failed — returning none")
+        return []
+
+    facts: list[StructuredFact] = []
+    for item in (data or {}).get("facts", []):
+        if not isinstance(item, dict):
+            continue
+        pred = _normalize(str(item.get("predicate", "")))
+        obj = str(item.get("object", "")).strip()
+        if pred and obj:
+            facts.append(
+                StructuredFact(
+                    subject=subject, predicate=pred, obj=obj, occurred_at=occurred_at
+                )
+            )
+    return facts
+
+
 # ── LTM representation + query-side detection ─────────────────────────────────
 
 #: ``metadata["kind"]`` marker for synthesized aggregate facts in LTM.
@@ -213,7 +296,9 @@ __all__ = [
     "StructuredFact",
     "DerivedFact",
     "aggregate",
+    "extract_structured_facts",
     "to_memory_item",
     "is_counting_question",
     "ENTITY_SUMMARY_KIND",
+    "CompletionFn",
 ]

@@ -19,11 +19,19 @@ from continuum.promotion.synthesis import (
     DerivedFact,
     StructuredFact,
     aggregate,
+    extract_structured_facts,
     is_counting_question,
     to_memory_item,
 )
 
 pytestmark = pytest.mark.unit
+
+
+def _fake_llm(reply: str):
+    async def fn(prompt: str) -> str:
+        return reply
+
+    return fn
 
 
 def _f(pred: str, obj: str, when: datetime | None = None) -> StructuredFact:
@@ -138,6 +146,49 @@ def test_is_counting_question_positive(q: str) -> None:
 )
 def test_is_counting_question_negative(q: str) -> None:
     assert is_counting_question(q) is False
+
+
+# ── structured-triple extraction (fake LLM) ───────────────────────────────────
+
+
+async def test_extract_parses_triples() -> None:
+    reply = '{"facts": [{"predicate": "Tank", "object": "goldfish tank"}, {"predicate": "tank", "object": "shrimp tank"}]}'
+    facts = await extract_structured_facts("I set up two tanks", completion_fn=_fake_llm(reply))
+    assert len(facts) == 2
+    assert all(f.predicate == "tank" for f in facts)  # normalized (lowercased)
+    assert {f.obj for f in facts} == {"goldfish tank", "shrimp tank"}
+
+
+async def test_extract_strips_markdown_fence() -> None:
+    reply = '```json\n{"facts": [{"predicate": "coin", "object": "1909 penny"}]}\n```'
+    facts = await extract_structured_facts("a coin", completion_fn=_fake_llm(reply))
+    assert len(facts) == 1 and facts[0].predicate == "coin"
+
+
+async def test_extract_graceful_on_garbage() -> None:
+    facts = await extract_structured_facts("x", completion_fn=_fake_llm("not json at all"))
+    assert facts == []
+
+
+async def test_extract_empty_text() -> None:
+    facts = await extract_structured_facts("   ", completion_fn=_fake_llm('{"facts":[]}'))
+    assert facts == []
+
+
+async def test_extract_then_aggregate_end_to_end() -> None:
+    # the full v3 logic path: extract triples → count distinct → correct count.
+    reply = (
+        '{"facts": ['
+        '{"predicate": "top", "object": "black top"},'
+        '{"predicate": "top", "object": "white top"},'
+        '{"predicate": "top", "object": "striped top"},'
+        '{"predicate": "top", "object": "denim top"},'
+        '{"predicate": "top", "object": "linen top"}]}'
+    )
+    facts = await extract_structured_facts("H&M haul", completion_fn=_fake_llm(reply))
+    (derived,) = aggregate(facts)
+    assert derived.count == 5
+    assert derived.text == "User has 5 tops."
 
 
 def test_to_memory_item_tags_entity_summary() -> None:
