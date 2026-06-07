@@ -47,3 +47,6 @@ evals/longmemeval/LongMemEval/
 results/
 bench/results/*.json
 evals/**/.wiki_cache*/
+
+# v3 synthesis extraction cache (deterministic LLM call cache — large, regenerable)
+.synthesis_cache/

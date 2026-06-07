@@ -10,6 +10,7 @@ real LongMemEval-S v2.0 failures: H&M tops (reader said 3, answer 5), postcards
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +20,7 @@ from continuum.promotion.synthesis import (
     DerivedFact,
     StructuredFact,
     aggregate,
+    disk_cached,
     extract_structured_facts,
     is_counting_question,
     relevant_summaries,
@@ -174,6 +176,42 @@ async def test_extract_carries_quantity() -> None:
     reply = '{"facts": [{"predicate": "session", "object": "Mon", "quantity": 2.5, "unit": "hours"}]}'
     facts = await extract_structured_facts("played 2.5h", completion_fn=_fake_llm(reply))
     assert facts[0].quantity == 2.5 and facts[0].unit == "hours"
+
+
+# ── disk cache (save extraction → no repeat credits) ──────────────────────────
+
+
+async def test_disk_cache_serves_repeats_without_calling_llm(tmp_path: Path) -> None:
+    calls = {"n": 0}
+
+    async def counting_fn(prompt: str) -> str:
+        calls["n"] += 1
+        return f"resp:{prompt}"
+
+    cached = disk_cached(counting_fn, tmp_path, namespace="gpt-4o-mini")
+    a = await cached("hello")
+    b = await cached("hello")  # served from disk → no second call
+    assert a == b == "resp:hello"
+    assert calls["n"] == 1                       # the LLM was hit exactly once
+    assert len(list(tmp_path.glob("*.txt"))) == 1  # one cached file written
+
+    # a fresh wrapper over the SAME dir still hits the cache (persisted to disk)
+    calls["n"] = 0
+    cached2 = disk_cached(counting_fn, tmp_path, namespace="gpt-4o-mini")
+    assert await cached2("hello") == "resp:hello"
+    assert calls["n"] == 0                       # zero credits on re-run
+
+
+async def test_disk_cache_namespace_separates(tmp_path: Path) -> None:
+    calls = {"n": 0}
+
+    async def counting_fn(prompt: str) -> str:
+        calls["n"] += 1
+        return "x"
+
+    await disk_cached(counting_fn, tmp_path, namespace="model-a")("p")
+    await disk_cached(counting_fn, tmp_path, namespace="model-b")("p")  # different model → miss
+    assert calls["n"] == 2
 
 
 def test_derived_fact_is_constructable() -> None:

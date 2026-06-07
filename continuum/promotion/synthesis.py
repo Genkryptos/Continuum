@@ -22,12 +22,15 @@ only lists items (and their quantities); the counting/summing happens here.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -274,6 +277,37 @@ async def extract_structured_facts(
     return facts
 
 
+# ── disk cache (extraction is deterministic → re-runs are free) ───────────────
+
+
+def disk_cached(fn: CompletionFn, cache_dir: str | Path, *, namespace: str = "") -> CompletionFn:
+    """
+    Wrap a completion fn with a content-addressed disk cache.
+
+    Synthesis extraction is deterministic (temperature 0), so identical
+    ``(namespace, prompt)`` inputs always yield the same response. Caching them
+    to disk makes re-runs **free** (no LLM credits) and instant — invaluable when
+    iterating on the *aggregation/injection* logic downstream of extraction. A
+    changed prompt or model (different ``namespace``) is a cache miss, so
+    correctness is preserved. One file per call (sha256 key) → safe under
+    concurrent async writes.
+    """
+    root = Path(cache_dir)
+    root.mkdir(parents=True, exist_ok=True)
+
+    async def wrapped(prompt: str) -> str:
+        key = hashlib.sha256(f"{namespace}\x00{prompt}".encode()).hexdigest()
+        path = root / f"{key}.txt"
+        with contextlib.suppress(OSError):
+            return path.read_text()
+        resp = await fn(prompt)
+        with contextlib.suppress(OSError):
+            path.write_text(resp)
+        return resp
+
+    return wrapped
+
+
 # ── query-side: relevance filtering + detection + LTM item ────────────────────
 
 _COUNTING_RE = re.compile(
@@ -349,6 +383,7 @@ __all__ = [
     "DerivedFact",
     "aggregate",
     "extract_structured_facts",
+    "disk_cached",
     "relevant_summaries",
     "to_memory_item",
     "is_counting_question",

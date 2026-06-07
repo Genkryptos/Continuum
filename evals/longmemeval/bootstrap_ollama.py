@@ -4969,6 +4969,13 @@ async def main_async(args: argparse.Namespace) -> int:
             return str(resp["choices"][0]["message"]["content"])
 
         synthesis_fn = _synth
+        if args.synthesis_cache:
+            from continuum.promotion.synthesis import disk_cached
+
+            synthesis_fn = disk_cached(
+                _synth, args.synthesis_cache, namespace=args.synthesis_model
+            )
+            log.info("v3 synthesis cache: %s", args.synthesis_cache)
         log.info("v3 synthesis ENABLED — extractor=%s", args.synthesis_model)
 
     # When the optimizer is on, retrieve a larger pool so the chain has
@@ -5801,6 +5808,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--synthesis-model",
         default="openrouter/openai/gpt-4o-mini",
         help="litellm model id for the synthesis triple-extractor (default gpt-4o-mini).",
+    )
+    p.add_argument(
+        "--synthesis-cache",
+        default=".synthesis_cache",
+        help=(
+            "Directory to cache synthesis extraction calls (deterministic, so "
+            "re-runs cost zero credits + are instant). Empty string disables."
+        ),
     )
     p.add_argument(
         "--question-ids-file",
