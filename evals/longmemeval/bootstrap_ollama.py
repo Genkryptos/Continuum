@@ -947,12 +947,18 @@ class OpenAILLM:
         self._max_retries = max_retries
 
     async def complete(self, *, prompt: str, max_tokens: int) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": self.temperature,
         }
+        # GPT-5 / o-series reasoning models reject `max_tokens` and a custom
+        # `temperature` — they require `max_completion_tokens` and the default
+        # temperature. Older models (gpt-4o*, gpt-4*) keep the legacy params.
+        if re.match(r"(?:gpt-5|o[0-9])", self.model, re.IGNORECASE):
+            payload["max_completion_tokens"] = max_tokens
+        else:
+            payload["max_tokens"] = max_tokens
+            payload["temperature"] = self.temperature
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
