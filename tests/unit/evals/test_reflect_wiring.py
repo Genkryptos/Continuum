@@ -22,6 +22,7 @@ from evals.longmemeval.bootstrap_ollama import (
     _DirectAnswerAdapter,
     _extract_reflect_answer,
     _is_reflect_eligible,
+    _majority_vote,
 )
 
 pytestmark = pytest.mark.unit
@@ -249,3 +250,70 @@ async def test_router_falls_through_when_no_match() -> None:
     assert out == "blue"
     assert a.llm.prompt is not None  # type: ignore[attr-defined]  # reader WAS called
     assert a.last_telemetry.get("router_applied") is None
+
+
+# ── self-consistency (vote-of-N) ──────────────────────────────────────────────
+
+
+def test_majority_vote_picks_consensus() -> None:
+    assert _majority_vote(["3 months", "3 months.", "a month"]) == "3 months"
+
+
+def test_majority_vote_normalizes_for_grouping() -> None:
+    # "Target", "target.", "TARGET" all group → consensus over a singleton.
+    assert _majority_vote(["Target", "target.", "Walmart"]) == "Target"
+
+
+def test_majority_vote_tie_breaks_earliest() -> None:
+    assert _majority_vote(["a", "b"]) == "a"
+
+
+def test_majority_vote_skips_empty_unless_all_empty() -> None:
+    # one real answer + two empties → the real answer wins (empties don't count).
+    assert _majority_vote(["", "Target", ""]) == "Target"
+    assert _majority_vote(["", "", ""]) == ""
+
+
+class _CyclingLLM:
+    """Returns a different reply each call (to exercise voting)."""
+
+    def __init__(self, replies: list[str]) -> None:
+        self._replies = replies
+        self.calls = 0
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        r = self._replies[self.calls % len(self._replies)]
+        self.calls += 1
+        return r
+
+
+def _vote_adapter(replies: list[str], vote_n: int) -> _DirectAnswerAdapter:
+    session = SimpleNamespace(
+        stm=_FakeSTM(),
+        retriever=_FakeRetriever([_turn("I have a goldfish tank")]),
+        session_id="s",
+    )
+    a = _DirectAnswerAdapter(
+        session=session, llm=_CyclingLLM(replies), answer_max_tokens=16,
+        top_k=8, max_context_chars=10_000, vote_n=vote_n,
+    )
+    a.dataset_question_type = "single-session-user"  # type: ignore[attr-defined]
+    return a
+
+
+async def test_vote_of_three_takes_majority() -> None:
+    # 2 of 3 samples say "Boston" → consensus, despite one "Chicago".
+    a = _vote_adapter(["Boston", "Chicago", "Boston"], vote_n=3)
+    out = await a.answer_question("Where do I live?")
+    assert out == "Boston"
+    assert a.llm.calls == 3  # type: ignore[attr-defined]
+    assert a.last_telemetry["llm_call_count"] == 3
+    assert a.last_telemetry["vote_n"] == 3
+
+
+async def test_vote_n_one_is_single_call() -> None:
+    a = _vote_adapter(["Boston", "Chicago", "Boston"], vote_n=1)
+    out = await a.answer_question("Where do I live?")
+    assert out == "Boston"
+    assert a.llm.calls == 1  # type: ignore[attr-defined]
+    assert a.last_telemetry["llm_call_count"] == 1

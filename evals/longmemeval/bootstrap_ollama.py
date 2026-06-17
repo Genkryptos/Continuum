@@ -2874,6 +2874,37 @@ def _extract_reflect_answer(text: str) -> str:
     return raw
 
 
+def _vote_norm(s: str) -> str:
+    """Normalize an answer for vote grouping — case/punctuation/whitespace-fold."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def _majority_vote(answers: list[str]) -> str:
+    """Self-consistency: pick the most common answer across samples.
+
+    gpt-oss-120b is ~non-deterministic (provider routing + sampling → ~44%
+    answer variance), so repeated calls on the same prompt are independent
+    samples. Grouping by a normalized form and taking the majority reduces the
+    ±3-5pp run-to-run noise and returns the consensus. Ties break by earliest
+    occurrence; empty answers only win if every sample was empty. Returns the
+    first ORIGINAL (un-normalized) answer in the winning group.
+    """
+    groups: dict[str, list[str]] = {}
+    order: list[str] = []
+    for a in answers:
+        k = _vote_norm(a)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(a)
+    if not order:
+        return ""
+    nonempty = [k for k in order if k]
+    pool = nonempty or order
+    best = max(pool, key=lambda k: (len(groups[k]), -order.index(k)))
+    return groups[best][0]
+
+
 # WS-date-math — the temporal residual is date ARITHMETIC the model still
 # botches even with dates surfaced (WS-1). For delta questions we ask the model
 # to emit a small SPEC alongside its answer, then compute the result in CODE
@@ -2991,6 +3022,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         reflect_max_tokens: int = 512,
         reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
         router: bool = False,
+        vote_n: int = 1,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -3012,6 +3044,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # or flipped by rerun noise. Falls through to the reader when there's no
         # confident match.
         self._router = router
+        # Self-consistency: sample the answer N times and majority-vote. N=1 is
+        # the legacy single-call path; >1 trades N× reader calls for lower
+        # run-to-run variance (gpt-oss has ~44% answer variance).
+        self._vote_n = max(1, int(vote_n))
         # v3 synthesis: when wired, ingest-time aggregation produces per-entity
         # counts ("User has 5 tops") that are injected into the prompt for
         # counting questions — the reader reads the count instead of miscounting.
@@ -3409,38 +3445,49 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
-        try:
-            answer = await self.llm.complete(
-                prompt=prompt,
-                max_tokens=(
-                    self._reflect_max_tokens if reflect_on else self.answer_max_tokens
-                ),
-            )
-        except Exception:
-            log.exception("direct answer LLM call failed")
-            answer = ""
-        answer = (answer or "").strip()
-        # v3 Reflect: the model reasoned then ended with "Answer: <final>" — keep
-        # only the committed answer, never the chain-of-thought.
-        if reflect_on and answer:
-            answer = _extract_reflect_answer(answer)
+        _max_tok = self._reflect_max_tokens if reflect_on else self.answer_max_tokens
 
-        # WS-date-math: replace the model's mental arithmetic with the
-        # code-computed delta when a valid SPEC is present; otherwise strip the
-        # SPEC line so it doesn't leak into the free-text answer.
-        codemath_applied = False
-        if temporal_delta and answer:
-            computed = _compute_temporal_from_spec(answer)
-            if computed is not None:
-                answer = computed
-                codemath_applied = True
-            else:
-                # SPEC is the final line — strip it and anything after,
-                # even when truncated/invalid (no closing brace).
-                answer = re.sub(r"\s*SPEC:.*", "", answer, flags=re.DOTALL).strip()
+        async def _one_answer() -> tuple[str, bool]:
+            """One sampled answer, fully post-processed (reflect parse + codemath)."""
+            try:
+                raw = await self.llm.complete(prompt=prompt, max_tokens=_max_tok)
+            except Exception:
+                log.exception("direct answer LLM call failed")
+                raw = ""
+            a = (raw or "").strip()
+            # v3 Reflect: keep only the committed "Answer:" line, never the CoT.
+            if reflect_on and a:
+                a = _extract_reflect_answer(a)
+            # WS-date-math: replace mental arithmetic with the code-computed delta
+            # when a valid SPEC is present; else strip the SPEC line.
+            cm = False
+            if temporal_delta and a:
+                computed = _compute_temporal_from_spec(a)
+                if computed is not None:
+                    a, cm = computed, True
+                else:
+                    a = re.sub(r"\s*SPEC:.*", "", a, flags=re.DOTALL).strip()
+            return a, cm
+
+        # Self-consistency: sample vote_n times and take the majority. gpt-oss is
+        # ~non-deterministic, so the samples vary; the consensus answer is more
+        # reliable than any single noisy draw (reduces the ±3-5pp run variance).
+        if self._vote_n > 1:
+            cands: list[str] = []
+            codemath_applied = False
+            for _ in range(self._vote_n):
+                a, cm = await _one_answer()
+                cands.append(a)
+                codemath_applied = codemath_applied or cm
+            answer = _majority_vote(cands)
+            _llm_calls = self._vote_n
+        else:
+            answer, codemath_applied = await _one_answer()
+            _llm_calls = 1
 
         self.last_telemetry = {
-            "llm_call_count": 1,
+            "llm_call_count": _llm_calls,
+            "vote_n": self._vote_n,
             "answer_mode": "direct",
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
@@ -4705,6 +4752,7 @@ def make_adapter_factory(
     reflect_max_tokens: int = 512,
     reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
     router: bool = False,
+    vote_n: int = 1,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4844,6 +4892,7 @@ def make_adapter_factory(
                 reflect_max_tokens=reflect_max_tokens,
                 reflect_types=reflect_types,
                 router=router,  # v3 deterministic answer router
+                vote_n=vote_n,  # self-consistency (majority over N samples)
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -5367,6 +5416,7 @@ async def main_async(args: argparse.Namespace) -> int:
         reflect_max_tokens=args.reflect_max_tokens,
         reflect_types=_reflect_types,
         router=args.router,
+        vote_n=args.vote_n,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -6111,6 +6161,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "directly and SKIP the reader (no injection, no reader arithmetic, no "
             "rerun noise). Requires --synthesis. Falls through to the reader when "
             "there's no confident match. A/B vs the injection path."
+        ),
+    )
+    p.add_argument(
+        "--vote-n", type=int, default=1,
+        help=(
+            "Self-consistency: sample the answer N times and majority-vote "
+            "(default 1 = single call). gpt-oss-120b is ~non-deterministic, so "
+            "N>1 reduces the ±3-5pp run-to-run variance and lifts the consensus "
+            "answer, at N× reader calls. Try 3."
         ),
     )
     p.add_argument(
