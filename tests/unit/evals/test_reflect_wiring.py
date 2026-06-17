@@ -1,0 +1,251 @@
+"""
+tests/unit/evals/test_reflect_wiring.py
+=======================================
+v3 Reflect: the single BOUNDED reasoning pass (not an agentic loop) wired into
+_DirectAnswerAdapter. Covers the gate (which question types are eligible), the
+"Answer:" final-line parsing, and the adapter plumbing — that Reflect uses
+exactly ONE llm.complete with the larger token budget, emits the right
+telemetry, is gated OFF simple fact recall, and STACKS with synthesis (a
+counting multi-session question gets both the COMPUTED FACTS block and the CoT
+prompt). Fakes throughout — no LLM, no network, no eval run.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from continuum.core.types import MemoryItem, MemoryTier
+from evals.longmemeval.bootstrap_ollama import (
+    _DirectAnswerAdapter,
+    _extract_reflect_answer,
+    _is_reflect_eligible,
+)
+
+pytestmark = pytest.mark.unit
+
+
+# ── the gate ──────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "qt",
+    [
+        "single-session-preference",  # clear semantic win (preference application)
+        "knowledge-update",           # net +2
+    ],
+)
+def test_eligible_default_categories(qt: str) -> None:
+    assert _is_reflect_eligible(qt, "whatever the question is") is True
+
+
+@pytest.mark.parametrize(
+    "qt",
+    [
+        "multi-session",            # net −13 → dropped from default
+        "temporal-reasoning",       # net −13 → dropped
+        "single-session-assistant", # net −2 → dropped
+    ],
+)
+def test_net_negative_categories_now_excluded(qt: str) -> None:
+    # full-500 showed CoT over-reasons these → no longer in the default set.
+    assert _is_reflect_eligible(qt, "whatever the question is") is False
+
+
+def test_excluded_simple_fact_recall() -> None:
+    # single-session-user plain recall is exactly where CoT over-thinks → off.
+    assert _is_reflect_eligible("single-session-user", "What is my dog's name?") is False
+
+
+def test_unknown_type_falls_back_to_wording() -> None:
+    assert _is_reflect_eligible("", "What headphones should I buy? Recommend one.") is True  # preference
+    assert _is_reflect_eligible("", "What is my dog's name?") is False        # plain
+
+
+def test_known_but_not_allowed_type_is_off() -> None:
+    # a type not in the allowed set and not excluded → don't reflect (no wording
+    # fallback for a *known* type).
+    assert _is_reflect_eligible("some-future-type", "How long ago?") is False
+
+
+def test_custom_allowed_set_overrides_default() -> None:
+    allowed = frozenset({"multi-session"})
+    assert _is_reflect_eligible("multi-session", "q", allowed=allowed) is True
+    assert _is_reflect_eligible("temporal-reasoning", "q", allowed=allowed) is False
+
+
+# ── answer parsing ────────────────────────────────────────────────────────────
+
+
+def test_parse_simple_answer_marker() -> None:
+    cot = "Step 1: the user said X.\nStep 2: so the answer is...\nAnswer: Target"
+    assert _extract_reflect_answer(cot) == "Target"
+
+
+def test_parse_uses_last_marker() -> None:
+    # the word "answer" appears mid-reasoning; take the final committed one.
+    cot = "The answer: depends.\nReasoning...\nAnswer: five"
+    assert _extract_reflect_answer(cot) == "five"
+
+
+def test_parse_multiline_tail() -> None:
+    cot = "Reasoning.\nAnswer: a list:\n- one\n- two"
+    assert _extract_reflect_answer(cot) == "a list:\n- one\n- two"
+
+
+def test_parse_fallback_to_last_line_when_no_marker() -> None:
+    assert _extract_reflect_answer("just reasoning\nfinal thought") == "final thought"
+
+
+def test_parse_empty() -> None:
+    assert _extract_reflect_answer("   ") == ""
+
+
+def test_parse_idk() -> None:
+    assert _extract_reflect_answer("no evidence.\nAnswer: I don't know.") == "I don't know."
+
+
+# ── adapter plumbing (fakes) ──────────────────────────────────────────────────
+
+
+class _FakeSTM:
+    def __init__(self) -> None:
+        self.items: list[MemoryItem] = []
+
+    async def append(self, item: MemoryItem) -> None:
+        self.items.append(item)
+
+
+class _FakeRetriever:
+    def __init__(self, items: list[MemoryItem]) -> None:
+        self._items = items
+
+    async def retrieve(self, query: Any, budget: Any) -> Any:
+        return SimpleNamespace(items=list(self._items))
+
+
+class _CaptureLLM:
+    def __init__(self, reply: str = "Answer: done") -> None:
+        self.prompt: str | None = None
+        self.max_tokens: int | None = None
+        self._reply = reply
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        self.prompt = prompt
+        self.max_tokens = max_tokens
+        return self._reply
+
+
+def _turn(text: str) -> MemoryItem:
+    return MemoryItem(content=text, tier=MemoryTier.STM, metadata={"role": "user"})
+
+
+def _adapter(
+    *,
+    reflect: bool,
+    reply: str = "Answer: done",
+    qt: str = "knowledge-update",  # a default reflect-eligible type
+    synthesis_fn: Any = None,
+    router: bool = False,
+) -> _DirectAnswerAdapter:
+    session = SimpleNamespace(
+        stm=_FakeSTM(),
+        retriever=_FakeRetriever([_turn("I have a goldfish tank and a shrimp tank")]),
+        session_id="s",
+    )
+    a = _DirectAnswerAdapter(
+        session=session,
+        llm=_CaptureLLM(reply),
+        answer_max_tokens=16,
+        top_k=8,
+        max_context_chars=10_000,
+        reflect=reflect,
+        reflect_max_tokens=400,
+        synthesis_fn=synthesis_fn,
+        router=router,
+    )
+    a.dataset_question_type = qt  # type: ignore[attr-defined]
+    return a
+
+
+async def test_reflect_uses_cot_prompt_and_big_budget() -> None:
+    a = _adapter(reflect=True, reply="reasoning here\nAnswer: Target")
+    out = await a.answer_question("Where did I redeem the coupon?")
+    prompt = a.llm.prompt  # type: ignore[attr-defined]
+    assert "Reason in a few SHORT steps" in prompt
+    assert "Answer:" in prompt
+    assert a.llm.max_tokens == 400          # the reflect budget, not 16
+    assert out == "Target"                  # parsed from the final line
+    assert a.last_telemetry["reflect_applied"] is True
+    assert a.last_telemetry["llm_call_count"] == 1   # still ONE call
+
+
+async def test_reflect_off_uses_direct_prompt() -> None:
+    a = _adapter(reflect=False, reply="Target")
+    out = await a.answer_question("Where did I redeem the coupon?")
+    prompt = a.llm.prompt  # type: ignore[attr-defined]
+    assert "Reason in a few SHORT steps" not in prompt
+    assert a.llm.max_tokens == 16           # the direct budget
+    assert out == "Target"
+    assert a.last_telemetry["reflect_applied"] is False
+
+
+async def test_reflect_gated_off_for_single_session_user() -> None:
+    a = _adapter(reflect=True, reply="Answer: Rex", qt="single-session-user")
+    await a.answer_question("What is my dog's name?")
+    prompt = a.llm.prompt  # type: ignore[attr-defined]
+    assert "Reason in a few SHORT steps" not in prompt
+    assert a.last_telemetry["reflect_applied"] is False
+
+
+async def test_reflect_stacks_with_synthesis() -> None:
+    # multi-session counting question: Reflect prompt AND the COMPUTED FACTS block.
+    a = _adapter(reflect=True, reply="reasoning\nAnswer: 3")
+    # seed a synthesis fact directly (bypass ingest extraction).
+    from continuum.promotion.synthesis import DerivedFact
+
+    a._synthesis_facts = [  # type: ignore[attr-defined]
+        DerivedFact(subject="user", predicate="tank", count=3, members=["a", "b", "c"])
+    ]
+    out = await a.answer_question("How many tanks do I have?")
+    prompt = a.llm.prompt  # type: ignore[attr-defined]
+    assert "COMPUTED FACTS" in prompt           # synthesis injected
+    assert "User has 3 tanks." in prompt
+    assert "Reason in a few SHORT steps" in prompt  # AND reflect
+    assert out == "3"
+    assert a.last_telemetry["reflect_applied"] is True
+    assert a.last_telemetry["synthesis_injected"] is True
+
+
+# ── deterministic router: counting questions bypass the reader entirely ────────
+
+
+async def test_router_answers_count_without_calling_reader() -> None:
+    a = _adapter(reflect=True, reply="reasoning\nAnswer: 99", router=True)
+    from continuum.promotion.synthesis import DerivedFact
+
+    a._synthesis_facts = [  # type: ignore[attr-defined]
+        DerivedFact(subject="user", predicate="tank", count=3, members=["a", "b", "c"])
+    ]
+    out = await a.answer_question("How many tanks do I have?")
+    # routed deterministically → the code answer, NOT the reader's "99".
+    assert out == "3"
+    assert a.llm.prompt is None  # type: ignore[attr-defined]  # reader never called
+    assert a.last_telemetry["llm_call_count"] == 0
+    assert a.last_telemetry["router_applied"] is True
+
+
+async def test_router_falls_through_when_no_match() -> None:
+    a = _adapter(reflect=True, reply="reasoning\nAnswer: blue", router=True)
+    from continuum.promotion.synthesis import DerivedFact
+
+    a._synthesis_facts = [  # type: ignore[attr-defined]
+        DerivedFact(subject="user", predicate="tank", count=3, members=["a", "b", "c"])
+    ]
+    # not a counting question → router returns None → reader answers.
+    out = await a.answer_question("What is my favorite colour?")
+    assert out == "blue"
+    assert a.llm.prompt is not None  # type: ignore[attr-defined]  # reader WAS called
+    assert a.last_telemetry.get("router_applied") is None

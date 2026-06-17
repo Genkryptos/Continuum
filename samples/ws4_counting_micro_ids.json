@@ -1,0 +1,9 @@
+{
+  "name": "ws4_counting_micro",
+  "purpose": "3 counting failures \u2014 fast directional write-time-extraction test (~15 min).",
+  "question_ids": [
+    "01493427",
+    "2133c1b5",
+    "4b24c848"
+  ]
+}

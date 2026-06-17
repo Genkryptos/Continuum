@@ -1,0 +1,14 @@
+{
+  "name": "ws4_counting_smoke",
+  "purpose": "8 clean counting failures (numeric answers) for a cheap write-time-extraction directional test.",
+  "question_ids": [
+    "01493427",
+    "2133c1b5",
+    "4b24c848",
+    "4d6b87c8",
+    "69fee5aa",
+    "72e3ee87",
+    "7a87bd0c",
+    "ba61f0b9"
+  ]
+}

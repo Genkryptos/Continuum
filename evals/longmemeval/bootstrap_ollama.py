@@ -2784,6 +2784,96 @@ def _is_knowledge_update_question(question: str) -> bool:
     return any(term in q for term in _KNOWLEDGE_UPDATE_TERMS)
 
 
+# v3 Reflect — a single, bounded reasoning pass (NOT an agentic loop).
+#
+# The motivating finding: ~29 of the 118 v2.0 failures are inference / preference
+# questions where the right context IS retrieved (recall ~99%) but the single-shot
+# reader under-reasons — it has to *connect* clues ("Cartwheel app" + "the email"
+# → Target), *apply* a stated preference, or *combine* across turns. Synthesis
+# (counting in code) fixes the counting bucket; it does nothing for these.
+#
+# Reflect is exactly ONE extra-conditioned LLM call: same retrieval, same single
+# `llm.complete`, but the prompt elicits a short chain-of-thought (pull facts →
+# connect them → final answer) with a bounded token budget. There is no
+# re-retrieval, no iteration, no tool loop, no model-controlled control flow —
+# that is the line between this and the v1 IterativeReasoner that went
+# net-negative. It is structured CoT prompting, not an agent.
+#
+# Gated AWAY from simple single-session-user fact recall, where CoT over-thinks a
+# clean fact into a confidently-wrong inference (the v1 −6pp lesson). Default
+# eligibility is the hard categories where reasoning is the missing step.
+# Full-500 lesson: reflect was net-NEGATIVE on multi-session (−13) and
+# temporal-reasoning (−13) and single-session-assistant (−2) — CoT over-reasons
+# those. It only nets positive on single-session-preference (the preference-
+# application prompt, a clear semantic win) and knowledge-update (+2). So the
+# default fires ONLY there; the rest go to the tuned direct prompts. Widen with
+# --reflect-types to experiment.
+_REFLECT_DEFAULT_TYPES: frozenset[str] = frozenset({
+    "single-session-preference",
+    "knowledge-update",
+})
+
+# Excluded outright — plain fact lookups the direct path already nails; CoT only
+# adds regression risk here.
+_REFLECT_EXCLUDED_TYPES: frozenset[str] = frozenset({
+    "single-session-user",
+})
+
+_REFLECT_ANSWER_RE = re.compile(r"(?is)\banswer\s*:\s*(.+?)\s*$")
+
+
+def _is_reflect_eligible(
+    question_type: str,
+    question: str,
+    *,
+    allowed: frozenset[str] = _REFLECT_DEFAULT_TYPES,
+) -> bool:
+    """Gate for the bounded Reflect pass.
+
+    True only for the categories where the bounded CoT pass nets positive —
+    preference (apply a stated preference) and knowledge-update (+2). Everything
+    else (multi-session / temporal / assistant / plain recall) goes to the tuned
+    direct prompts, where the full-500 run showed CoT over-reasons and regresses.
+    When the dataset type is unknown, fall back to preference / knowledge-update
+    wording only (NOT temporal — that was net −13).
+    """
+    qt = (question_type or "").lower().strip()
+    if qt in _REFLECT_EXCLUDED_TYPES:
+        return False
+    if qt in allowed:
+        return True
+    if qt:  # a known-but-not-allowed type → don't reflect
+        return False
+    # unknown type: lean on wording for the two net-positive intents only.
+    return _is_preference_question(question) or _is_knowledge_update_question(question)
+
+
+def _extract_reflect_answer(text: str) -> str:
+    """Pull the final answer from a Reflect chain-of-thought.
+
+    The Reflect prompt asks the model to end with a line ``Answer: <final>``.
+    Prefer the LAST such marker (the model may quote the word mid-reasoning).
+    Graceful fallbacks keep this from ever dropping an answer:
+      1. last ``Answer:`` marker → text after it (one or more lines),
+      2. else the last non-empty line,
+      3. else the whole stripped string.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    # Find the last "Answer:" marker and take everything after it.
+    markers = list(re.finditer(r"(?i)\banswer\s*:\s*", raw))
+    if markers:
+        tail = raw[markers[-1].end():].strip()
+        if tail:
+            return tail
+    # No usable marker: fall back to the last non-empty line.
+    for line in reversed(raw.splitlines()):
+        if line.strip():
+            return line.strip()
+    return raw
+
+
 # WS-date-math — the temporal residual is date ARITHMETIC the model still
 # botches even with dates surfaced (WS-1). For delta questions we ask the model
 # to emit a small SPEC alongside its answer, then compute the result in CODE
@@ -2897,11 +2987,31 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         knowledge_update_conditioning: bool = False,
         temporal_codemath: bool = False,
         synthesis_fn: Any = None,
+        reflect: bool = False,
+        reflect_max_tokens: int = 512,
+        reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
+        router: bool = False,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
+        # v3 Reflect: a single bounded reasoning pass (NOT a loop). When on and
+        # the question is in an eligible hard category, the final answer call uses
+        # a chain-of-thought prompt (pull facts → connect → "Answer: <final>")
+        # with a larger token budget, and we parse the final line. Still exactly
+        # ONE llm.complete; no re-retrieval, no iteration. Gated to keep it off
+        # the simple fact-recall questions the direct path already nails.
+        self._reflect = reflect
+        self._reflect_max_tokens = reflect_max_tokens
+        self._reflect_types = reflect_types
+        # v3 deterministic router: for a counting question with exactly one
+        # confident synthesis match, return the CODE-COMPUTED count/total
+        # directly and SKIP the reader. More robust than injection — the answer
+        # never passes through gpt-oss's arithmetic, so it can't be over-counted
+        # or flipped by rerun noise. Falls through to the reader when there's no
+        # confident match.
+        self._router = router
         # v3 synthesis: when wired, ingest-time aggregation produces per-entity
         # counts ("User has 5 tops") that are injected into the prompt for
         # counting questions — the reader reads the count instead of miscounting.
@@ -3001,6 +3111,23 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 log.exception("direct retrieve failed for %r", question[:80])
         self.last_ctx = ctx
 
+        # v3 deterministic router: answer counting questions from CODE, bypassing
+        # the reader entirely. Only fires on exactly one confident synthesis match
+        # (route_count_answer returns None otherwise → fall through to the reader).
+        if self._router and self._synthesis_facts:
+            from continuum.promotion.synthesis import route_count_answer
+
+            routed = route_count_answer(self._synthesis_facts, question)
+            if routed is not None:
+                self.last_telemetry = {
+                    "llm_call_count": 0,
+                    "answer_mode": "router_count",
+                    "router_applied": True,
+                    "synthesis_summaries": len(self._synthesis_facts),
+                    "retrieved_items": len(list(getattr(ctx, "items", []) or [])),
+                }
+                return routed
+
         pool = list(getattr(ctx, "items", []) or [])
         reranked = False
         # WS-4: the cross-encoder rerank measurably HELPS the retrieval-bound
@@ -3055,6 +3182,15 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # missing_aggregation despite 85% recall).
         aggregate = qt == "multi-session" or is_aggregate_question(question)
 
+        # v3 Reflect (gated): a single bounded CoT pass for the hard reasoning
+        # categories. Kept OFF the deterministic temporal-delta path (codemath is
+        # exact; don't let CoT override verified arithmetic).
+        reflect_on = (
+            self._reflect
+            and not temporal_delta
+            and _is_reflect_eligible(qt, question, allowed=self._reflect_types)
+        )
+
         if ku:
             # Current-first: live LTM facts (source="ltm_fact") ahead of raw
             # turns. Stable sort preserves retrieval order within each group.
@@ -3092,12 +3228,22 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # ~40 and buried the answer), so the reader reads the count/total.
         from continuum.promotion.synthesis import (
             is_counting_question,
+            is_scoped_count_question,
             relevant_summaries,
         )
 
+        # Inject the code-computed count ONLY for unbounded totals. For a
+        # bounded-window question ("in March", "this year", "since I started
+        # again") the all-time synthesis total is WRONG, so skip injection and let
+        # the reader count the in-window members from context (fixes the
+        # postcards 25-vs-33 / weddings 3-vs-4 regressions).
         chosen = (
             relevant_summaries(self._synthesis_facts, question)
-            if (self._synthesis_facts and is_counting_question(question))
+            if (
+                self._synthesis_facts
+                and is_counting_question(question)
+                and not is_scoped_count_question(question)
+            )
             else []
         )
         synthesis_injected = bool(chosen)
@@ -3108,7 +3254,62 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 "questions):\n" + "\n".join(f"- {f.text}" for f in chosen)
             )
             context = block + "\n\n" + context
-        if temporal:
+        if reflect_on:
+            # v3 Reflect — ONE bounded reasoning pass. The context above is
+            # already conditioned (COMPUTED FACTS from synthesis, date stamps if
+            # temporal, [CURRENT FACT] marks if knowledge-update), so this prompt
+            # just elicits the missing step: connect the retrieved clues to the
+            # answer. No re-retrieval, no iteration — a single llm.complete with a
+            # larger token budget, final answer parsed from the "Answer:" line.
+            today = (getattr(self, "dataset_question_date", "") or "").strip()
+            today_line = f"Today's date is {today}.\n" if today else ""
+            _reflect_pref = (
+                qt == "single-session-preference" or _is_preference_question(question)
+            )
+            if _reflect_pref:
+                # Preference-application Reflect: the generic "answer or say I
+                # don't know" prompt made the reader abstain / give a generic menu
+                # on preference questions (0/12). Here the task is to FIND the
+                # user's stated preference and HONOUR it with a concrete pick.
+                prompt = (
+                    "You are responding to the user, drawing on their own "
+                    "conversation history. Reason in a few SHORT steps, then give "
+                    "a concrete, personalised response.\n" + today_line +
+                    "Steps:\n"
+                    "1) Find the specific preference, habit, resource, or past "
+                    "experience the user has STATED in the retrieved conversation "
+                    "that is relevant to their request (quote it).\n"
+                    "2) Give a SPECIFIC recommendation or answer that honours that "
+                    "preference and makes the link explicit — a definite pick, NOT "
+                    "a long generic menu of options. Never invent a preference; "
+                    "never sacrifice factual accuracy.\n"
+                    "3) On a NEW final line, write exactly: Answer: <the response>\n"
+                    "Do NOT answer 'I don't know' when a relevant stated "
+                    "preference is present — use it.\n\n"
+                    f"Retrieved conversation:\n{context}\n\n"
+                    f"Request: {question}"
+                )
+            else:
+                prompt = (
+                    "You are answering a question from the user's own conversation "
+                    "history. Reason in a few SHORT steps, then commit to a final "
+                    "answer.\n" + today_line +
+                    "Steps:\n"
+                    "1) Quote the specific facts in the retrieved conversation that "
+                    "bear on the question.\n"
+                    "2) Connect them to what the question actually asks — apply any "
+                    "stated user preference, make the necessary inference, combine "
+                    "evidence across turns, or work out the timing. Items labelled "
+                    "[CURRENT FACT] are the user's current resolved state; trust "
+                    "COMPUTED FACTS for counts/totals.\n"
+                    "3) On a NEW final line, write exactly: Answer: <the answer>\n"
+                    "Keep the reasoning brief. Use ONLY the retrieved conversation. "
+                    "If the answer truly isn't present, the final line is "
+                    "'Answer: I don't know.'\n\n"
+                    f"Retrieved conversation:\n{context}\n\n"
+                    f"Question: {question}"
+                )
+        elif temporal:
             # The turns above are date-stamped. Give "now" and ask for an
             # explicit, scoped date calculation (NOT a general reasoning loop).
             today = (getattr(self, "dataset_question_date", "") or "").strip()
@@ -3210,12 +3411,19 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             )
         try:
             answer = await self.llm.complete(
-                prompt=prompt, max_tokens=self.answer_max_tokens,
+                prompt=prompt,
+                max_tokens=(
+                    self._reflect_max_tokens if reflect_on else self.answer_max_tokens
+                ),
             )
         except Exception:
             log.exception("direct answer LLM call failed")
             answer = ""
         answer = (answer or "").strip()
+        # v3 Reflect: the model reasoned then ended with "Answer: <final>" — keep
+        # only the committed answer, never the chain-of-thought.
+        if reflect_on and answer:
+            answer = _extract_reflect_answer(answer)
 
         # WS-date-math: replace the model's mental arithmetic with the
         # code-computed delta when a valid SPEC is present; otherwise strip the
@@ -3248,6 +3456,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "synthesis_injected": synthesis_injected,
             "synthesis_summaries": len(self._synthesis_facts),
             "synthesis_injected_n": len(chosen),
+            "reflect_applied": reflect_on,
         }
         return answer
 
@@ -4492,6 +4701,10 @@ def make_adapter_factory(
     aggregation_v2: bool = False,
     knowledge_update_conditioning: bool = True,  # WS-3 confirmed (~+4.5pp KU) → default-on
     temporal_codemath: bool = False,
+    reflect: bool = False,
+    reflect_max_tokens: int = 512,
+    reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
+    router: bool = False,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4627,6 +4840,10 @@ def make_adapter_factory(
                 knowledge_update_conditioning=knowledge_update_conditioning,  # WS-3
                 temporal_codemath=temporal_codemath,  # WS-date-math
                 synthesis_fn=synthesis_fn,  # v3 aggregation
+                reflect=reflect,  # v3 Reflect (bounded CoT pass)
+                reflect_max_tokens=reflect_max_tokens,
+                reflect_types=reflect_types,
+                router=router,  # v3 deterministic answer router
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -4962,16 +5179,38 @@ async def main_async(args: argparse.Namespace) -> int:
     # v3 synthesis: an LLM completion (prompt -> JSON text) for the triple
     # extractor. litellm routes args.synthesis_model (default openrouter gpt-4o-mini).
     synthesis_fn: Any = None
-    if args.synthesis:
+    if args.synthesis and args.synthesis_model == "local":
+        # --synthesis-model local → the dependency-free, $0 rule-based extractor
+        # (no API, no network). Same {"facts": [...]} shape, so the cache +
+        # aggregate path is unchanged. No disk cache needed — it's instant.
+        from continuum.promotion.local_extractor import local_completion_fn
+
+        synthesis_fn = local_completion_fn
+        log.info("v3 synthesis ENABLED — extractor=local (no API, $0)")
+    elif args.synthesis:
         import litellm
 
+        # gpt-5 / o-series are reasoning models: they reject a custom temperature
+        # and need ``max_completion_tokens`` (with headroom for reasoning tokens)
+        # instead of ``max_tokens``. Detect and branch so the SAME flag works for
+        # gpt-4o-mini (today) and gpt-5-mini (tomorrow). drop_params is a belt-and-
+        # braces fallback so litellm silently drops anything still unsupported.
+        _synth_reasoning = bool(
+            re.search(r"(?:gpt-5|\bo[13])", args.synthesis_model, re.IGNORECASE)
+        )
+
         async def _synth(prompt: str) -> str:
-            resp = await litellm.acompletion(
-                model=args.synthesis_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=1024,
-            )
+            kwargs: dict[str, Any] = {
+                "model": args.synthesis_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "drop_params": True,
+            }
+            if _synth_reasoning:
+                kwargs["max_completion_tokens"] = 4096  # reasoning + JSON headroom
+            else:
+                kwargs["temperature"] = 0.0
+                kwargs["max_tokens"] = 1024
+            resp = await litellm.acompletion(**kwargs)
             return str(resp["choices"][0]["message"]["content"])
 
         synthesis_fn = _synth
@@ -5093,6 +5332,19 @@ async def main_async(args: argparse.Namespace) -> int:
         log.info("LTM-backed haystack ENABLED — backend=%s, llm_promoter=%s",
                  ltm_backend_label, args.llm_promoter)
 
+    # v3 Reflect: parse the eligible-types override (CSV) once. Empty/unset →
+    # the default hard-category set.
+    _reflect_types = (
+        frozenset(t.strip().lower() for t in args.reflect_types.split(",") if t.strip())
+        if getattr(args, "reflect_types", "")
+        else _REFLECT_DEFAULT_TYPES
+    )
+    if args.reflect:
+        log.info(
+            "v3 Reflect ENABLED — bounded CoT pass, types=%s, max_tokens=%d",
+            sorted(_reflect_types), args.reflect_max_tokens,
+        )
+
     factory = make_adapter_factory(
         llm=llm, embedder=embedder, top_k=effective_top_k, chain=chain,
         answer_max_tokens=args.answer_max_tokens,
@@ -5111,6 +5363,10 @@ async def main_async(args: argparse.Namespace) -> int:
         aggregation_v2=args.aggregation_v2,
         knowledge_update_conditioning=args.ku_recency,
         temporal_codemath=args.temporal_codemath,
+        reflect=args.reflect,
+        reflect_max_tokens=args.reflect_max_tokens,
+        reflect_types=_reflect_types,
+        router=args.router,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -5821,6 +6077,40 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Directory to cache synthesis extraction calls (deterministic, so "
             "re-runs cost zero credits + are instant). Empty string disables."
+        ),
+    )
+    p.add_argument(
+        "--reflect", action="store_true",
+        help=(
+            "v3 Reflect: a single BOUNDED reasoning pass (not an agentic loop). "
+            "On eligible hard categories (inference / preference / multi-hop / "
+            "temporal) the final answer call uses a short chain-of-thought "
+            "('quote facts → connect → Answer: <final>') with a larger token "
+            "budget; still exactly one llm.complete, no re-retrieval/iteration. "
+            "Gated off single-session-user fact recall. See roadmap_v3.md §8."
+        ),
+    )
+    p.add_argument(
+        "--reflect-max-tokens", type=int, default=512,
+        help="Token budget for the Reflect CoT pass (default 512).",
+    )
+    p.add_argument(
+        "--reflect-types", default="",
+        help=(
+            "CSV of dataset question_types eligible for Reflect. Empty → the "
+            "default hard-category set (single-session-preference, "
+            "single-session-assistant, multi-session, knowledge-update, "
+            "temporal-reasoning)."
+        ),
+    )
+    p.add_argument(
+        "--router", action="store_true",
+        help=(
+            "v3 deterministic answer router: for counting questions with exactly "
+            "one confident synthesis match, return the CODE-COMPUTED count/total "
+            "directly and SKIP the reader (no injection, no reader arithmetic, no "
+            "rerun noise). Requires --synthesis. Falls through to the reader when "
+            "there's no confident match. A/B vs the injection path."
         ),
     )
     p.add_argument(

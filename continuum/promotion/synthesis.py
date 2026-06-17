@@ -228,6 +228,64 @@ def _strip_json(raw: str) -> str:
     return s[i : j + 1] if i != -1 and j != -1 and j > i else s
 
 
+# One flat (non-nested) JSON object — enough to salvage the fact records the
+# extractor emits, which are flat {"predicate":..,"object":..,"quantity":..}.
+_OBJ_RE = re.compile(r"\{[^{}]*\}")
+# A double-quoted JSON string value, tolerating escaped chars inside.
+_STR = r'"((?:[^"\\]|\\.)*)"'
+_PRED_RE = re.compile(r'"predicate"\s*:\s*' + _STR)
+_OBJ_FIELD_RE = re.compile(r'"object"\s*:\s*' + _STR)
+_QTY_RE = re.compile(r'"quantity"\s*:\s*("?-?\d+(?:\.\d+)?"?|null)')
+_UNIT_RE = re.compile(r'"unit"\s*:\s*' + _STR)
+
+
+def _salvage_fact_items(raw: str) -> list[dict[str, object]]:
+    """Regex-recover the well-formed fact objects from malformed JSON.
+
+    gpt-4o-mini sometimes emits a single bad string (an unescaped quote inside a
+    value, e.g. a model name) that breaks ``json.loads`` for the WHOLE response —
+    which would otherwise drop every member in that session and undercount. We
+    scan each flat ``{...}`` block and pull predicate/object/quantity/unit by
+    regex, skipping only the genuinely broken records instead of the whole set.
+    """
+    items: list[dict[str, object]] = []
+    for blob in _OBJ_RE.findall(raw or ""):
+        p = _PRED_RE.search(blob)
+        o = _OBJ_FIELD_RE.search(blob)
+        if not (p and o):
+            continue
+        item: dict[str, object] = {"predicate": p.group(1), "object": o.group(1)}
+        q = _QTY_RE.search(blob)
+        if q and q.group(1) != "null":
+            item["quantity"] = q.group(1).strip('"')
+        u = _UNIT_RE.search(blob)
+        if u:
+            item["unit"] = u.group(1)
+        items.append(item)
+    return items
+
+
+def _parse_fact_items(raw: str) -> list[dict[str, object]]:
+    """Parse the extractor response into fact dicts, tolerantly.
+
+    Fast path: strict ``json.loads`` of the ``{"facts": [...]}`` envelope. On any
+    JSON error, fall back to regex salvage so one malformed record no longer
+    discards an entire session's facts (the H&M-3-vs-5 / citrus-2-vs-3 cause).
+    """
+    try:
+        data = json.loads(_strip_json(raw))
+        if isinstance(data, dict):
+            facts = data.get("facts", [])
+            if isinstance(facts, list):
+                return [f for f in facts if isinstance(f, dict)]
+    except (json.JSONDecodeError, ValueError):
+        pass
+    salvaged = _salvage_fact_items(raw)
+    if salvaged:
+        log.warning("structured-fact JSON malformed — salvaged %d records", len(salvaged))
+    return salvaged
+
+
 def _coerce_qty(v: object) -> float | None:
     if isinstance(v, bool) or v is None:
         return None
@@ -251,13 +309,14 @@ async def extract_structured_facts(
         return []
     try:
         raw = await completion_fn(_EXTRACT_PROMPT % text)
-        data = json.loads(_strip_json(raw))
     except Exception:
-        log.exception("structured-fact extraction failed — returning none")
+        log.exception("structured-fact extraction call failed — returning none")
         return []
 
+    items = _parse_fact_items(raw)
+
     facts: list[StructuredFact] = []
-    for item in (data or {}).get("facts", []):
+    for item in items:
         if not isinstance(item, dict):
             continue
         pred = _normalize(str(item.get("predicate", "")))
@@ -322,6 +381,32 @@ def is_counting_question(text: str) -> bool:
     return bool(text) and _COUNTING_RE.search(text) is not None
 
 
+# A counting question scoped to a BOUNDED time window — "in the past two weeks",
+# "this year", "in March", "since I started again", "3 weeks ago". For these the
+# all-time synthesis total is WRONG (it counts members outside the window), so we
+# must NOT inject it; the reader counts the in-window members from context.
+# Unbounded totals ("so far", "in total", "currently", "do I have", "a typical
+# week") deliberately do NOT match — synthesis is correct there.
+_MONTHS = (
+    "january|february|march|april|may|june|july|august"
+    "|september|october|november|december"
+)
+_SCOPED_COUNT_RE = re.compile(
+    r"\bin the (?:first|last|past)\s+(?:\w+\s+)?(?:day|week|month|year)s?\b"
+    r"|\b(?:this|last|past|next)\s+(?:\w+\s+)?(?:day|week|month|year)s?\b"
+    r"|\bsince I (?:started|began|moved|got|joined|switched|changed)\b"
+    r"|\bin (?:" + _MONTHS + r")\b"
+    r"|\b\w+\s+(?:days?|weeks?|months?|years?)\s+ago\b",
+    re.IGNORECASE,
+)
+
+
+def is_scoped_count_question(text: str) -> bool:
+    """True for counting questions bounded to a time window (the synthesis total
+    would be wrong — see the postcards 25-vs-33 / weddings 3-vs-4 regressions)."""
+    return bool(text) and _SCOPED_COUNT_RE.search(text) is not None
+
+
 def _predicate_in_question(predicate: str, question_lower: str) -> bool:
     """Does any (3+ char) word of the predicate appear as a word in the question?"""
     for w in re.findall(r"[a-z]+", predicate.lower()):
@@ -347,6 +432,61 @@ def relevant_summaries(
     if matched:
         return matched
     return sorted((f for f in facts if f.count >= 2), key=lambda f: -f.count)[:fallback_max]
+
+
+# Sum-intent: the question wants a TOTAL of a quantity (hours, money, days), not
+# a count of distinct members.
+_SUM_INTENT_RE = re.compile(
+    r"\bhow (?:much|long)\b|\btotal\b|\bin total\b|\baltogether\b|\bcombined\b"
+    r"|\b(?:hours?|minutes?|days?|weeks?|months?|years?|dollars?|\$)\b",
+    re.IGNORECASE,
+)
+
+# STRICT count intent — the ONLY phrasings the router may answer deterministically.
+# "how many <X>" / "number of <X>" = a distinct-member count.
+_COUNT_INTENT_RE = re.compile(r"\bhow many\b|\bnumber of\b", re.IGNORECASE)
+# Money-sum intent — "how much did I spend", "total amount", "$".
+_MONEY_SUM_RE = re.compile(
+    r"\bhow much\b.*\b(?:spen[dt]|cost|pay|paid|money|amount|total|\$)\b"
+    r"|\btotal\b.*\b(?:spen[dt]|cost|amount|money)\b",
+    re.IGNORECASE,
+)
+
+
+def route_count_answer(facts: list[DerivedFact], question: str) -> str | None:
+    """Deterministic answer for a counting question — the BARE value, bypassing
+    the reader entirely.
+
+    STRICT by design (full-500 lesson): an earlier version fired on *any* single
+    predicate match and was 82% WRONG — it answered "how long is my commute" and
+    "what yoga studio" with a garbage count. So we now fire ONLY on:
+      • explicit "how many" / "number of"  → distinct count (and only count ≥ 2), or
+      • money/measurement "how much / total ..." with a real summed quantity.
+    Anything else (durations, recall, "how often") returns ``None`` → the reader
+    answers. Still requires exactly ONE strict predicate match (never the fuzzy
+    fallback) so a coincidental match can't hijack the answer.
+    """
+    if not (facts and question):
+        return None
+    if is_scoped_count_question(question):
+        return None  # all-time total is wrong for a bounded-window question
+    ql = question.lower()
+    want_count = _COUNT_INTENT_RE.search(ql) is not None
+    want_money = _MONEY_SUM_RE.search(ql) is not None
+    if not (want_count or want_money):
+        return None  # not a clear count/sum question → let the reader handle it
+    matched = [f for f in facts if _predicate_in_question(f.predicate, ql)]
+    if len(matched) != 1:
+        return None  # 0 = no signal; >1 = ambiguous → let the reader decide
+    d = matched[0]
+    # SUM path: a real measurement total + sum/money intent → the total.
+    if d.total is not None and (want_money or _SUM_INTENT_RE.search(ql)):
+        return f"{_fmt_num(d.total)} {d.unit}".strip()
+    # COUNT path: explicit "how many / number of", and only when ≥ 2 distinct
+    # members (a count of 1 is usually a spurious single match — defer to reader).
+    if want_count and d.count >= 2:
+        return str(d.count)
+    return None
 
 
 def to_memory_item(
