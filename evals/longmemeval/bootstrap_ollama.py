@@ -2905,6 +2905,47 @@ def _majority_vote(answers: list[str]) -> str:
     return groups[best][0]
 
 
+# Phase 1 — evidence distillation. Recall is ~98% but the reader DROWNS in ~70
+# retrieved turns (the recall-fix run proved MORE context lowered accuracy). So
+# for the distraction-heavy categories, first ask the model to QUOTE only the
+# relevant turns (one bounded extractive call, NOT a loop), then answer from that
+# short slice. Gated to multi-session + knowledge-update (the floor categories);
+# the 90%+ categories are left untouched.
+_DISTILL_DEFAULT_TYPES: frozenset[str] = frozenset({
+    "multi-session",
+    "knowledge-update",
+})
+
+_DISTILL_PROMPT = (
+    "From the retrieved conversation below, copy VERBATIM only the lines that "
+    "could bear on the question — every relevant date, quantity, name, or "
+    "statement — one per line. ALWAYS keep any line marked [CURRENT FACT] and "
+    "anything under COMPUTED FACTS. Omit unrelated chatter. Do NOT answer the "
+    "question; only extract the relevant lines.\n\n"
+    "Retrieved conversation:\n%s\n\n"
+    "Question: %s\n\nRelevant lines:"
+)
+
+
+def _is_distill_eligible(
+    question_type: str,
+    question: str,
+    *,
+    allowed: frozenset[str] = _DISTILL_DEFAULT_TYPES,
+) -> bool:
+    """Gate for evidence distillation — the categories where distraction hurts
+    most (multi-session, knowledge-update). Aggregate/counting wording also
+    qualifies when the dataset type is unknown."""
+    qt = (question_type or "").lower().strip()
+    if qt in allowed:
+        return True
+    if qt:  # a known type not in the set → skip
+        return False
+    from continuum.promotion.synthesis import is_counting_question
+
+    return is_counting_question(question) or _is_knowledge_update_question(question)
+
+
 # WS-date-math — the temporal residual is date ARITHMETIC the model still
 # botches even with dates surfaced (WS-1). For delta questions we ask the model
 # to emit a small SPEC alongside its answer, then compute the result in CODE
@@ -3023,6 +3064,9 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
         router: bool = False,
         vote_n: int = 1,
+        distill: bool = False,
+        distill_max_tokens: int = 1024,
+        distill_types: frozenset[str] = _DISTILL_DEFAULT_TYPES,
     ) -> None:
         super().__init__(
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
@@ -3048,6 +3092,12 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # the legacy single-call path; >1 trades N× reader calls for lower
         # run-to-run variance (gpt-oss has ~44% answer variance).
         self._vote_n = max(1, int(vote_n))
+        # Phase 1 evidence distillation: one bounded extractive call filters the
+        # retrieved turns down to the relevant lines before answering. Gated to
+        # the distraction-heavy categories (multi-session, knowledge-update).
+        self._distill = distill
+        self._distill_max_tokens = distill_max_tokens
+        self._distill_types = distill_types
         # v3 synthesis: when wired, ingest-time aggregation produces per-entity
         # counts ("User has 5 tops") that are injected into the prompt for
         # counting questions — the reader reads the count instead of miscounting.
@@ -3290,6 +3340,31 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 "questions):\n" + "\n".join(f"- {f.text}" for f in chosen)
             )
             context = block + "\n\n" + context
+
+        # Phase 1 evidence distillation: one bounded extractive call filters the
+        # retrieved turns down to the relevant lines, so the reader answers over a
+        # short, on-point slice instead of drowning in ~70 turns. Gated to the
+        # distraction-heavy categories; graceful (keeps the full context if the
+        # filter returns something trivially short).
+        distilled = False
+        if (
+            self._distill
+            and context.strip()
+            and _is_distill_eligible(qt, question, allowed=self._distill_types)
+        ):
+            try:
+                quotes = await self.llm.complete(
+                    prompt=_DISTILL_PROMPT % (context, question),
+                    max_tokens=self._distill_max_tokens,
+                )
+            except Exception:
+                log.exception("distill call failed; using full context")
+                quotes = ""
+            quotes = (quotes or "").strip()
+            if len(quotes) >= 20:  # non-trivial extract → answer over it
+                context = quotes
+                distilled = True
+
         if reflect_on:
             # v3 Reflect — ONE bounded reasoning pass. The context above is
             # already conditioned (COMPUTED FACTS from synthesis, date stamps if
@@ -3504,6 +3579,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "synthesis_summaries": len(self._synthesis_facts),
             "synthesis_injected_n": len(chosen),
             "reflect_applied": reflect_on,
+            "distill_applied": distilled,
         }
         return answer
 
@@ -4753,6 +4829,9 @@ def make_adapter_factory(
     reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
     router: bool = False,
     vote_n: int = 1,
+    distill: bool = False,
+    distill_max_tokens: int = 1024,
+    distill_types: frozenset[str] = _DISTILL_DEFAULT_TYPES,
     small_llm: Any | None = None,
     max_context_tokens: int = 100_000,
     score_weights: dict[str, float] | None = None,
@@ -4893,6 +4972,9 @@ def make_adapter_factory(
                 reflect_types=reflect_types,
                 router=router,  # v3 deterministic answer router
                 vote_n=vote_n,  # self-consistency (majority over N samples)
+                distill=distill,  # Phase 1 evidence distillation
+                distill_max_tokens=distill_max_tokens,
+                distill_types=distill_types,
             )
         if use_iterative_reasoner:
             return _IterativeReasoningAdapter(
@@ -5417,6 +5499,8 @@ async def main_async(args: argparse.Namespace) -> int:
         reflect_types=_reflect_types,
         router=args.router,
         vote_n=args.vote_n,
+        distill=args.distill,
+        distill_max_tokens=args.distill_max_tokens,
         small_llm=small_llm,
         rrf_k=args.rrf_k,
         max_context_tokens=args.max_context_tokens,
@@ -6171,6 +6255,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "N>1 reduces the ±3-5pp run-to-run variance and lifts the consensus "
             "answer, at N× reader calls. Try 3."
         ),
+    )
+    p.add_argument(
+        "--distill", action="store_true",
+        help=(
+            "Phase 1 evidence distillation: one bounded extractive call quotes "
+            "only the retrieved turns relevant to the question, then the reader "
+            "answers over that short slice (recall is ~98%; the reader drowns in "
+            "~70 turns). Gated to multi-session + knowledge-update. +1 reader "
+            "call per eligible question."
+        ),
+    )
+    p.add_argument(
+        "--distill-max-tokens", type=int, default=1024,
+        help="Token budget for the distillation extract (default 1024).",
     )
     p.add_argument(
         "--question-ids-file",

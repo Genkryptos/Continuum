@@ -21,6 +21,7 @@ from continuum.core.types import MemoryItem, MemoryTier
 from evals.longmemeval.bootstrap_ollama import (
     _DirectAnswerAdapter,
     _extract_reflect_answer,
+    _is_distill_eligible,
     _is_reflect_eligible,
     _majority_vote,
 )
@@ -275,13 +276,15 @@ def test_majority_vote_skips_empty_unless_all_empty() -> None:
 
 
 class _CyclingLLM:
-    """Returns a different reply each call (to exercise voting)."""
+    """Returns a different reply each call (to exercise voting / distill)."""
 
     def __init__(self, replies: list[str]) -> None:
         self._replies = replies
         self.calls = 0
+        self.last_prompt: str | None = None
 
     async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        self.last_prompt = prompt
         r = self._replies[self.calls % len(self._replies)]
         self.calls += 1
         return r
@@ -317,3 +320,52 @@ async def test_vote_n_one_is_single_call() -> None:
     assert out == "Boston"
     assert a.llm.calls == 1  # type: ignore[attr-defined]
     assert a.last_telemetry["llm_call_count"] == 1
+
+
+# ── Phase 1 evidence distillation ─────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("qt", ["multi-session", "knowledge-update"])
+def test_distill_eligible_default(qt: str) -> None:
+    assert _is_distill_eligible(qt, "how many tanks?") is True
+
+
+@pytest.mark.parametrize("qt", ["single-session-user", "single-session-preference"])
+def test_distill_not_eligible_other_types(qt: str) -> None:
+    assert _is_distill_eligible(qt, "what is my dog's name?") is False
+
+
+async def test_distill_filters_then_answers() -> None:
+    # call 1 = distill (returns quotes), call 2 = answer over the quotes.
+    llm = _CyclingLLM(["[user] I have a goldfish tank\n[user] and a shrimp tank", "2"])
+    session = SimpleNamespace(
+        stm=_FakeSTM(),
+        retriever=_FakeRetriever([_turn("I have a goldfish tank"), _turn("random chatter")]),
+        session_id="s",
+    )
+    a = _DirectAnswerAdapter(
+        session=session, llm=llm, answer_max_tokens=16, top_k=8,
+        max_context_chars=10_000, distill=True,
+    )
+    a.dataset_question_type = "multi-session"  # type: ignore[attr-defined]
+    out = await a.answer_question("How many tanks do I have?")
+    assert out == "2"
+    assert a.llm.calls == 2  # type: ignore[attr-defined]  # distill + answer
+    assert a.last_telemetry["distill_applied"] is True
+    # the answer prompt must contain the DISTILLED quotes, not raw chatter
+    assert "shrimp tank" in (a.llm.last_prompt or "")  # type: ignore[attr-defined]
+
+
+async def test_distill_off_is_single_call() -> None:
+    llm = _CyclingLLM(["answer"])
+    session = SimpleNamespace(
+        stm=_FakeSTM(), retriever=_FakeRetriever([_turn("I have a tank")]), session_id="s",
+    )
+    a = _DirectAnswerAdapter(
+        session=session, llm=llm, answer_max_tokens=16, top_k=8,
+        max_context_chars=10_000, distill=False,
+    )
+    a.dataset_question_type = "multi-session"  # type: ignore[attr-defined]
+    await a.answer_question("How many tanks?")
+    assert a.llm.calls == 1  # type: ignore[attr-defined]
+    assert a.last_telemetry["distill_applied"] is False
