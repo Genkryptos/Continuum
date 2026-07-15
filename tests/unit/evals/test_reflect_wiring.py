@@ -20,9 +20,11 @@ import pytest
 from continuum.core.types import MemoryItem, MemoryTier
 from evals.longmemeval.bootstrap_ollama import (
     _DirectAnswerAdapter,
+    _compute_temporal_order,
     _extract_reflect_answer,
     _is_distill_eligible,
     _is_reflect_eligible,
+    _is_temporal_order_question,
     _majority_vote,
 )
 
@@ -369,3 +371,45 @@ async def test_distill_off_is_single_call() -> None:
     await a.answer_question("How many tanks?")
     assert a.llm.calls == 1  # type: ignore[attr-defined]
     assert a.last_telemetry["distill_applied"] is False
+
+
+# ── Phase 2 temporal ordering (sort in code) ──────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        "What is the order of the six museums I visited from earliest to latest?",
+        "Who graduated first, second and third among Emma, Rachel and Alex?",
+        "Which event happened first, the concert or the festival?",
+    ],
+)
+def test_is_temporal_order_positive(q: str) -> None:
+    assert _is_temporal_order_question(q) is True
+
+
+@pytest.mark.parametrize(
+    "q",
+    ["How many days ago did I move?", "What is my favorite museum?"],
+)
+def test_is_temporal_order_negative(q: str) -> None:
+    assert _is_temporal_order_question(q) is False
+
+
+def test_compute_temporal_order_sorts_by_date() -> None:
+    a = (
+        'The order is...\n'
+        'ORDER: [{"event": "Metropolitan", "date": "2023-05-10"}, '
+        '{"event": "Science Museum", "date": "2023-01-02"}, '
+        '{"event": "Modern Art", "date": "2023-03-15"}]'
+    )
+    assert _compute_temporal_order(a) == "Science Museum, Modern Art, Metropolitan"
+
+
+def test_compute_temporal_order_none_on_garbage() -> None:
+    assert _compute_temporal_order("no spec here") is None
+    assert _compute_temporal_order("ORDER: [not json]") is None
+
+
+def test_compute_temporal_order_needs_two() -> None:
+    assert _compute_temporal_order('ORDER: [{"event": "x", "date": "2023-01-01"}]') is None

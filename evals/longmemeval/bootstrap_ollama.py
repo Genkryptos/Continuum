@@ -3026,6 +3026,53 @@ def _compute_temporal_from_spec(answer: str) -> str | None:
     return None
 
 
+# Phase 2 — temporal ORDERING in code. "what is the order of the events / who
+# graduated first" is a sort, not arithmetic: the reader mis-orders even with
+# dates present. So the model emits ``ORDER: [{event, date}, ...]`` and CODE
+# sorts by date (deterministic — the reader only IDENTIFIES the events).
+_TEMPORAL_ORDER_TERMS: tuple[str, ...] = (
+    "order of", "in what order", "in the order", "which happened first",
+    "which came first", "happened first", "earliest to latest", "from earliest",
+    "first, second", "second, and third", "who graduated first",
+    "which event happened", "put them in order", "chronological",
+)
+
+
+def _is_temporal_order_question(question: str) -> bool:
+    """Event-ordering questions (sort by date), distinct from the delta subset."""
+    q = (question or "").lower()
+    return any(t in q for t in _TEMPORAL_ORDER_TERMS)
+
+
+def _compute_temporal_order(answer: str) -> str | None:
+    """Parse an ``ORDER: [{"event","date"}, ...]`` line and return the events
+    sorted earliest→latest. ``None`` when no valid spec (keep the free text)."""
+    m = re.search(r"ORDER:\s*(\[.*\])", answer, re.DOTALL)
+    if not m:
+        return None
+    try:
+        items = json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(items, list):
+        return None
+    parsed: list[tuple[dt.date, str]] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        ev = str(it.get("event", "")).strip()
+        try:
+            d = dt.date.fromisoformat(str(it.get("date", ""))[:10])
+        except (ValueError, TypeError):
+            continue
+        if ev:
+            parsed.append((d, ev))
+    if len(parsed) < 2:
+        return None
+    parsed.sort(key=lambda x: x[0])
+    return ", ".join(ev for _, ev in parsed)
+
+
 class _DirectAnswerAdapter(_IngestingAdapter):
     """
     Minimal A/B baseline for the IterativeReasoner: retrieve, then hand
@@ -3252,6 +3299,14 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         temporal_delta = (
             temporal and self._temporal_codemath and _is_temporal_delta_question(question)
         )
+        # Phase 2: an ORDERING sub-question we can sort in code (mutually
+        # exclusive with delta — a question is one or the other).
+        temporal_order = (
+            temporal
+            and self._temporal_codemath
+            and not temporal_delta
+            and _is_temporal_order_question(question)
+        )
         # WS-7 preference branch (gated on the flag + the type/wording).
         preference = self._pref_conditioning and (
             qt == "single-session-preference" or _is_preference_question(question)
@@ -3449,6 +3504,16 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                     'and Y"; use op="ago" with the single event date + now for '
                     '"how long ago / since".'
                 )
+            elif temporal_order:
+                # Phase 2: emit each event with its date; CODE sorts them so the
+                # ordering can't be botched by the reader.
+                prompt += (
+                    "\n\nThen, on a NEW final line, list EVERY event the question "
+                    "asks to order, each with its date, as JSON:\n"
+                    'ORDER: [{"event": "<short label>", "date": "YYYY-MM-DD"}, ...]\n'
+                    "Include all of them; the exact wording of each label should "
+                    "match how you'd name it in the answer."
+                )
         elif ku:
             prompt = (
                 "The user's situation may have CHANGED over time. Items marked "
@@ -3542,6 +3607,13 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                     a, cm = computed, True
                 else:
                     a = re.sub(r"\s*SPEC:.*", "", a, flags=re.DOTALL).strip()
+            # Phase 2: replace the reader's ordering with the code-sorted one.
+            elif temporal_order and a:
+                ordered = _compute_temporal_order(a)
+                if ordered is not None:
+                    a, cm = ordered, True
+                else:
+                    a = re.sub(r"\s*ORDER:.*", "", a, flags=re.DOTALL).strip()
             return a, cm
 
         # Self-consistency: sample vote_n times and take the majority. gpt-oss is
