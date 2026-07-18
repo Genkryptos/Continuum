@@ -129,6 +129,8 @@ jobs:
           # gate would skip instead of enforcing.
           # [pool] extra → psycopg_pool, required by PostgresLTM's DSN pooling.
           pip install 'psycopg[binary,pool]>=3.1' mypy
+          # MCP SDK → so the continuum-mcp server tests run (else they skip).
+          pip install 'mcp>=1.0.0'
 
       # ── Unit tests (no DB) ───────────────────────────────────────────────
       - name: Run unit tests

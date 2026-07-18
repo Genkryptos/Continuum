@@ -240,6 +240,7 @@ module = [
     "tiktoken.*",
     "llmlingua.*",
     "tree_sitter.*",
+    "mcp.*",
 ]
 ignore_missing_imports = true
 

@@ -96,6 +96,7 @@ async def test_timeline_returns_dicts() -> None:
 
 
 async def test_build_server_registers_four_tools() -> None:
+    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
     server = build_server(memory=_FakeMemory())  # type: ignore[arg-type]
     tools = await server.list_tools()
     names = {t.name for t in tools}
@@ -103,6 +104,7 @@ async def test_build_server_registers_four_tools() -> None:
 
 
 def test_build_server_accepts_injected_memory() -> None:
+    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
     m = _FakeMemory()
     server = build_server(memory=m)  # type: ignore[arg-type]
     assert server is not None  # constructs without a DB / default memory
