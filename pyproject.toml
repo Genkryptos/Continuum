@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name        = "continuum-memory"
-version     = "0.3.0"
+dynamic     = ["version"]
 description = "Production-grade memory infrastructure for AI agents — tiered STM / MTM / LTM with first-class supersession and bi-temporal queries."
 readme      = "README.md"
 license     = { file = "LICENSE" }
@@ -64,11 +64,11 @@ dependencies = [
 # keys in [project] (TOML disallows splitting a table and returning
 # with un-namespaced keys later).
 [project.urls]
-Homepage      = "https://github.com/mayanksahu/Continuum"
-Documentation = "https://github.com/mayanksahu/Continuum/tree/main/docs"
-Repository    = "https://github.com/mayanksahu/Continuum"
-Issues        = "https://github.com/mayanksahu/Continuum/issues"
-Changelog     = "https://github.com/mayanksahu/Continuum/blob/main/CHANGELOG.md"
+Homepage      = "https://github.com/Genkryptos/Continuum"
+Documentation = "https://github.com/Genkryptos/Continuum/tree/main/docs"
+Repository    = "https://github.com/Genkryptos/Continuum"
+Issues        = "https://github.com/Genkryptos/Continuum/issues"
+Changelog     = "https://github.com/Genkryptos/Continuum/blob/main/CHANGELOG.md"
 
 
 # ── Optional extras ───────────────────────────────────────────────────────────
@@ -101,9 +101,13 @@ optimizer = [
 code = [
     "tree-sitter>=0.21.0",
 ]
+# MCP server — expose memory as tools to any MCP client (continuum-mcp)
+mcp = [
+    "mcp>=1.0.0",
+]
 # Everything at once (for full local dev)
 all = [
-    "continuum-memory[postgres,llm,embed,optimizer,code]",
+    "continuum-memory[postgres,llm,embed,optimizer,code,mcp]",
 ]
 # Developer toolchain — installed via `pip install -e .[dev]`
 dev = [
@@ -119,6 +123,17 @@ dev = [
     "psycopg2-binary>=2.9.9",
     "PyYAML>=6.0",
 ]
+
+[project.scripts]
+# MCP server — `pip install continuum-memory[mcp]` then `continuum-mcp`.
+continuum-mcp = "continuum.mcp.server:main"
+
+
+# ── Version ───────────────────────────────────────────────────────────────────
+# Single source of truth: continuum/__init__.py::__version__
+
+[tool.hatch.version]
+path = "continuum/__init__.py"
 
 
 # ── Package discovery ─────────────────────────────────────────────────────────
