@@ -5,6 +5,32 @@ format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
 
+## [2.0.0] — unreleased
+
+First public release. Turns Continuum from a research codebase into an
+importable library with a clean API and an MCP server.
+
+### Added
+- **Public `Memory` facade** (`from continuum import Memory`) — `add` /
+  `remember` / `recall` / `current` (supersession-resolved) / `timeline`
+  (bi-temporal history) + sync wrappers. `Memory.in_memory()` for zero-config
+  demos/tests; wrap a Postgres-backed `ContinuumSession` for production.
+- **MCP server** (`continuum-mcp`, `continuum-memory[mcp]`) — exposes memory as
+  `recall`/`remember`/`current`/`timeline` tools to any MCP client (Claude Code,
+  Cursor, …). See `docs/mcp.md`.
+- **`docs/limitations.md`** — honest known-limitations: accuracy is reader-bound
+  (~63% multi-session counting); the disproven deterministic levers (synthesis
+  router, evidence distillation, temporal codemath — all net-negative); the
+  benchmark-variance + same-setup-control methodology lesson.
+- **`examples/`** — `bare_agent.py` (framework-free, runnable) and
+  `langgraph_node.py` (Memory as a LangGraph node).
+
+### Notes
+- Research/eval levers (synthesis, router, distill, temporal codemath) are NOT
+  part of the product API — they remain opt-in flags in `evals/` as tested
+  negative results. Only the memory layer + supersession + retrieval + a bounded
+  reflect pass + vote-of-N self-consistency are the shipped path.
+
 ## [1.0.0] — 2026-05-31
 
 v1 — broke the LongMemEval-S 32% ceiling to **60.8% judged**, and learned the

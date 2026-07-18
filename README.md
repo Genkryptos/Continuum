@@ -131,6 +131,33 @@ Each box is a swappable component. The retriever and optimizer chain are protoco
 
 ## Quick start (no infra)
 
+**Use it in Python** — the library API (`pip install continuum-memory`):
+
+```python
+import asyncio
+from continuum import Memory
+
+async def main():
+    mem = Memory.in_memory()                        # zero-config — no Postgres, no model download
+    async with mem:
+        await mem.add("I moved to Boston")
+        await mem.add("Actually I'm in NYC now")    # supersession handles the update
+        print(await mem.recall("where do I live?"))
+        print(await mem.current("user", "residence"))  # the resolved, current value
+        print(await mem.timeline("residence"))          # bi-temporal history, oldest→newest
+
+asyncio.run(main())
+```
+
+Or plug it into any MCP client (Claude Code, Cursor, …) with zero glue — see
+[docs/mcp.md](docs/mcp.md): `pip install "continuum-memory[mcp]"` then `continuum-mcp`.
+
+> Supersession + bi-temporal history are strongest on the Postgres path (below);
+> `Memory.in_memory()` is the zero-setup path for demos and tests. Honest scope
+> and known limits: [docs/limitations.md](docs/limitations.md).
+
+**From source (demo + benchmarks):**
+
 ```bash
 git clone https://github.com/Genkryptos/Continuum.git && cd Continuum
 
