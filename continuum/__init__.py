@@ -11,6 +11,17 @@ introspection (``continuum.__version__``).
 
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "2.0.0"
 
-__all__ = ["__version__"]
+# Public API. Heavy submodules stay lazy — importing `continuum` must be cheap
+# and must not pull in optional backends (Postgres, embedders) until used.
+from continuum.core.types import MemoryItem, MemoryTier, Query
+from continuum.memory import Memory
+
+__all__ = [
+    "Memory",
+    "MemoryItem",
+    "MemoryTier",
+    "Query",
+    "__version__",
+]
