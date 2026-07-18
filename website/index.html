@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Continuum — memory for AI agents</title>
+<meta name="description" content="A memory layer for AI agents with first-class supersession and bi-temporal recall. Honest benchmarks, open source." />
+<style>
+  :root {
+    --bg: #ffffff; --fg: #14171a; --muted: #5b6470; --line: #e6e9ec;
+    --accent: #2b6cb0; --card: #f7f9fb; --code-bg: #0e1116; --code-fg: #e6edf3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1116; --fg:#e6edf3; --muted:#9aa4af; --line:#232a31;
+            --accent:#6ea8fe; --card:#161b22; --code-bg:#010409; --code-fg:#e6edf3; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 72px 0 32px; }
+  h1 { font-size: 2.6rem; line-height:1.1; margin:0 0 12px; letter-spacing:-0.02em; }
+  .tag { color:var(--muted); font-size:1.2rem; margin:0 0 28px; }
+  h2 { font-size:1.4rem; margin:44px 0 14px; letter-spacing:-0.01em; }
+  p { margin: 0 0 14px; } a { color:var(--accent); }
+  .btns { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+  .btn { display:inline-block; padding:10px 18px; border-radius:8px; text-decoration:none;
+    border:1px solid var(--line); color:var(--fg); font-weight:600; }
+  .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  pre { background:var(--code-bg); color:var(--code-fg); padding:16px; border-radius:10px;
+    overflow-x:auto; font: 13.5px/1.55 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  code { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  .nums { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:8px 0 4px; }
+  .num { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .num b { display:block; font-size:2rem; letter-spacing:-0.02em; }
+  .num span { color:var(--muted); font-size:.9rem; }
+  table { width:100%; border-collapse:collapse; margin:6px 0 14px; font-size:.95rem; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
+  td.r, th.r { text-align:right; }
+  .note { color:var(--muted); font-size:.9rem; }
+  footer { margin:56px 0 40px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--line); padding-top:20px; }
+  @media (max-width:640px){ .nums{grid-template-columns:1fr;} h1{font-size:2.1rem;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Memory for AI agents is a<br>state problem, not a retrieval problem.</h1>
+    <p class="tag">Continuum is a memory layer with first-class <b>supersession</b> and <b>bi-temporal</b> recall — it knows which version of a fact is <em>current</em>, and what was true <em>as of</em> any date.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/Genkryptos/Continuum">GitHub</a>
+      <a class="btn" href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">Technical report</a>
+      <a class="btn" href="https://github.com/Genkryptos/Continuum/blob/main/docs/limitations.md">Honest limitations</a>
+    </div>
+  </header>
+
+  <h2>The numbers, honestly</h2>
+  <div class="nums">
+    <div class="num"><b>~74–76%</b><span>LongMemEval-S (gpt-oss-120b reader, llama-3.3 judge)</span></div>
+    <div class="num"><b>100%</b><span>scripted supersession &amp; as-of-date correctness</span></div>
+    <div class="num"><b>~5k</b><span>tokens per query (Mem0-competitive)</span></div>
+  </div>
+  <p class="note">Single-run LongMemEval numbers carry ±3–5pp reader variance; we report a same-setup control (73.8%) and the best mandate-clean config (75.6%). See the report.</p>
+
+  <h2>Use it in three lines</h2>
+  <pre><code>pip install continuum-memory
+
+from continuum import Memory
+mem = Memory.in_memory()
+await mem.add("I moved to Boston")
+await mem.add("Actually I'm in NYC now")   # supersession handles the update
+await mem.current("user", "residence")     # -> "NYC" (resolved, not stale)
+await mem.timeline("residence")            # bi-temporal history</code></pre>
+
+  <p>Or plug it into any MCP client (Claude Code, Cursor):</p>
+  <pre><code>pip install "continuum-memory[mcp]"
+continuum-mcp        # exposes recall / remember / current / timeline as tools</code></pre>
+
+  <h2>How it compares</h2>
+  <table>
+    <tr><th>System</th><th>Approach</th><th class="r">LongMemEval-S*</th></tr>
+    <tr><td>Mem0</td><td>auto-extract → vector + graph + KV</td><td class="r">~49%</td></tr>
+    <tr><td>Zep</td><td>bi-temporal knowledge graph</td><td class="r">~63.8%</td></tr>
+    <tr><td><b>Continuum</b></td><td>tiered + supersession + bi-temporal</td><td class="r"><b>~74–76%</b></td></tr>
+  </table>
+  <p class="note">*Not perfectly comparable across setups/readers — directional. Continuum's edge is temporal / supersession correctness.</p>
+
+  <h2>What we tried that didn't work</h2>
+  <p>We spent real effort proving four ideas <em>wrong</em> — counting in code, a deterministic answer router, evidence distillation, temporal date-math — all net-negative, because you can't bolt deterministic machinery onto a mid-size model's unreliable intermediate outputs. The two things that helped were better prompting and sampling. The negative results, and the measurement mistake that made them look good at first, are in the <a href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">report</a>.</p>
+
+  <footer>
+    Continuum is the state layer under your reasoner — not a reasoning engine.
+    Open source · MIT. <a href="https://github.com/Genkryptos/Continuum">github.com/Genkryptos/Continuum</a>
+  </footer>
+</div>
+</body>
+</html>
