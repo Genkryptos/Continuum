@@ -329,6 +329,19 @@ branch  = true          # measure branch coverage, not just line coverage
 omit = [
     "continuum/__init__.py",
     "continuum/core/__init__.py",
+    # ── Not unit-gated (covered by integration / manual, not `pytest -m unit`) ──
+    # Interactive CLI entrypoints: argparse + stdin/stdout REPL and diagnostics.
+    # Exercised end-to-end, not by unit tests; unit-mocking a REPL adds no signal.
+    "continuum/chat.py",
+    "continuum/doctor.py",
+    # Optional optimizer-strategy plugins whose real path needs heavy models we
+    # don't install in the unit lane (LLMLingua-2 / an embedder / an LLM). Their
+    # behaviour is validated where those deps are present, not in `-m unit`.
+    # NOTE: the pure-logic strategies (score_prune, stm_trim) are intentionally
+    # NOT omitted — they're honest testable debt, not hidden here.
+    "continuum/optimizer/strategies/llmlingua.py",
+    "continuum/optimizer/strategies/semantic_dedupe.py",
+    "continuum/optimizer/strategies/mtm_summarize.py",
 ]
 
 [tool.coverage.report]

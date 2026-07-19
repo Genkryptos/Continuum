@@ -106,3 +106,49 @@ async def test_local_completion_fn_plugs_into_extract() -> None:
 def test_empty_text() -> None:
     assert extract_facts_local("") == []
     assert extract_facts_local("How are you today?") == []
+
+
+# ── singularizer branches ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("plural", "singular"),
+    [
+        ("parties", "party"),  # -ies → -y
+        ("boxes", "box"),  # -xes → strip 'es'
+        ("dishes", "dish"),  # -shes → strip 'es'
+        ("watches", "watch"),  # -ches → strip 'es'
+        ("glasses", "glass"),  # -sses → strip 'es'
+        ("tops", "top"),  # plain -s
+        ("glass", "glass"),  # -ss kept (not a plural)
+        ("as", "as"),  # len <= 2 → left untouched
+    ],
+)
+def test_singularize_branches(plural: str, singular: str) -> None:
+    from continuum.promotion.local_extractor import _singularize
+
+    assert _singularize(plural) == singular
+
+
+# ── head/object edge cases ────────────────────────────────────────────────────
+
+
+def test_head_and_object_all_trimmed_is_none() -> None:
+    # phrase is entirely trim/preposition words → nothing kept → None.
+    from continuum.promotion.local_extractor import _head_and_object
+
+    assert _head_and_object("for with") is None
+
+
+def test_head_and_object_skips_trailing_number_token() -> None:
+    # head is the last ALPHABETIC token, skipping a trailing measurement number.
+    from continuum.promotion.local_extractor import _head_and_object
+
+    result = _head_and_object("coin 1909")
+    assert result is not None and result[0] == "coin"
+
+
+def test_head_and_object_no_alpha_token_is_none() -> None:
+    from continuum.promotion.local_extractor import _head_and_object
+
+    assert _head_and_object("40 50") is None

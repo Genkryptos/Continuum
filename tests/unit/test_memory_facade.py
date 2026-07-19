@@ -185,4 +185,81 @@ def test_sync_wrapper_refuses_inside_running_loop() -> None:
     asyncio.run(_inner())
 
 
+def test_add_sync_and_current_sync_outside_loop() -> None:
+    s = _FakeSession([_item("residence: NYC", valid_from=datetime(2023, 6, 1, tzinfo=UTC))])
+    mem = Memory(s)  # type: ignore[arg-type]
+    mem.add_sync("I moved to NYC", occurred_at=datetime(2023, 6, 1, tzinfo=UTC))
+    assert [i.content for i in s.stm.items] == ["I moved to NYC"]
+    assert mem.current_sync("user", "residence") == "residence: NYC"
+
+
+# ── write path: no-LTM session ────────────────────────────────────────────────
+
+
+async def test_add_without_ltm_only_writes_stm() -> None:
+    s = _FakeSession()
+    s.ltm = None  # session with no long-term store attached
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("ephemeral note")
+    assert [i.content for i in s.stm.items] == ["ephemeral note"]  # STM only, no crash
+
+
+async def test_remember_passes_occurred_at() -> None:
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    when = datetime(2022, 3, 4, tzinfo=UTC)
+    await mem.remember("older fact", occurred_at=when)
+    assert s.stm.items[0].created_at == when
+
+
+# ── timeline: until bound + effective-time fallback to created_at ─────────────
+
+
+async def test_timeline_filters_by_until() -> None:
+    a = _item("residence: Boston", valid_from=datetime(2023, 1, 1, tzinfo=UTC))
+    b = _item("residence: NYC", valid_from=datetime(2023, 6, 1, tzinfo=UTC))
+    mem = Memory(_FakeSession([a, b]))  # type: ignore[arg-type]
+    hist = await mem.timeline("residence", until=datetime(2023, 3, 1, tzinfo=UTC))
+    assert [h.content for h in hist] == ["residence: Boston"]
+
+
+async def test_timeline_orders_by_created_at_when_no_valid_range() -> None:
+    # No bi-temporal range → _effective_time falls back to created_at ordering.
+    old = MemoryItem(
+        content="residence: Boston",
+        tier=MemoryTier.LTM,
+        created_at=datetime(2021, 1, 1, tzinfo=UTC),
+    )
+    new = MemoryItem(
+        content="residence: NYC", tier=MemoryTier.LTM, created_at=datetime(2024, 1, 1, tzinfo=UTC)
+    )
+    mem = Memory(_FakeSession([new, old]))  # type: ignore[arg-type]  # unordered in
+    hist = await mem.timeline("residence")
+    assert [h.content for h in hist] == ["residence: Boston", "residence: NYC"]
+
+
+# ── lifecycle: start / aclose / async context manager ─────────────────────────
+
+
+async def test_lifecycle_start_aclose_and_context_manager() -> None:
+    calls: list[str] = []
+
+    class _LifecycleSession(_FakeSession):
+        async def start(self) -> None:
+            calls.append("start")
+
+        async def aclose(self) -> None:
+            calls.append("aclose")
+
+    mem = Memory(_LifecycleSession())  # type: ignore[arg-type]
+    await mem.start()
+    await mem.aclose()
+    assert calls == ["start", "aclose"]
+
+    calls.clear()
+    async with Memory(_LifecycleSession()) as m:  # type: ignore[arg-type]
+        assert m is not None
+    assert calls == ["start", "aclose"]  # __aenter__ / __aexit__ drive lifecycle
+
+
 _ = timedelta  # keep import referenced for future date-math tests

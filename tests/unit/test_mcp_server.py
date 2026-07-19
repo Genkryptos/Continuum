@@ -12,7 +12,15 @@ from typing import Any
 
 import pytest
 
-from continuum.mcp.server import _current, _recall, _remember, _timeline, build_server
+from continuum.mcp.server import (
+    _current,
+    _default_memory,
+    _recall,
+    _remember,
+    _timeline,
+    build_server,
+    main,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -90,6 +98,95 @@ async def test_timeline_returns_dicts() -> None:
     m._timeline = [_FakeItem("Boston"), _FakeItem("NYC")]
     out = await _timeline(m, "residence")  # type: ignore[arg-type]
     assert [d["content"] for d in out] == ["Boston", "NYC"]
+
+
+async def test_timeline_parses_and_tolerates_bad_bounds() -> None:
+    # good `since` is parsed to a datetime; malformed `until` is dropped to None.
+    m = _FakeMemory()
+
+    captured: dict[str, Any] = {}
+
+    async def _spy(entity: str, *, since: Any = None, until: Any = None) -> list[Any]:
+        captured["since"], captured["until"] = since, until
+        return []
+
+    m.timeline = _spy  # type: ignore[method-assign]
+    await _timeline(m, "residence", since="2023-05-10", until="not-a-date")  # type: ignore[arg-type]
+    assert captured["since"] is not None and captured["since"].year == 2023
+    assert captured["until"] is None  # bad ISO string tolerated, not raised
+
+
+def test_item_dict_serialises_created_at() -> None:
+    from datetime import UTC, datetime
+
+    from continuum.mcp.server import _item_dict
+
+    class _WithTime:
+        content = "x"
+        id = "1"
+        session_id = "s"
+        created_at = datetime(2023, 1, 2, tzinfo=UTC)
+
+    d = _item_dict(_WithTime())
+    assert d["created_at"] == "2023-01-02T00:00:00+00:00"
+
+
+# ── registered tool wrappers (invoked through the MCP server) ──────────────────
+
+
+async def test_registered_tools_invoke_logic() -> None:
+    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    m = _FakeMemory()
+    m._recall = [_FakeItem("Boston")]
+    m._current = "NYC"
+    m._timeline = [_FakeItem("Boston"), _FakeItem("NYC")]
+    server = build_server(memory=m)  # type: ignore[arg-type]
+
+    # FastMCP.call_tool returns (content, structured) — assert on the structured half.
+    _, recall_out = await server.call_tool("recall", {"query": "where?", "k": 3})
+    assert recall_out["result"][0]["content"] == "Boston"
+
+    _, remember_out = await server.call_tool("remember", {"text": "I moved to NYC"})
+    assert remember_out["result"] == "stored"
+    assert m.added == [("I moved to NYC", None)]
+
+    _, current_out = await server.call_tool(
+        "current", {"subject": "user", "attribute": "residence"}
+    )
+    assert current_out["result"] == "NYC"
+
+    _, timeline_out = await server.call_tool("timeline", {"entity": "residence"})
+    assert [d["content"] for d in timeline_out["result"]] == ["Boston", "NYC"]
+
+
+# ── default memory + entry point ──────────────────────────────────────────────
+
+
+def test_default_memory_without_dsn_is_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CONTINUUM_DB_DSN", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    mem = _default_memory()
+    assert mem.session is not None and mem.session.ltm is not None
+
+
+def test_default_memory_with_dsn_falls_back_gracefully(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A DSN is set but no live DB — the server must still build an importable
+    # in-memory Memory rather than raising at import/construction time.
+    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://nobody@localhost:1/none")
+    mem = _default_memory()
+    assert mem.session is not None
+
+
+def test_main_builds_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    ran: list[bool] = []
+
+    class _FakeServer:
+        def run(self) -> None:
+            ran.append(True)
+
+    monkeypatch.setattr("continuum.mcp.server.build_server", lambda: _FakeServer())
+    main()
+    assert ran == [True]  # entry point wires build_server().run()
 
 
 # ── server assembly ───────────────────────────────────────────────────────────
