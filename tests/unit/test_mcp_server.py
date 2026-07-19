@@ -178,15 +178,48 @@ def test_default_memory_with_dsn_falls_back_gracefully(monkeypatch: pytest.Monke
 
 
 def test_main_builds_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    ran: list[bool] = []
+    ran: list[str] = []
 
     class _FakeServer:
-        def run(self) -> None:
-            ran.append(True)
+        def run(self, transport: str = "stdio") -> None:
+            ran.append(transport)
 
-    monkeypatch.setattr("continuum.mcp.server.build_server", lambda: _FakeServer())
-    main()
-    assert ran == [True]  # entry point wires build_server().run()
+    monkeypatch.setattr("continuum.mcp.server.build_server", lambda **_kw: _FakeServer())
+    main([])  # explicit empty argv — don't parse pytest's sys.argv
+    assert ran == ["stdio"]  # default entry point wires build_server().run() over stdio
+
+
+@pytest.mark.parametrize(
+    ("flag", "expected_transport"),
+    [("--http", "streamable-http"), ("--sse", "sse")],
+)
+def test_main_http_transports(
+    monkeypatch: pytest.MonkeyPatch, flag: str, expected_transport: str
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeServer:
+        def run(self, transport: str = "stdio") -> None:
+            captured["transport"] = transport
+
+    def _fake_build(
+        memory: Any = None, *, host: str | None = None, port: int | None = None
+    ) -> _FakeServer:
+        captured["host"], captured["port"] = host, port
+        return _FakeServer()
+
+    monkeypatch.setattr("continuum.mcp.server.build_server", _fake_build)
+    main([flag, "--host", "0.0.0.0", "--port", "9001"])
+    assert captured["transport"] == expected_transport
+    assert captured["host"] == "0.0.0.0"
+    assert captured["port"] == 9001
+
+
+def test_build_server_applies_host_port() -> None:
+    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    server = build_server(memory=_FakeMemory(), host="0.0.0.0", port=9123)  # type: ignore[arg-type]
+    assert server.settings.host == "0.0.0.0"
+    assert server.settings.port == 9123
 
 
 # ── server assembly ───────────────────────────────────────────────────────────

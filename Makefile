@@ -18,7 +18,7 @@
         lint typecheck format check \
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
-        mcp-install mcp-smoke mcp-serve mcp-claude \
+        mcp-install mcp-smoke mcp-serve mcp-serve-http mcp-claude \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -40,6 +40,10 @@ BENCH_PYTHON ?= $(shell test -x /Library/Frameworks/Python.framework/Versions/3.
 
 SRC     := continuum
 TESTS   := tests
+
+# MCP HTTP server bind address (override: make mcp-serve-http MCP_PORT=9000)
+MCP_HOST ?= 127.0.0.1
+MCP_PORT ?= 8000
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 
@@ -149,6 +153,13 @@ mcp-smoke: ## Prove the MCP server works end-to-end (handshake + remember→reca
 
 mcp-serve: ## Run the MCP server over stdio in the foreground (debug/manual — a stdio client spawns its own copy)
 	@$(BENCH_PYTHON) -m continuum.mcp.server
+
+mcp-serve-http: ## Run a standalone always-on HTTP MCP server (default http://127.0.0.1:8000/mcp) that Claude connects to by URL. Override MCP_HOST / MCP_PORT
+	@bin="$$(dirname $(BENCH_PYTHON))/continuum-mcp"; \
+	 test -x "$$bin" || { echo "ERROR: $$bin not found — run 'make mcp-install' first"; exit 1; }; \
+	 echo "Serving Continuum MCP at http://$(MCP_HOST):$(MCP_PORT)/mcp  (Ctrl-C to stop)"; \
+	 echo "Register with:  claude mcp add continuum --transport http http://$(MCP_HOST):$(MCP_PORT)/mcp"; \
+	 "$$bin" --http --host $(MCP_HOST) --port $(MCP_PORT)
 
 mcp-claude: ## Register the server with Claude Code (local scope). Use ARGS='--scope user' for all projects
 	@bin="$$(dirname $(BENCH_PYTHON))/continuum-mcp"; \

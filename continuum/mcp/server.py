@@ -101,12 +101,26 @@ def _default_memory() -> Memory:
     return Memory.in_memory()
 
 
-def build_server(memory: Memory | None = None) -> FastMCP:
-    """Build the Continuum MCP server. Inject *memory* for tests / custom stores."""
+def build_server(
+    memory: Memory | None = None,
+    *,
+    host: str | None = None,
+    port: int | None = None,
+) -> FastMCP:
+    """Build the Continuum MCP server. Inject *memory* for tests / custom stores.
+
+    *host* / *port* set the bind address for the HTTP transports
+    (``streamable-http`` / ``sse``); they are ignored under stdio.
+    """
     from mcp.server.fastmcp import FastMCP
 
     mem = memory or _default_memory()
-    server = FastMCP("continuum")
+    settings: dict[str, Any] = {}
+    if host is not None:
+        settings["host"] = host
+    if port is not None:
+        settings["port"] = port
+    server = FastMCP("continuum", **settings)
 
     @server.tool()
     async def recall(query: str, k: int = 8) -> list[dict[str, Any]]:
@@ -135,9 +149,50 @@ def build_server(memory: Memory | None = None) -> FastMCP:
     return server
 
 
-def main() -> None:
-    """Console entry point (`continuum-mcp`) — run over stdio."""
-    build_server().run()
+def main(argv: list[str] | None = None) -> None:
+    """Console entry point (``continuum-mcp``).
+
+    Default transport is **stdio**: an MCP client (Claude Code, Cursor, …) spawns
+    this process and talks over stdin/stdout — you do not pre-start it.
+
+    Pass ``--http`` to instead run a standalone **Streamable-HTTP** server that a
+    client connects to by URL — a genuinely always-on server::
+
+        continuum-mcp --http --host 127.0.0.1 --port 8000
+        claude mcp add continuum --transport http http://127.0.0.1:8000/mcp
+
+    ``--sse`` selects the legacy SSE transport (endpoint ``/sse``).
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="continuum-mcp",
+        description="Continuum MCP server — memory as recall/remember/current/timeline tools.",
+    )
+    transport = parser.add_mutually_exclusive_group()
+    transport.add_argument(
+        "--http",
+        action="store_true",
+        help="run a standalone Streamable-HTTP server (endpoint /mcp) instead of stdio",
+    )
+    transport.add_argument(
+        "--sse",
+        action="store_true",
+        help="run a standalone legacy SSE server (endpoint /sse) instead of stdio",
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="bind host for --http/--sse (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="bind port for --http/--sse (default: 8000)"
+    )
+    args = parser.parse_args(argv)
+
+    if args.http or args.sse:
+        server = build_server(host=args.host, port=args.port)
+        server.run(transport="sse" if args.sse else "streamable-http")
+    else:
+        build_server().run()
 
 
 if __name__ == "__main__":
