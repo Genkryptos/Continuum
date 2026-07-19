@@ -404,9 +404,16 @@ class Memory:
             log.debug("attribute lookup failed for %r — falling back", attribute, exc_info=True)
             return False, None
         live = [r for r in rows if not _is_superseded(r)] or list(rows)
-        if not live:
-            return True, None
-        return True, (max(live, key=_effective_time).content or None)
+        if live:
+            return True, (max(live, key=_effective_time).content or None)
+        # Nothing carries this attribute. Whether that is an honest "no such
+        # fact" or simply a corpus that never tags attributes decides between
+        # answering None and falling back to retrieval — so ask.
+        try:
+            tagged = await by_tags({}, key="attribute", limit=1)
+        except TypeError:
+            return False, None  # store predates the `key` argument
+        return bool(tagged), None
 
     async def timeline(
         self,

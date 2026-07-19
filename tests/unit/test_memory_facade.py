@@ -141,11 +141,16 @@ class _TagLTM(_FakeLTM):
         self.calls: list[tuple[dict[str, Any], Any]] = []
 
     async def by_tags(
-        self, tags: dict[str, Any], *, as_of: Any = None, **_kw: Any
+        self, tags: dict[str, Any], *, key: str | None = None, as_of: Any = None, **_kw: Any
     ) -> list[MemoryItem]:
         self.calls.append((tags, as_of))
-        want = tags.get("attribute")
-        return [r for r in self.rows if (r.metadata or {}).get("attribute") == want]
+        rows = self.rows
+        if key is not None:  # "does any row carry this tag key at all?"
+            rows = [r for r in rows if key in (r.metadata or {})]
+        if tags:
+            want = tags.get("attribute")
+            rows = [r for r in rows if (r.metadata or {}).get("attribute") == want]
+        return rows
 
 
 async def test_add_tags_the_attribute() -> None:
@@ -170,12 +175,25 @@ async def test_current_prefers_exact_attribute_lookup() -> None:
 
 
 async def test_current_returns_none_rather_than_guessing() -> None:
-    # A store that CAN answer attributes exactly is authoritative — including
-    # "no such fact". Falling back to retrieval here would invent a value.
+    # The corpus DOES use attribute tags, just not this attribute. That makes the
+    # store authoritative — including "no such fact". Falling back to retrieval
+    # here would invent an employer out of an unrelated memory.
+    tagged = _item("Boston", valid_from=datetime(2026, 1, 1, tzinfo=UTC))
+    tagged.metadata["attribute"] = "residence"
     s = _FakeSession([_item("I studied at IIT", valid_from=datetime(2026, 7, 20, tzinfo=UTC))])
-    s.ltm = _TagLTM([])  # lookup works, matches nothing
+    s.ltm = _TagLTM([tagged])
     mem = Memory(s)  # type: ignore[arg-type]
     assert await mem.current("user", "employer") is None
+
+
+async def test_current_falls_back_when_corpus_has_no_attribute_tags() -> None:
+    # Nothing is tagged at all → the store isn't using attributes, so the
+    # relevance-ranked fallback is the right behaviour (not an empty answer).
+    hits = [_item("residence: NYC", valid_from=datetime(2026, 6, 1, tzinfo=UTC))]
+    s = _FakeSession(hits)
+    s.ltm = _TagLTM([])  # lookup works, but corpus carries no attribute tags
+    mem = Memory(s)  # type: ignore[arg-type]
+    assert await mem.current("user", "residence") == "residence: NYC"
 
 
 async def test_current_as_of_is_passed_to_the_store() -> None:

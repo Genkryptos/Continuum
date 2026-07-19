@@ -95,9 +95,10 @@ current("user", "residence", as_of="2026-03-01") # → "I live in Boston"  (bi-t
 current("user", "employer")                      # → "not found"  (honest — no such fact)
 ```
 
-Untagged facts still work via relevance-ranked retrieval, but that is best-effort.
-When the store can answer attributes exactly, its answer is final — including
-"no such fact", rather than guessing a wrong value.
+If **nothing** in the store is tagged, `current` falls back to relevance-ranked
+retrieval — best-effort, and only as good as the probe. But once the store *does*
+use attribute tags, its lookup is authoritative: an attribute with no fact
+returns "not found" instead of inventing one from an unrelated memory.
 
 ## Notes
 

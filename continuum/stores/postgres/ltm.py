@@ -506,6 +506,7 @@ class PostgresLTM:
         self,
         tags: dict[str, Any],
         *,
+        key: str | None = None,
         as_of: datetime | None = None,
         session_id: str | None = None,
         limit: int = 100,
@@ -519,9 +520,22 @@ class PostgresLTM:
         answering "what is the user's CURRENT residence?", which is a lookup, not
         a search. *as_of* applies the bi-temporal window (a fact counts only if
         it had already become valid and had not yet been superseded).
+
+        *key* additionally requires the tag **key** to exist (JSONB key-exists),
+        which answers "does this corpus use attribute tags at all?" — the
+        difference between "no fact has that attribute" and "attributes aren't
+        used here", and therefore between answering honestly and guessing.
         """
-        extra = ["tags @> %(filt)s::jsonb", "invalidated_at IS NULL"]
-        params: dict[str, Any] = {"filt": json.dumps(tags), "k": int(limit)}
+        extra = ["invalidated_at IS NULL"]
+        params: dict[str, Any] = {"k": int(limit)}
+        if tags:
+            extra.append("tags @> %(filt)s::jsonb")
+            params["filt"] = json.dumps(tags)
+        if key is not None:
+            # jsonb_exists(), not the `?` operator — `?` collides with driver
+            # placeholder parsing.
+            extra.append("jsonb_exists(tags, %(key)s)")
+            params["key"] = key
         if as_of is not None:
             extra.append("(valid_from IS NULL OR valid_from <= %(as_of)s)")
             extra.append("(valid_to IS NULL OR valid_to > %(as_of)s)")
