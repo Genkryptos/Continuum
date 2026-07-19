@@ -25,6 +25,21 @@ that the public API may still shift before 1.0.
 - **`make mcp-install` / `mcp-smoke` / `mcp-serve` / `mcp-claude`** helpers.
 
 ### Fixed
+- **Retrieval was query-independent on the Postgres path** (core bug, affected
+  `session.search()` for every Postgres user — not just MCP). The stores return
+  hits *without* their embedding vector, so `Scorer` computed
+  `cosine(query.embedding, None) == 0` as the relevance for **every** item and
+  ranking collapsed to importance/recency — the same results for any query.
+  `Retriever._score_all` now reuses the relevance the hybrid search already
+  computed (dense ⊕ sparse ⊕ RRF), min-max normalised across the pool, when an
+  item carries no embedding of its own. Custom scorers that don't expose
+  `config.weights` keep their own ordering. Measured on a 14-fact scenario with
+  distractors: **recall@1 10% → 100%**, recall@3 30% → 100%.
+- **MCP server: the backing session was never started**, so the Postgres
+  connection pool never opened and the first tool call hung. Started lazily on
+  first use, exactly once.
+- **`Memory.add()` stored no embedding**, leaving LTM rows invisible to the
+  dense channel; `Memory` now embeds on write when an embedder is attached.
 - **MCP server now honors `CONTINUUM_DB_DSN`** — `_default_memory()` builds a real
   Postgres-backed session (via `from_postgres`) instead of always falling back to
   in-memory. `CONTINUUM_MCP_EMBEDDINGS=0` disables the embedder; if the backend

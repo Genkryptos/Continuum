@@ -161,6 +161,54 @@ def test_satisfies_retriever_protocol() -> None:
     assert isinstance(Retriever(), RetrieverProtocol)
 
 
+class TestRetrievalRelevanceSurvivesScoring:
+    """Regression: the stores return hits WITHOUT their embedding vector, so the
+    real Scorer computed ``cosine(query.embedding, None) == 0`` as the relevance
+    for every item. Ranking then collapsed to importance/recency — the SAME
+    results for every query. The hybrid (RRF) relevance must survive scoring."""
+
+    @staticmethod
+    def _hit(content: str, rrf: float, importance: float) -> ScoredItem:
+        item = MemoryItem(
+            content=content,
+            tier=MemoryTier.LTM,
+            importance=importance,
+            embedding=None,  # what search_hybrid actually returns
+        )
+        return ScoredItem(
+            item=item,
+            scores=ScoreBreakdown(
+                relevance=rrf, importance=0.0, recency=0.0, confidence=0.0, composite=rrf
+            ),
+        )
+
+    async def test_best_match_wins_over_high_importance_distractors(self) -> None:
+        # The true match has the top RRF score but the LOWEST importance. Under
+        # the old behaviour importance won and it ranked last.
+        ltm = FakeLTM(
+            [
+                self._hit("the answer", 0.0164, 0.0),
+                self._hit("distractor A", 0.0161, 1.0),
+                self._hit("distractor B", 0.0159, 1.0),
+            ]
+        )
+        r = Retriever(RetrieverConfig(), ltm=ltm, stm=FakeSTM([]))  # real Scorer
+        bundle = await r.retrieve(_q(), BUDGET)
+        assert bundle.items[0].content == "the answer"
+
+    async def test_custom_scorer_without_weights_keeps_its_own_order(self) -> None:
+        # An injected scorer need not expose config.weights; its ordering wins.
+        ltm = FakeLTM([self._hit("low rrf", 0.001, 0.0), self._hit("high rrf", 0.9, 0.0)])
+        r = Retriever(
+            RetrieverConfig(),
+            ltm=ltm,
+            stm=FakeSTM([]),
+            scorer=FakeScorer({"low rrf": 1.0, "high rrf": 0.0}),
+        )
+        bundle = await r.retrieve(_q(), BUDGET)
+        assert bundle.items[0].content == "low rrf"  # FakeScorer's order, not RRF
+
+
 class TestFullPipeline:
     async def test_runs_and_returns_contextbundle(self) -> None:
         ltm = FakeLTM([_si("fact one", 0.9), _si("fact two", 0.5)])

@@ -55,6 +55,27 @@ ClockFn = Callable[[], datetime]
 _ZERO = ScoreBreakdown(relevance=0.0, importance=0.0, recency=0.0, confidence=0.0, composite=0.0)
 
 
+def _clamp01(x: float) -> float:
+    return 0.0 if x < 0.0 else 1.0 if x > 1.0 else x
+
+
+def _normalised_retrieval_relevance(pool: dict[str, ScoredItem]) -> dict[str, float]:
+    """Min-max the retrieval (RRF) relevance across the pool into [0, 1].
+
+    RRF scores are rank-derived and tiny in absolute terms (~1/(60+rank)), so
+    they are only comparable *within* a result set. Items that carry no
+    retrieval relevance (e.g. STM recency hits) are omitted — they keep whatever
+    the scorer gave them.
+    """
+    vals = {k: si.scores.relevance for k, si in pool.items() if si.scores.relevance > 0.0}
+    if not vals:
+        return {}
+    lo, hi = min(vals.values()), max(vals.values())
+    if hi <= lo:
+        return dict.fromkeys(vals, 1.0)  # single hit / all tied → full relevance
+    return {k: (v - lo) / (hi - lo) for k, v in vals.items()}
+
+
 class Retriever:
     """
     End-to-end retrieval pipeline.
@@ -209,9 +230,17 @@ class Retriever:
         debug: dict[str, Any],
     ) -> list[ScoredItem]:
         now = self._clock()
+        # The stores return hits WITHOUT their embedding vector (hydrating a
+        # 1024-dim column per hit is wasteful), so ``Scorer`` computes
+        # ``cosine(query.embedding, None) == 0`` as the relevance for *every*
+        # item — collapsing the ranking to recency/importance and making recall
+        # query-independent. The hybrid search already computed real relevance
+        # (dense ⊕ sparse ⊕ RRF); reuse it, normalised across the pool because
+        # RRF scores are only meaningful relative to one another.
+        retrieval_rel = _normalised_retrieval_relevance(pool)
         rescored: list[ScoredItem] = []
         filtered_out = 0
-        for si in pool.values():
+        for key, si in pool.items():
             if not self._should_retrieve(si.item, now):
                 filtered_out += 1
                 continue
@@ -220,6 +249,8 @@ class Retriever:
             except Exception:
                 log.debug("scoring failed for %s", si.item.id, exc_info=True)
                 sb = si.scores
+            if si.item.embedding is None and key in retrieval_rel:
+                sb = self._with_relevance(sb, retrieval_rel[key])
             boosted = self._apply_policy_boost(si.item, query, sb)
             rescored.append(ScoredItem(item=si.item, scores=boosted))
         rescored.sort(key=lambda s: s.score, reverse=True)
@@ -227,6 +258,22 @@ class Retriever:
         if filtered_out:
             debug["policy_filtered"] = filtered_out
         return rescored
+
+    def _with_relevance(self, sb: ScoreBreakdown, relevance: float) -> ScoreBreakdown:
+        """``sb`` with *relevance* substituted and ``composite`` recomputed using
+        the scorer's own weights (so tuning ``config.weights`` still applies).
+
+        A custom/injected scorer need not expose ``config.weights``; in that case
+        we record the relevance but leave ``composite`` — and therefore the
+        ordering — entirely to that scorer.
+        """
+        w = getattr(getattr(self._scorer, "config", None), "weights", None)
+        if w is None:
+            return replace(sb, relevance=relevance)
+        composite = _clamp01(
+            w.rel * relevance + w.imp * sb.importance + w.rec * sb.recency + w.conf * sb.confidence
+        )
+        return replace(sb, relevance=relevance, composite=composite)
 
     # ── policy-aware filtering / boosting ───────────────────────────────────
 
