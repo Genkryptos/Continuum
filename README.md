@@ -52,19 +52,18 @@ Sources: LongMemEval-S numbers are documented in the [v1 findings report](findin
 > methodology lesson that measuring gains only on known failures overstates them.
 > Full write-up: [docs/limitations.md](docs/limitations.md) · [docs/report.md](docs/report.md).
 
-> **v2.0** — **72.8% → 76.4% judged** (full-500, gpt-oss-120b), from one
-> **architecture-native retrieval lever** — no new model, no compression:
-> - **Over-fetch + cross-encoder rerank (WS-4):** over-fetch the candidate pool,
->   then a cross-encoder (`continuum/retrieval/reranker.py`) reorders it and
->   keeps the best 24. This lifts retrieval recall and lands on the
->   **retrieval-bound** category: **multi-session 57.9% → 69.9% (+12pp**, n=133
->   A/B, net +16 questions). Temporal +2.3pp bonus; knowledge-update flat
->   (within noise); reranking **gated off for single-session-preference** (it
->   reorders away the rubric turns). The ss-user −2.9pp that tripped the
->   regression guard is **reader jitter, not a regression** — per-question diff
->   shows the flips are inference questions that vary run-to-run, not dropped
->   context. **Honest framing: the win is multi-session retrieval, not a
->   model change.**
+> **v2.0** — **retrieval reranking** (architecture-native — no new model, no
+> compression). Over-fetch the candidate pool, then a cross-encoder
+> (`continuum/retrieval/reranker.py`) reorders it and keeps the best 24:
+> - Lifts recall on the **retrieval-bound** category — **multi-session 57.9% →
+>   69.9%** (+12pp, n=133 A/B) — with a +2.3pp temporal bonus; knowledge-update
+>   flat; **gated off for single-session-preference** (it reorders away the
+>   rubric turns).
+> - **Honest note:** this improves *retrieval recall*, but on the full-500
+>   **judged** aggregate it lands **within `gpt-oss-120b`'s run-to-run noise** of
+>   the baseline. The judged number is **~74 %** (see the honest headline above),
+>   **not** the **76.4 %** an earlier favorable single draw reported. The win
+>   here is multi-session retrieval quality, not a lift in the headline accuracy.
 >
 > **v1.1** — **60.8% → 72.8% judged** (confirmed full-500, gpt-oss-120b), from
 > two **memory-attributable** fixes — no new model, no reasoning loop, just

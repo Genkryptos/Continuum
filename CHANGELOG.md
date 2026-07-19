@@ -5,7 +5,7 @@ format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
 
-## [2.0.0] — unreleased
+## [2.0.0] — 2026-07-19
 
 First public release. Turns Continuum from a research codebase into an
 importable library with a clean API and an MCP server.

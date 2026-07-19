@@ -300,7 +300,15 @@ entire *fixable* temporal win; the rest is reader-bound. Flag stays off.
   out-compute the reader. Architecture-native levers at gpt-oss-120b are
   **mined out at ~72.8%**.
 
-### WS-4 over-fetch + cross-encoder rerank — **CONFIRMED WIN, SHIPPED (72.8% → 76.4%)**
+### WS-4 over-fetch + cross-encoder rerank — retrieval win (single-run 72.8% → 76.4%)
+
+> **⚠️ Superseded (v3 same-setup replication).** The **76.4 %** below is a single
+> favorable A/B draw. Repeated same-setup runs on `gpt-oss-120b` put the judged
+> full-500 aggregate at **~74 % (73.6–75.6 %)** — the reranking win is real for
+> *retrieval recall* (multi-session), but it does **not** move the judged
+> headline beyond run-to-run noise. Treat **~74 %**, not 76.4 %, as the number.
+> See [`roadmap_v3.md`](roadmap_v3.md) and [`../docs/limitations.md`](../docs/limitations.md).
+
 `--rerank --rerank-to 24` on an over-fetched pool (pool > 24 so the reranker
 actually reorders what reaches the prompt). This is **architecture-native**: it
 improves *retrieval* (the winning pattern), not reader machinery. First attempt
@@ -357,7 +365,9 @@ enough to ship.)
 
 **Decision rule satisfied** (MS up, KU up, overall ≥+2pp) → **over-fetch+rerank
 shipped default-on**: v2 config = v1.1 + `--decompose-max-items 60 --rerank
---rerank-to 24` (preference-gated). **release-2.0 headline: 76.4%.**
+--rerank-to 24` (preference-gated). **Headline (corrected, v3): ~74 % judged** —
+the 76.4 % was a single favorable draw; see the superseded note at the top of
+this section.
 
 ### Remaining (no longer benchmark-ROI levers at this model)
 - **WS-6 graph** — a *product differentiator* build (real multi-hop), not a

@@ -12,9 +12,11 @@ Continuum debuts publicly at **v2.0.0**: production-grade memory infrastructure
 for AI agents, with the three claims nobody else in the category backs with
 reproducible numbers:
 
-1. **LongMemEval-S 76.4 % judged** (full 500, documented trajectory 34 % → 76 %)
-2. **Supersession correctness 100 %** (vs 38 % baseline)
-3. **Bi-temporal "as of date Y" queries 100 %** (vs 75 % baseline)
+1. **Supersession correctness 100 %** (vs 38 % baseline) — deterministic, reproducible
+2. **Bi-temporal "as of date Y" queries 100 %** (vs 75 % baseline) — deterministic, reproducible
+3. **LongMemEval-S ~74 % judged** (full 500, `gpt-oss-120b`; 73.6–75.6 % across
+   repeated same-setup runs — a single run is not a stable estimate. The 76.4 %
+   in earlier notes was a favorable draw; see [limitations.md](limitations.md).)
 
 Everything in this plan serves one test: *a stranger with a laptop can verify
 the claims in under an hour.*
@@ -132,9 +134,10 @@ WS-E ≈ 1–2 weeks overlapping. **Target: ~5–6 weeks to public.**
 
 A stranger can: `pip install continuum-memory` → run the 60-second demo →
 follow the quickstart into a real agent → rerun `make bench-all` and see the
-synthetic numbers → (with API credits) rerun LongMemEval and reproduce 76.4 %
-±judge noise → read the technical report and understand why. Every claim in
-the README traces to a pinned, reproducible run.
+synthetic numbers (supersession / bi-temporal 100 %) → (with API credits) rerun
+LongMemEval and land at **~74 %** within `gpt-oss-120b` judge/run noise → read
+the technical report and understand why. Every claim in the README traces to a
+pinned, reproducible run.
 
 ## 9. Risks
 
