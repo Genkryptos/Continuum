@@ -18,6 +18,7 @@
         lint typecheck format check \
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
+        mcp-install mcp-smoke mcp-serve mcp-claude \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -134,6 +135,26 @@ run-full: ## Like run, but WITH the embedder for dense recall (downloads bge-m3 
 run-mem: ## Start the chat REPL with in-memory stores (no Postgres needed)
 	@$(BENCH_PYTHON) -m continuum.chat --in-memory --no-embeddings $(ARGS)
 
+# ── MCP server ────────────────────────────────────────────────────────────────
+# The Continuum MCP server uses STDIO transport: an MCP client (e.g. Claude Code)
+# launches its OWN copy per session and talks to it over stdin/stdout. You do NOT
+# pre-start it for such a client. `mcp-serve` is for debugging or an HTTP client;
+# `mcp-smoke` proves the server works with no client at all.
+
+mcp-install: ## Install the package + MCP extra (editable) — provides the `continuum-mcp` script
+	@$(BENCH_PYTHON) -m pip install -e ".[mcp]"
+
+mcp-smoke: ## Prove the MCP server works end-to-end (handshake + remember→recall); no Claude needed
+	@$(BENCH_PYTHON) scripts/mcp_smoke.py
+
+mcp-serve: ## Run the MCP server over stdio in the foreground (debug/manual — a stdio client spawns its own copy)
+	@$(BENCH_PYTHON) -m continuum.mcp.server
+
+mcp-claude: ## Register the server with Claude Code (local scope). Use ARGS='--scope user' for all projects
+	@bin="$$(dirname $(BENCH_PYTHON))/continuum-mcp"; \
+	 test -x "$$bin" || { echo "ERROR: $$bin not found — run 'make mcp-install' first"; exit 1; }; \
+	 claude mcp add continuum $(ARGS) -- "$$bin"
+
 check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
 	@$(BENCH_PYTHON) -m continuum.doctor--------
 
@@ -156,7 +177,7 @@ clean: ## Remove caches, coverage artefacts, and build output
 repro-longmemeval: ## Reproduce the LongMemEval-S headline numbers from findings/longmemeval_2026-05.md
 	@bash findings/longmemeval/repro/run_repro.sh
 
-repro-everything: ## Reproduce the v2.0 headline (76.4%): full LongMemEval-S (direct + over-fetch + rerank) + judged rescore + LOCOMO smoke (needs OPENROUTER_API_KEY; ~<2h, <$5)
+repro-everything: ## Reproduce the v2.0 headline (~74% judged, 73.6–75.6% across runs): full LongMemEval-S (direct + over-fetch + rerank) + judged rescore + LOCOMO smoke (needs OPENROUTER_API_KEY; ~<2h, <$5)
 	@test -n "$$OPENROUTER_API_KEY" || ( echo "ERROR: export OPENROUTER_API_KEY first" && exit 1 )
 	@echo "==> [1/3] LongMemEval-S v2.0 full run (direct + over-fetch + cross-encoder rerank)…"
 	@$(BENCH_PYTHON) -m evals.longmemeval.bootstrap_ollama \
