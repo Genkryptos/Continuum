@@ -31,6 +31,36 @@ see `docs/config.md`). The in-memory default is fine for demos, but its recall i
 recency-ranked — at scale the relevant memory gets buried, which also weakens
 `current` (it depends on recall surfacing the fact). Use Postgres for real recall.
 
+## When the database is down
+
+With a DSN configured, the server **never silently falls back to in-memory** —
+answering from a store that vanishes at exit is worse than an error, because the
+caller believes it has durable memory. Instead the tool call returns a clear
+`isError` message and the server stays up, so the rest of the session still works.
+
+Set `CONTINUUM_MCP_AUTOSTART` to have it bring the database up on first use:
+
+```bash
+export CONTINUUM_MCP_AUTOSTART="brew services start postgresql@16"   # or: docker compose up -d postgres
+```
+
+Opt-in only — with the variable unset nothing is ever executed. On a failed
+connect the server runs that command once, polls until the database answers, and
+retries; if it still can't connect you get the error above rather than a hang.
+Because it lives in the server, this works for **any** MCP client, and also
+covers the database dying mid-session.
+
+> **Readiness means the database, not the port.** The probe opens a real
+> connection rather than checking `host:port`. A port check reports success
+> whenever *anything* owns the port — including a different PostgreSQL major
+> version that lacks your database entirely (two Homebrew versions both wanting
+> 5432 is enough to trigger it). Acting on that false positive silently points
+> memory at the wrong store, so `pg_isready`-style checks are not sufficient.
+
+For Claude Code you can additionally warm the backend before the first prompt
+with a `SessionStart` hook in `.claude/settings.local.json`, which also removes
+the one-off model-load latency from your first memory call.
+
 ## Add to a client
 
 **Claude Desktop / Claude Code** — add to your MCP config (`claude_desktop_config.json`

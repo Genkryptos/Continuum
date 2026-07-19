@@ -20,6 +20,7 @@ testable without the MCP runtime); the FastMCP tools are thin wrappers.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from datetime import datetime
@@ -30,7 +31,7 @@ from continuum.memory import Memory
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-__all__ = ["build_server", "main"]
+__all__ = ["BackendUnavailableError", "build_server", "main"]
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +98,98 @@ async def _timeline(
     return [_item_dict(h) for h in items]
 
 
+# ── backend availability / auto-start ─────────────────────────────────────────
+
+
+class BackendUnavailableError(RuntimeError):
+    """The configured memory backend could not be reached.
+
+    Raised instead of quietly using an in-memory store: when a DSN is configured,
+    answering from a phantom store that disappears at exit is worse than an error,
+    because the caller believes it has durable memory.
+    """
+
+
+def _configured_dsn() -> str | None:
+    return os.environ.get("CONTINUUM_DB_DSN") or os.environ.get("DATABASE_URL")
+
+
+async def _dsn_reachable(dsn: str, timeout: float = 2.0) -> bool:
+    """Is the DSN's **database** actually usable?
+
+    Deliberately not just a port check. A port probe reports success whenever
+    *anything* is listening — including a different PostgreSQL instance that
+    grabbed the port and does not have this database at all (easy to hit when
+    two versions are installed). That false positive is worse than a plain
+    outage, because the caller proceeds against the wrong store. So connect for
+    real when psycopg is importable, and fall back to TCP only when it isn't.
+    """
+    try:
+        import psycopg
+    except ImportError:
+        return await _port_open(dsn, timeout)
+    try:
+        conn = await asyncio.wait_for(
+            psycopg.AsyncConnection.connect(dsn, connect_timeout=int(timeout) or 1), timeout
+        )
+    except Exception:
+        return False
+    with contextlib.suppress(Exception):
+        await conn.close()
+    return True
+
+
+async def _port_open(dsn: str, timeout: float = 2.0) -> bool:
+    """TCP-only liveness probe — a weaker fallback when psycopg is unavailable."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(dsn)
+    host, port = parts.hostname or "127.0.0.1", parts.port or 5432
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    except (TimeoutError, OSError):
+        return False
+    writer.close()
+    # Bounded: wait_closed() can block indefinitely against a peer that accepts
+    # but never completes the close handshake — which would hang the very probe
+    # meant to keep the server responsive.
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(writer.wait_closed(), timeout)
+    return True
+
+
+async def _autostart(dsn: str, *, timeout: float = 60.0) -> bool:
+    """Run ``CONTINUUM_MCP_AUTOSTART`` and wait for *dsn* to accept connections.
+
+    Opt-in only: with the variable unset we never execute anything. It exists so
+    an MCP client (Claude Code, Cursor, …) can bring a stopped database up on the
+    first memory call instead of the session simply failing, e.g.::
+
+        CONTINUUM_MCP_AUTOSTART="brew services start postgresql@16"
+    """
+    cmd = (os.environ.get("CONTINUUM_MCP_AUTOSTART") or "").strip()
+    if not cmd:
+        return False
+    log.warning("continuum-mcp: backend unreachable — running CONTINUUM_MCP_AUTOSTART: %s", cmd)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+        )
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+    except Exception:
+        log.exception("continuum-mcp: autostart command failed")
+        return False
+
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        if await _dsn_reachable(dsn):
+            log.warning("continuum-mcp: backend is up")
+            return True
+        await asyncio.sleep(0.5)
+    log.error("continuum-mcp: backend still unreachable %.0fs after autostart", timeout)
+    return False
+
+
 # ── server assembly ───────────────────────────────────────────────────────────
 
 
@@ -155,11 +248,31 @@ def build_server(
 
     async def _ready() -> Memory:
         nonlocal started
-        if not started:
-            async with start_lock:
-                if not started:
-                    await mem.start()
-                    started = True
+        if started:
+            return mem
+        async with start_lock:
+            if started:
+                return mem
+            # Check the DSN is reachable BEFORE opening the pool.
+            # psycopg_pool.open() does not raise on a dead DSN — it opens
+            # optimistically and the failure surfaces later inside a pool worker,
+            # tearing down that request's task group so the client gets *no
+            # reply at all*. Probing first turns that into a clean, reportable
+            # error (and gives autostart somewhere to hook in).
+            dsn = _configured_dsn()
+            if dsn and not await _dsn_reachable(dsn) and not await _autostart(dsn):
+                raise BackendUnavailableError(
+                    f"Continuum memory backend is unreachable at {dsn}. Start it, or set "
+                    f"CONTINUUM_MCP_AUTOSTART to a command that does "
+                    f"(e.g. 'brew services start postgresql@16')."
+                )
+            try:
+                await mem.start()
+            except Exception as exc:
+                raise BackendUnavailableError(
+                    f"Continuum memory backend failed to start{f' ({dsn})' if dsn else ''}: {exc}"
+                ) from exc
+            started = True
         return mem
 
     @server.tool()

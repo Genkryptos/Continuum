@@ -301,6 +301,127 @@ async def test_tools_start_the_backend_exactly_once() -> None:
     assert m.starts == 1  # idempotent — started once, not per call
 
 
+# ── backend availability / auto-start ─────────────────────────────────────────
+
+
+async def test_port_open_detects_a_listener() -> None:
+    import asyncio
+    import contextlib
+
+    from continuum.mcp.server import _port_open
+
+    assert await _port_open("postgresql://u@127.0.0.1:5599/none", timeout=1.0) is False
+
+    async def _drop(reader: Any, writer: Any) -> None:
+        writer.close()  # close server-side too, else wait_closed() blocks on it
+
+    server = await asyncio.start_server(_drop, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        assert await _port_open(f"postgresql://u@127.0.0.1:{port}/db", timeout=2.0) is True
+    finally:
+        server.close()
+        # Bounded: on 3.12 wait_closed() waits for lingering connections.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(server.wait_closed(), 2.0)
+
+
+async def test_dsn_reachable_is_not_fooled_by_a_bare_listener() -> None:
+    """The whole point of the DB-level probe.
+
+    A port check says "up" whenever *anything* owns the port — including a
+    different PostgreSQL major version that does not have this database. Acting
+    on that false positive is worse than an outage: the caller proceeds against
+    the wrong store. `_dsn_reachable` must reject a non-Postgres listener.
+    """
+    import asyncio
+    import contextlib
+
+    from continuum.mcp.server import _dsn_reachable, _port_open
+
+    pytest.importorskip("psycopg")
+
+    async def _drop(reader: Any, writer: Any) -> None:
+        writer.close()
+
+    server = await asyncio.start_server(_drop, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    dsn = f"postgresql://u@127.0.0.1:{port}/db"
+    try:
+        assert await _port_open(dsn, timeout=2.0) is True  # port-only: fooled
+        assert await _dsn_reachable(dsn, timeout=2.0) is False  # DB-level: correct
+    finally:
+        server.close()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(server.wait_closed(), 2.0)
+
+
+async def test_autostart_is_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    # With the variable unset we must never execute anything.
+    from continuum.mcp.server import _autostart
+
+    monkeypatch.delenv("CONTINUUM_MCP_AUTOSTART", raising=False)
+    assert await _autostart("postgresql://u@127.0.0.1:5599/none", timeout=1.0) is False
+
+
+async def test_autostart_runs_command_then_waits_for_readiness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    from continuum.mcp import server as srv
+
+    # Orchestration test: the command must actually RUN, and the DB must then be
+    # polled until it reports ready. The readiness probe is stubbed because a
+    # real one now requires a live PostgreSQL handshake (a bare socket no longer
+    # counts as "up" — that was the wrong-database false positive).
+    sentinel = tmp_path / "ran.txt"
+    monkeypatch.setenv("CONTINUUM_MCP_AUTOSTART", f"touch {sentinel}")
+
+    calls = {"n": 0}
+
+    async def _fake_probe(dsn: str, timeout: float = 2.0) -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1  # down on the pre-check, up once the command ran
+
+    monkeypatch.setattr(srv, "_dsn_reachable", _fake_probe)
+    assert await srv._autostart("postgresql://u@127.0.0.1:5599/db", timeout=10.0) is True
+    assert sentinel.exists()  # the configured command really executed
+
+
+async def test_autostart_gives_up_when_backend_never_comes_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from continuum.mcp import server as srv
+
+    monkeypatch.setenv("CONTINUUM_MCP_AUTOSTART", "true")
+
+    async def _never(dsn: str, timeout: float = 2.0) -> bool:
+        return False
+
+    monkeypatch.setattr(srv, "_dsn_reachable", _never)
+    # Bounded, and reports failure rather than hanging the session forever.
+    assert await srv._autostart("postgresql://u@127.0.0.1:5599/db", timeout=2.0) is False
+
+
+async def test_unreachable_backend_errors_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A dead DSN must produce a reportable error, not kill the server: the pool
+    # opens optimistically, so without the pre-flight probe the request's task
+    # group tears down and the client gets no reply at all.
+    pytest.importorskip("mcp.server.fastmcp")
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://u@127.0.0.1:5599/none")
+    monkeypatch.delenv("CONTINUUM_MCP_AUTOSTART", raising=False)
+    server = build_server(memory=_FakeMemory())  # type: ignore[arg-type]
+    # FastMCP wraps it as ToolError — which is exactly how the client receives
+    # isError=True plus the message, rather than losing the connection.
+    with pytest.raises(ToolError, match="unreachable"):
+        await server.call_tool("remember", {"text": "x"})
+    # …and the server is still usable afterwards.
+    assert len(await server.list_tools()) == 4
+
+
 def test_build_server_applies_host_port() -> None:
     pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
     server = build_server(memory=_FakeMemory(), host="0.0.0.0", port=9123)  # type: ignore[arg-type]

@@ -56,3 +56,6 @@ node_modules/
 
 # One-off eval run artifact (control-arm failed question ids; regenerable)
 samples/control_failed_ids.json
+
+# Personal, machine-specific Claude Code settings (hooks reference local services)
+.claude/settings.local.json
