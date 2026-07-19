@@ -244,6 +244,15 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# numpy ships typed stubs, but recent releases write them with PEP 695 `type X =`
+# aliases that are only valid at python_version >= 3.12. We target 3.11 (our
+# floor), so mypy would reject numpy's *own* stub on a fresh install. We never
+# type-check numpy's internals anyway — skip following it into the package.
+module = ["numpy", "numpy.*"]
+follow_imports        = "skip"
+follow_imports_for_stubs = true
+
 
 # ── Ruff ─────────────────────────────────────────────────────────────────────
 
