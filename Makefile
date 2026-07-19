@@ -173,7 +173,7 @@ mcp-claude: ## Register the server with Claude Code (local scope). Use ARGS='--s
 	 claude mcp add continuum $(ARGS) -- "$$bin"
 
 check-env: ## Verify .env: config loads, provider key, DB reachable, in-memory smoke
-	@$(BENCH_PYTHON) -m continuum.doctor--------
+	@$(BENCH_PYTHON) -m continuum.doctor
 
 check-env-ping: ## Like check-env, but also validates each LLM provider key via a live API call
 	@$(BENCH_PYTHON) -m continuum.doctor --ping
