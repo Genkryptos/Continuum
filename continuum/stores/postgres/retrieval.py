@@ -49,6 +49,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from continuum.core.types import (
+    BiTemporalRange,
     MemoryItem,
     MemoryTier,
     ScoreBreakdown,
@@ -157,6 +158,18 @@ def _as_uuid(value: Any) -> uuid.UUID:
 # ============================================================================
 # PostgresRetriever
 # ============================================================================
+
+
+def _as_datetime(raw: Any) -> datetime | None:
+    """Coerce a DB timestamp to datetime; None when absent/unparseable."""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    try:
+        return datetime.fromisoformat(str(raw))
+    except ValueError:
+        return None
 
 
 @dataclass
@@ -347,7 +360,7 @@ class PostgresRetriever:
             return {}
         sql = f"""
             SELECT id, "text", kind, importance, confidence,
-                   created_at, tags
+                   created_at, tags, valid_from, valid_to
             FROM   {self.table}
             WHERE  id = ANY(%(ids)s)
               AND  invalidated_at IS NULL
@@ -372,6 +385,14 @@ class PostgresRetriever:
         if row.get("kind") is not None:
             metadata["kind"] = row["kind"]
 
+        # Valid time (bi-temporal). Without hydrating this, every retrieved item
+        # looks like it became true when it was *recorded*, so supersession-aware
+        # reads (`current`, `timeline`) cannot tell a stale fact from a fresh one.
+        valid_range = None
+        vf, vt = _as_datetime(row.get("valid_from")), _as_datetime(row.get("valid_to"))
+        if vf is not None or vt is not None:
+            valid_range = BiTemporalRange(valid_from=vf or created_at, valid_to=vt)
+
         return MemoryItem(
             id=str(row["id"]),
             content=str(row.get("text") or ""),
@@ -379,6 +400,7 @@ class PostgresRetriever:
             importance=float(row["importance"]) if row.get("importance") is not None else 0.5,
             confidence=float(row["confidence"]) if row.get("confidence") is not None else 1.0,
             created_at=created_at,
+            valid_range=valid_range,
             metadata=metadata,
         )
 

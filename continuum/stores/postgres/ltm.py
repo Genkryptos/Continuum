@@ -59,6 +59,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from continuum.core.types import (
+    BiTemporalRange,
     Edge,
     MemoryItem,
     MemoryTier,
@@ -463,7 +464,7 @@ class PostgresLTM:
         sql = f"""
             WITH {", ".join(ctes)}
             SELECT n.id, n."text", n.kind, n.importance, n.confidence,
-                   n.created_at, n.tags,
+                   n.created_at, n.tags, n.valid_from, n.valid_to,
                    ({d_term} + {s_term}) AS rrf
             FROM   {self._table} n{join_clause}
             WHERE  ({" OR ".join(present)})
@@ -609,6 +610,26 @@ class PostgresLTM:
         else:
             created_at = datetime.now(UTC)
 
+        # Valid time (bi-temporal). Without hydrating this, a retrieved item
+        # looks like it became true when it was *recorded*, so supersession-aware
+        # reads (`current`, `timeline`) cannot tell a stale fact from a fresh one.
+        def _dt(raw: Any) -> datetime | None:
+            if raw is None:
+                return None
+            if isinstance(raw, datetime):
+                return raw
+            try:
+                return datetime.fromisoformat(str(raw))
+            except ValueError:
+                return None
+
+        valid_from, valid_to = _dt(row.get("valid_from")), _dt(row.get("valid_to"))
+        valid_range = (
+            BiTemporalRange(valid_from=valid_from or created_at, valid_to=valid_to)
+            if (valid_from is not None or valid_to is not None)
+            else None
+        )
+
         return MemoryItem(
             id=str(row["id"]) if row.get("id") is not None else str(row["target_id"]),
             content=str(row.get("text") or ""),
@@ -616,6 +637,7 @@ class PostgresLTM:
             importance=(float(row["importance"]) if row.get("importance") is not None else 0.5),
             confidence=(float(row["confidence"]) if row.get("confidence") is not None else 1.0),
             created_at=created_at,
+            valid_range=valid_range,
             metadata=tags,
         )
 

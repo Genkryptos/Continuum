@@ -28,16 +28,25 @@ to run inside a live event loop (use the ``await`` form there).
 
 from __future__ import annotations
 
+import logging
+import math
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from continuum.core.session import ContinuumSession
-from continuum.core.types import MemoryItem, MemoryTier
+from continuum.core.types import BiTemporalRange, MemoryItem, MemoryTier
 
 if TYPE_CHECKING:
     from continuum.core.config import ContinuumConfig
     from continuum.core.protocols import LTMProtocol, RetrieverProtocol
+    from continuum.promotion.mem0_promoter import CompletionFn
     from continuum.retrieval.embedding_query import EmbedderProtocol
+
+log = logging.getLogger(__name__)
+
+#: How many of the most-relevant hits `current` considers topical. Valid time
+#: breaks ties inside this window; beyond it, a hit is about something else.
+_CURRENT_TOPICAL_WINDOW = 3
 
 __all__ = ["Memory"]
 
@@ -51,14 +60,21 @@ class Memory:
         *,
         session_id: str | None = None,
         embedder: EmbedderProtocol | None = None,
+        decider: Any | None = None,
     ) -> None:
         """Wrap an existing session. Use :meth:`in_memory` for a zero-config one.
 
         *embedder*, when given, is used to embed text **on write** so the LTM
         dense channel has vectors to match against — the read side alone is not
-        enough (a stored item with no embedding is invisible to dense search)."""
+        enough (a stored item with no embedding is invisible to dense search).
+
+        *decider*, when given, routes each write through the Mem0
+        ADD/UPDATE/DELETE decision so a contradicting fact **supersedes** the one
+        it replaces instead of piling up beside it. See
+        :meth:`from_postgres` — it requires an LLM and is off by default."""
         self._session = session
         self._embedder = embedder
+        self._decider = decider
         if session_id is not None:
             self._session.session_id = session_id
 
@@ -93,6 +109,7 @@ class Memory:
         dsn: str | None = None,
         *,
         embeddings: bool = True,
+        supersession_completion_fn: CompletionFn | None = None,
         session_id: str = "default",
         config: ContinuumConfig | None = None,
     ) -> Memory:
@@ -106,7 +123,17 @@ class Memory:
         local bge-m3 embedder so the LTM dense channel fires — it downloads
         ~2.3 GB on first use; pass ``embeddings=False`` for a sparse-only setup
         with no model download. Call :meth:`start` (or use ``async with``)
-        before reading — that is when the connection pool opens."""
+        before reading — that is when the connection pool opens.
+
+        *supersession_completion_fn* enables true supersession: writes are routed
+        through the Mem0 ADD/UPDATE/DELETE decider so a contradicting fact
+        retires the one it replaces (which is what makes :meth:`current`
+        meaningful). It is **off by default and requires an LLM**: contradiction
+        pairs land in the decider's ambiguous similarity band — e.g.
+        ``cosine("I live in Boston", "I moved from Boston to New York") = 0.81``,
+        between ``add_threshold`` 0.5 and ``noop_threshold`` 0.97 — where only
+        the model can adjudicate. With no LLM the decider returns ``NOOP`` and
+        the new fact would be **dropped**, so we never enable it implicitly."""
         from continuum.core.config import ContinuumConfig as _Cfg
         from continuum.retrieval import Retriever
         from continuum.retrieval.embedding_query import EmbeddingQueryRetriever
@@ -122,6 +149,13 @@ class Memory:
 
             embedder = EmbeddingService(cfg.embedding)
 
+        decider = None
+        if supersession_completion_fn is not None:
+            from continuum.core.config import PromoterConfig
+            from continuum.promotion.mem0_promoter import Mem0Promoter
+
+            decider = Mem0Promoter(PromoterConfig(), completion_fn=supersession_completion_fn)
+
         stm = PostgresSTM(dsn=resolved_dsn)
         ltm = PostgresLTM(dsn=resolved_dsn)
         inner = Retriever(ltm=ltm, stm=stm, session_id=session_id)
@@ -134,7 +168,7 @@ class Memory:
             retriever=cast("RetrieverProtocol", retriever),
             session_id=session_id,
         )
-        return cls(session, session_id=session_id, embedder=embedder)
+        return cls(session, session_id=session_id, embedder=embedder, decider=decider)
 
     @property
     def session(self) -> ContinuumSession:
@@ -180,17 +214,107 @@ class Memory:
             )
         )
         ltm = self._session.ltm
-        if ltm is not None:
-            await ltm.upsert(
-                MemoryItem(
-                    content=text,
-                    tier=MemoryTier.LTM,
-                    session_id=sid,
-                    created_at=when,
-                    importance=importance,
-                    embedding=await self._embed(text),
+        if ltm is None:
+            return
+        vec = await self._embed(text)
+        node = MemoryItem(
+            content=text,
+            tier=MemoryTier.LTM,
+            session_id=sid,
+            created_at=when,
+            importance=importance,
+            embedding=vec,
+            # Valid time: when the fact became true in the world (as opposed to
+            # when we recorded it). Without this the store has no temporal
+            # ordering to reason over and every fact ties, so `current` cannot
+            # tell stale from fresh.
+            valid_range=BiTemporalRange(valid_from=when),
+        )
+        if self._decider is not None and await self._decided_write(ltm, node, vec):
+            return
+        await ltm.upsert(node)
+
+    async def _decided_write(self, ltm: Any, node: MemoryItem, vec: list[float] | None) -> bool:
+        """Route the write through the Mem0 decider. Returns True if it handled
+        the write, False to fall back to a plain upsert.
+
+        Never drops the fact: any failure — decider error, an UPDATE/DELETE with
+        no target, or a NOOP that came from an unavailable LLM rather than a real
+        duplicate — returns False so the caller stores it normally.
+        """
+        import uuid as _uuid
+
+        from continuum.extraction.fact_extractor import Fact
+
+        decider = self._decider
+        if decider is None:
+            return False
+        text = node.content or ""
+        try:
+            neighbors = await self._cosine_neighbors(ltm, text, vec)
+            decision = await decider.decide_operation(
+                Fact(
+                    text=text,
+                    confidence=0.9,
+                    entities_mentioned=[],
+                    source_block_id=_uuid.uuid4(),
+                ),
+                neighbors,
+            )
+        except Exception:
+            log.debug("supersession decider unavailable — storing as a plain add", exc_info=True)
+            return False
+
+        op, target = decision.op, decision.target_id
+        try:
+            if op == "UPDATE" and target is not None:
+                merged = decision.merged_text or text
+                await ltm.update(target, {"text": merged, "embedding": await self._embed(merged)})
+                return True
+            if op == "DELETE" and target is not None:
+                await ltm.invalidate(target)  # retire the contradicted fact…
+                return False  # …and still store the new one
+            if op == "NOOP" and not decision.short_circuited:
+                # A genuine duplicate short-circuits. An un-short-circuited NOOP
+                # means the decider could not adjudicate (typically no LLM), and
+                # honouring it would silently discard the fact.
+                return False
+        except Exception:
+            log.debug("applying decision %s failed — falling back to add", op, exc_info=True)
+            return False
+        return bool(op == "NOOP")
+
+    async def _cosine_neighbors(self, ltm: Any, text: str, vec: list[float] | None) -> list[Any]:
+        """Nearest stored facts, re-scored by true cosine.
+
+        ``search_hybrid`` ranks by RRF (~0.03) and returns items *without* their
+        embedding, but the decider's add/noop thresholds are calibrated for
+        cosine — so re-embed the top candidates and score them properly.
+        """
+        from continuum.core.types import Query, ScoreBreakdown, ScoredItem
+
+        q = Query(
+            text=text,
+            embedding=vec,
+            top_k=8,
+            tiers=[MemoryTier.LTM],
+            session_id=self._session.session_id,
+        )
+        hits = list(await ltm.search_hybrid(q, 8))
+        if vec is None:
+            return hits
+        rescored: list[Any] = []
+        for si in hits[:6]:
+            cos = _cosine(vec, await self._embed(si.item.content or ""))
+            rescored.append(
+                ScoredItem(
+                    item=si.item,
+                    scores=ScoreBreakdown(
+                        relevance=cos, importance=0.0, recency=0.0, confidence=1.0, composite=cos
+                    ),
                 )
             )
+        return rescored
 
     async def _embed(self, text: str) -> list[float] | None:
         """Dense vector for *text*, or None when no embedder is attached.
@@ -221,8 +345,13 @@ class Memory:
         hits = await self.recall(f"{subject} {attribute}", k=8)
         if not hits:
             return None
-        live = [h for h in hits if not _is_superseded(h)]
-        chosen = max(live or hits, key=_effective_time)
+        live = [h for h in hits if not _is_superseded(h)] or hits
+        # Relevance first, then valid time — NOT valid time alone. This asks
+        # about one attribute, so the answer must be *about* it; ranking the
+        # whole result set by time lets an unrelated fact recorded today outrank
+        # the real answer. `recall` is relevance-ranked, so the head of `live` is
+        # the topical set and valid time only breaks ties inside it.
+        chosen = max(live[:_CURRENT_TOPICAL_WINDOW], key=_effective_time)
         return chosen.content or None
 
     async def timeline(
@@ -263,6 +392,16 @@ class Memory:
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _cosine(a: list[float] | None, b: list[float] | None) -> float:
+    """Cosine similarity; 0.0 when either vector is missing."""
+    if not a or not b:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
 
 
 def _is_superseded(item: MemoryItem) -> bool:

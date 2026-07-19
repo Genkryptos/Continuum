@@ -132,6 +132,22 @@ async def test_current_prefers_live_over_superseded() -> None:
     assert await mem.current("user", "residence") == "NYC"
 
 
+async def test_current_ignores_newer_but_irrelevant_hits() -> None:
+    # Regression: `current` used to take the newest of ALL hits, so an unrelated
+    # fact recorded today outranked the real answer. `recall` is relevance-ranked,
+    # so only the topical head counts; valid time breaks ties inside it.
+    hits = [
+        _item("residence: Boston", valid_from=datetime(2023, 1, 1, tzinfo=UTC)),
+        _item("residence: NYC", valid_from=datetime(2023, 6, 1, tzinfo=UTC)),
+        _item("filler a", valid_from=datetime(2022, 1, 1, tzinfo=UTC)),
+        _item("filler b", valid_from=datetime(2022, 1, 1, tzinfo=UTC)),
+        # Newest by far, but ranked outside the topical window — must NOT win.
+        _item("bought a laptop", valid_from=datetime(2025, 1, 1, tzinfo=UTC)),
+    ]
+    mem = Memory(_FakeSession(hits))  # type: ignore[arg-type]
+    assert await mem.current("user", "residence") == "residence: NYC"
+
+
 async def test_current_none_when_empty() -> None:
     mem = Memory(_FakeSession([]))  # type: ignore[arg-type]
     assert await mem.current("user", "residence") is None
