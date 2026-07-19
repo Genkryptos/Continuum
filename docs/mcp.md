@@ -64,7 +64,25 @@ claude mcp add continuum --transport http http://127.0.0.1:8000/mcp   # HTTP dae
 ```bash
 make mcp-smoke   # handshake + remember→recall round-trip (proves it works, no Claude)
 make mcp-eval    # scores retrieval: recall@1/@3, supersession, timeline
+make mcp-bench   # latency: p50/p95 per tool + embedder-vs-DB breakdown
 ```
+
+`mcp-bench` never inherits `CONTINUUM_DB_DSN` — it writes facts, so it would
+pollute a real store. It runs in-memory unless you hand it a throwaway:
+`make mcp-bench MCP_BENCH_DSN=postgresql://…/continuum_bench`.
+
+Measured on Postgres 16.10 + pgvector 0.8.0 + bge-m3 (CPU, Apple silicon):
+
+| tool | p50 | dominated by |
+|---|---:|---|
+| `remember` | ~81 ms | embedding the text |
+| `recall` | ~87 ms | embedding the query |
+| `timeline` | ~8 ms | no embed on a repeated entity |
+| `current` | **~1.6 ms** | exact tag lookup — never touches the model |
+
+The embedder is ~77 ms of every semantic call (hybrid retrieval itself is ~7 ms),
+so attribute-keyed `current` is ~50× faster than a semantic `recall`. Add ~7 s
+one-off on the first tool call of a session for pool open + model load.
 
 `mcp-eval` runs a fixed scenario with distractors. On the in-memory backend
 recall@1 is low (recency, no retriever); set `CONTINUUM_DB_DSN` and it measures
