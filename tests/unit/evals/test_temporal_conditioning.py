@@ -52,7 +52,10 @@ class _CaptureLLM:
 def _adapter(*, temporal_conditioning: bool, qtype: str | None, qdate: str | None = "2023-02-01"):
     session = SimpleNamespace(
         retriever=_FakeRetriever(
-            [_item("visited MoMA", "2023-01-24"), _item("Ancient Civilizations exhibit", "2023-01-31")]
+            [
+                _item("visited MoMA", "2023-01-24"),
+                _item("Ancient Civilizations exhibit", "2023-01-31"),
+            ]
         ),
         stm=None,
         session_id="s",

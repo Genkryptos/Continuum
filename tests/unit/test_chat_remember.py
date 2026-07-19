@@ -101,7 +101,9 @@ def _info(ltm: _FakeLTM, decision: Decision, *, decider_llm: bool = True) -> dic
 
 async def test_add_upserts() -> None:
     ltm = _FakeLTM()
-    note = await _remember(_info(ltm, Decision(op="ADD", target_id=None, rationale="")), "s", "I live in Pune")
+    note = await _remember(
+        _info(ltm, Decision(op="ADD", target_id=None, rationale="")), "s", "I live in Pune"
+    )
     assert "ADD" in note
     assert ltm.upserted == ["I live in Pune"]
     assert ltm.invalidated == []
@@ -123,7 +125,7 @@ async def test_contradiction_delete_supersedes() -> None:
     dec = Decision(op="DELETE", target_id="hyd", rationale="", metadata={})  # no retraction flag
     note = await _remember(_info(ltm, dec), "s", "I moved to Bangalore")
     assert "SUPERSEDE" in note
-    assert ltm.invalidated == ["hyd"]          # old retired
+    assert ltm.invalidated == ["hyd"]  # old retired
     assert ltm.upserted == ["I moved to Bangalore"]  # new stored
 
 

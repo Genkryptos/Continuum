@@ -80,7 +80,12 @@ _THREE_TANKS = (
 )
 
 _MSGS = [
-    {"role": "user", "content": "I set up a goldfish tank", "session_id": "s1", "date": "2023-01-01"},
+    {
+        "role": "user",
+        "content": "I set up a goldfish tank",
+        "session_id": "s1",
+        "date": "2023-01-01",
+    },
     {"role": "user", "content": "added a shrimp tank", "session_id": "s1", "date": "2023-01-02"},
     {"role": "user", "content": "and a betta tank", "session_id": "s1", "date": "2023-01-03"},
 ]

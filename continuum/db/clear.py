@@ -67,8 +67,7 @@ def clear_all(
         import psycopg
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise SystemExit(
-            "psycopg is required to clear the database.\n"
-            "  pip install 'psycopg[binary,pool]'"
+            "psycopg is required to clear the database.\n  pip install 'psycopg[binary,pool]'"
         ) from exc
 
     resolved = _resolve_dsn(dsn)
@@ -112,10 +111,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m continuum.db.clear",
         description="Delete all memory records (keeps schema + migration history).",
     )
-    p.add_argument("--dsn", default=None,
-                   help="Postgres DSN (default: ContinuumConfig.load().database.dsn)")
-    p.add_argument("--yes", action="store_true",
-                   help="skip the confirmation prompt (non-interactive)")
+    p.add_argument(
+        "--dsn", default=None, help="Postgres DSN (default: ContinuumConfig.load().database.dsn)"
+    )
+    p.add_argument(
+        "--yes", action="store_true", help="skip the confirmation prompt (non-interactive)"
+    )
     args = p.parse_args(argv)
 
     try:

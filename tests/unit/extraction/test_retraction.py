@@ -40,14 +40,14 @@ def test_positive_retractions(text: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "I never eat meat",              # standing preference — a fact, not a retraction
-        "I moved to Boston",             # temporal change → supersession, not retraction
+        "I never eat meat",  # standing preference — a fact, not a retraction
+        "I moved to Boston",  # temporal change → supersession, not retraction
         "I live in New York",
-        "I have a never-ending list",    # "never-ending" must not match
+        "I have a never-ending list",  # "never-ending" must not match
         "My flight was delayed",
         "I was in Bengaluru last year",  # a positive past claim
         "I prefer dark mode",
-        "",                              # empty
+        "",  # empty
     ],
 )
 def test_negative_non_retractions(text: str) -> None:

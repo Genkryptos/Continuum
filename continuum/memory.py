@@ -111,16 +111,22 @@ class Memory:
         when = occurred_at or datetime.now(UTC)
         await self._session.stm.append(
             MemoryItem(
-                content=text, tier=MemoryTier.STM, session_id=sid,
-                created_at=when, importance=importance,
+                content=text,
+                tier=MemoryTier.STM,
+                session_id=sid,
+                created_at=when,
+                importance=importance,
             )
         )
         ltm = self._session.ltm
         if ltm is not None:
             await ltm.upsert(
                 MemoryItem(
-                    content=text, tier=MemoryTier.LTM, session_id=sid,
-                    created_at=when, importance=importance,
+                    content=text,
+                    tier=MemoryTier.LTM,
+                    session_id=sid,
+                    created_at=when,
+                    importance=importance,
                 )
             )
 
@@ -168,7 +174,8 @@ class Memory:
 
     def add_sync(self, text: str, *, occurred_at: datetime | None = None) -> None:
         ContinuumSession._run_sync(
-            self.add(text, occurred_at=occurred_at), label="add",
+            self.add(text, occurred_at=occurred_at),
+            label="add",
         )
 
     def recall_sync(self, query: str, *, k: int = 8) -> list[MemoryItem]:
@@ -176,7 +183,8 @@ class Memory:
 
     def current_sync(self, subject: str, attribute: str) -> str | None:
         return ContinuumSession._run_sync(
-            self.current(subject, attribute), label="current",
+            self.current(subject, attribute),
+            label="current",
         )
 
 

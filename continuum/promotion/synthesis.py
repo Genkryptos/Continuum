@@ -387,10 +387,7 @@ def is_counting_question(text: str) -> bool:
 # must NOT inject it; the reader counts the in-window members from context.
 # Unbounded totals ("so far", "in total", "currently", "do I have", "a typical
 # week") deliberately do NOT match — synthesis is correct there.
-_MONTHS = (
-    "january|february|march|april|may|june|july|august"
-    "|september|october|november|december"
-)
+_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
 _SCOPED_COUNT_RE = re.compile(
     r"\bin the (?:first|last|past)\s+(?:\w+\s+)?(?:day|week|month|year)s?\b"
     r"|\b(?:this|last|past|next)\s+(?:\w+\s+)?(?:day|week|month|year)s?\b"

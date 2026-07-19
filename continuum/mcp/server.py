@@ -65,7 +65,10 @@ async def _current(mem: Memory, subject: str, attribute: str) -> str:
 
 
 async def _timeline(
-    mem: Memory, entity: str, since: str | None = None, until: str | None = None,
+    mem: Memory,
+    entity: str,
+    since: str | None = None,
+    until: str | None = None,
 ) -> list[dict[str, Any]]:
     def _parse(s: str | None) -> datetime | None:
         if not s:
@@ -122,7 +125,9 @@ def build_server(memory: Memory | None = None) -> FastMCP:
 
     @server.tool()
     async def timeline(
-        entity: str, since: str | None = None, until: str | None = None,
+        entity: str,
+        since: str | None = None,
+        until: str | None = None,
     ) -> list[dict[str, Any]]:
         """Bi-temporal history for an entity, oldest→newest (ISO date bounds)."""
         return await _timeline(mem, entity, since, until)

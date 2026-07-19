@@ -144,9 +144,7 @@ def test_apply_dry_run_lists_pending_without_executing_ddl(
     assert not any("CREATE TABLE" in s for s in conn.executed)
 
 
-def test_apply_reports_up_to_date(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_apply_reports_up_to_date(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _write(tmp_path, "001_a.sql")
     conn = _FakeConn(applied=["001"])
     _patch_connect(monkeypatch, conn)
@@ -157,9 +155,7 @@ def test_apply_reports_up_to_date(
     assert "up to date" in buf.getvalue()
 
 
-def test_apply_runs_pending_and_commits(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_apply_runs_pending_and_commits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _write(tmp_path, "001_a.sql", "CREATE TABLE a();")
     conn = _FakeConn(applied=[])  # nothing applied → 001 runs
     _patch_connect(monkeypatch, conn)

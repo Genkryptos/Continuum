@@ -50,8 +50,8 @@ def test_format_context_partitions_current_vs_recent() -> None:
     out = format_context(SimpleNamespace(items=items))
     assert "CURRENT MEMORY" in out and "RECENT CONVERSATION" in out
     cur, _, rec = out.partition("RECENT CONVERSATION")
-    assert "Bhilai" in cur          # live fact under CURRENT
-    assert "Bengaluru" in rec       # raw stale turn under RECENT
+    assert "Bhilai" in cur  # live fact under CURRENT
+    assert "Bengaluru" in rec  # raw stale turn under RECENT
 
 
 def test_format_context_empty_or_none() -> None:

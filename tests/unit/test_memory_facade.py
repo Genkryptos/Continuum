@@ -49,7 +49,9 @@ class _FakeSession:
         return list(self._search_result[:k])
 
 
-def _item(content: str, *, valid_from: datetime | None = None, valid_to: datetime | None = None) -> MemoryItem:
+def _item(
+    content: str, *, valid_from: datetime | None = None, valid_to: datetime | None = None
+) -> MemoryItem:
     vr = None
     if valid_from is not None or valid_to is not None:
         vr = BiTemporalRange(valid_from=valid_from or datetime.now(UTC), valid_to=valid_to)
@@ -105,7 +107,11 @@ async def test_recall_delegates_to_search() -> None:
 
 
 async def test_current_prefers_live_over_superseded() -> None:
-    old = _item("Boston", valid_from=datetime(2023, 1, 1, tzinfo=UTC), valid_to=datetime(2023, 6, 1, tzinfo=UTC))
+    old = _item(
+        "Boston",
+        valid_from=datetime(2023, 1, 1, tzinfo=UTC),
+        valid_to=datetime(2023, 6, 1, tzinfo=UTC),
+    )
     new = _item("NYC", valid_from=datetime(2023, 6, 1, tzinfo=UTC))  # open (current)
     mem = Memory(_FakeSession([old, new]))  # type: ignore[arg-type]
     assert await mem.current("user", "residence") == "NYC"
@@ -117,8 +123,16 @@ async def test_current_none_when_empty() -> None:
 
 
 async def test_current_falls_back_to_latest_when_all_superseded() -> None:
-    a = _item("Boston", valid_from=datetime(2023, 1, 1, tzinfo=UTC), valid_to=datetime(2023, 3, 1, tzinfo=UTC))
-    b = _item("Chicago", valid_from=datetime(2023, 3, 1, tzinfo=UTC), valid_to=datetime(2023, 6, 1, tzinfo=UTC))
+    a = _item(
+        "Boston",
+        valid_from=datetime(2023, 1, 1, tzinfo=UTC),
+        valid_to=datetime(2023, 3, 1, tzinfo=UTC),
+    )
+    b = _item(
+        "Chicago",
+        valid_from=datetime(2023, 3, 1, tzinfo=UTC),
+        valid_to=datetime(2023, 6, 1, tzinfo=UTC),
+    )
     mem = Memory(_FakeSession([a, b]))  # type: ignore[arg-type]
     assert await mem.current("user", "residence") == "Chicago"  # latest of the closed ones
 

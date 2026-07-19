@@ -358,8 +358,7 @@ async def _remember_one(info: dict[str, Any], session_id: str, text: str) -> str
 
     neighbors: list[Any] = []
     try:
-        q = Query(text=text, embedding=vec, top_k=8,
-                  tiers=[MemoryTier.LTM], session_id=session_id)
+        q = Query(text=text, embedding=vec, top_k=8, tiers=[MemoryTier.LTM], session_id=session_id)
         neighbors = list(await ltm.search_hybrid(q, 8))
     except Exception:
         pass
@@ -379,8 +378,11 @@ async def _remember_one(info: dict[str, Any], session_id: str, text: str) -> str
                 ScoredItem(
                     item=si.item,
                     scores=ScoreBreakdown(
-                        relevance=cos, importance=0.0, recency=0.0,
-                        confidence=1.0, composite=cos,
+                        relevance=cos,
+                        importance=0.0,
+                        recency=0.0,
+                        confidence=1.0,
+                        composite=cos,
                     ),
                 )
             )
@@ -388,13 +390,15 @@ async def _remember_one(info: dict[str, Any], session_id: str, text: str) -> str
 
     def _node(content: str, embedding: list[float] | None) -> MemoryItem:
         return MemoryItem(
-            content=content, tier=MemoryTier.LTM, embedding=embedding,
-            session_id=session_id, metadata={"role": "user", "source": "chat"},
+            content=content,
+            tier=MemoryTier.LTM,
+            embedding=embedding,
+            session_id=session_id,
+            metadata={"role": "user", "source": "chat"},
         )
 
     try:
-        fact = Fact(text=text, confidence=0.9, entities_mentioned=[],
-                    source_block_id=_uuid.uuid4())
+        fact = Fact(text=text, confidence=0.9, entities_mentioned=[], source_block_id=_uuid.uuid4())
         decision = await decider.decide_operation(fact, neighbors)
     except Exception:
         # Decider unavailable → fall back to a plain ADD so memory still accrues.
@@ -601,9 +605,13 @@ async def _handle_command(line: str, session: ContinuumSession, info: dict[str, 
         print(f"  session   : {session.session_id}")
         print(f"  backend   : {backend}")
         print(f"  responder : {info['responder_label']}")
-        print(f"  embedder  : {'off' if info['embedder'] is None else info['embedder'].config.model_name}")
+        print(
+            f"  embedder  : {'off' if info['embedder'] is None else info['embedder'].config.model_name}"
+        )
         if info.get("decider") is not None:
-            tie = "LLM" if info["responder_label"].startswith("openrouter") else "deterministic-only"
+            tie = (
+                "LLM" if info["responder_label"].startswith("openrouter") else "deterministic-only"
+            )
             print(f"  memory    : Mem0 decider (ADD/UPDATE/DELETE/NOOP; tie-break={tie})")
     elif head == "/search":
         if not rest:
@@ -699,12 +707,19 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         prog="python -m continuum.chat",
         description="Interactive Postgres-backed chat REPL on a real ContinuumSession.",
     )
-    p.add_argument("--session", default="default", help="persistent session id (default: 'default')")
-    p.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenRouter model (default: {DEFAULT_MODEL})")
+    p.add_argument(
+        "--session", default="default", help="persistent session id (default: 'default')"
+    )
+    p.add_argument(
+        "--model", default=DEFAULT_MODEL, help=f"OpenRouter model (default: {DEFAULT_MODEL})"
+    )
     p.add_argument("--in-memory", action="store_true", help="use InMemorySTM, no Postgres")
     p.add_argument("--mock", action="store_true", help="deterministic responder, no LLM call")
-    p.add_argument("--no-embeddings", action="store_true",
-                   help="skip the embedder (LTM dense channel off; sparse + STM still work)")
+    p.add_argument(
+        "--no-embeddings",
+        action="store_true",
+        help="skip the embedder (LTM dense channel off; sparse + STM still work)",
+    )
     return p.parse_args(argv)
 
 

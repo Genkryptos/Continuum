@@ -19,8 +19,8 @@ import pytest
 
 from continuum.core.types import MemoryItem, MemoryTier
 from evals.longmemeval.bootstrap_ollama import (
-    _DirectAnswerAdapter,
     _compute_temporal_order,
+    _DirectAnswerAdapter,
     _extract_reflect_answer,
     _is_distill_eligible,
     _is_reflect_eligible,
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.unit
     "qt",
     [
         "single-session-preference",  # clear semantic win (preference application)
-        "knowledge-update",           # net +2
+        "knowledge-update",  # net +2
     ],
 )
 def test_eligible_default_categories(qt: str) -> None:
@@ -48,9 +48,9 @@ def test_eligible_default_categories(qt: str) -> None:
 @pytest.mark.parametrize(
     "qt",
     [
-        "multi-session",            # net −13 → dropped from default
-        "temporal-reasoning",       # net −13 → dropped
-        "single-session-assistant", # net −2 → dropped
+        "multi-session",  # net −13 → dropped from default
+        "temporal-reasoning",  # net −13 → dropped
+        "single-session-assistant",  # net −2 → dropped
     ],
 )
 def test_net_negative_categories_now_excluded(qt: str) -> None:
@@ -64,8 +64,10 @@ def test_excluded_simple_fact_recall() -> None:
 
 
 def test_unknown_type_falls_back_to_wording() -> None:
-    assert _is_reflect_eligible("", "What headphones should I buy? Recommend one.") is True  # preference
-    assert _is_reflect_eligible("", "What is my dog's name?") is False        # plain
+    assert (
+        _is_reflect_eligible("", "What headphones should I buy? Recommend one.") is True
+    )  # preference
+    assert _is_reflect_eligible("", "What is my dog's name?") is False  # plain
 
 
 def test_known_but_not_allowed_type_is_off() -> None:
@@ -180,10 +182,10 @@ async def test_reflect_uses_cot_prompt_and_big_budget() -> None:
     prompt = a.llm.prompt  # type: ignore[attr-defined]
     assert "Reason in a few SHORT steps" in prompt
     assert "Answer:" in prompt
-    assert a.llm.max_tokens == 400          # the reflect budget, not 16
-    assert out == "Target"                  # parsed from the final line
+    assert a.llm.max_tokens == 400  # the reflect budget, not 16
+    assert out == "Target"  # parsed from the final line
     assert a.last_telemetry["reflect_applied"] is True
-    assert a.last_telemetry["llm_call_count"] == 1   # still ONE call
+    assert a.last_telemetry["llm_call_count"] == 1  # still ONE call
 
 
 async def test_reflect_off_uses_direct_prompt() -> None:
@@ -191,7 +193,7 @@ async def test_reflect_off_uses_direct_prompt() -> None:
     out = await a.answer_question("Where did I redeem the coupon?")
     prompt = a.llm.prompt  # type: ignore[attr-defined]
     assert "Reason in a few SHORT steps" not in prompt
-    assert a.llm.max_tokens == 16           # the direct budget
+    assert a.llm.max_tokens == 16  # the direct budget
     assert out == "Target"
     assert a.last_telemetry["reflect_applied"] is False
 
@@ -215,7 +217,7 @@ async def test_reflect_stacks_with_synthesis() -> None:
     ]
     out = await a.answer_question("How many tanks do I have?")
     prompt = a.llm.prompt  # type: ignore[attr-defined]
-    assert "COMPUTED FACTS" in prompt           # synthesis injected
+    assert "COMPUTED FACTS" in prompt  # synthesis injected
     assert "User has 3 tanks." in prompt
     assert "Reason in a few SHORT steps" in prompt  # AND reflect
     assert out == "3"
@@ -299,8 +301,12 @@ def _vote_adapter(replies: list[str], vote_n: int) -> _DirectAnswerAdapter:
         session_id="s",
     )
     a = _DirectAnswerAdapter(
-        session=session, llm=_CyclingLLM(replies), answer_max_tokens=16,
-        top_k=8, max_context_chars=10_000, vote_n=vote_n,
+        session=session,
+        llm=_CyclingLLM(replies),
+        answer_max_tokens=16,
+        top_k=8,
+        max_context_chars=10_000,
+        vote_n=vote_n,
     )
     a.dataset_question_type = "single-session-user"  # type: ignore[attr-defined]
     return a
@@ -346,8 +352,12 @@ async def test_distill_filters_then_answers() -> None:
         session_id="s",
     )
     a = _DirectAnswerAdapter(
-        session=session, llm=llm, answer_max_tokens=16, top_k=8,
-        max_context_chars=10_000, distill=True,
+        session=session,
+        llm=llm,
+        answer_max_tokens=16,
+        top_k=8,
+        max_context_chars=10_000,
+        distill=True,
     )
     a.dataset_question_type = "multi-session"  # type: ignore[attr-defined]
     out = await a.answer_question("How many tanks do I have?")
@@ -361,11 +371,17 @@ async def test_distill_filters_then_answers() -> None:
 async def test_distill_off_is_single_call() -> None:
     llm = _CyclingLLM(["answer"])
     session = SimpleNamespace(
-        stm=_FakeSTM(), retriever=_FakeRetriever([_turn("I have a tank")]), session_id="s",
+        stm=_FakeSTM(),
+        retriever=_FakeRetriever([_turn("I have a tank")]),
+        session_id="s",
     )
     a = _DirectAnswerAdapter(
-        session=session, llm=llm, answer_max_tokens=16, top_k=8,
-        max_context_chars=10_000, distill=False,
+        session=session,
+        llm=llm,
+        answer_max_tokens=16,
+        top_k=8,
+        max_context_chars=10_000,
+        distill=False,
     )
     a.dataset_question_type = "multi-session"  # type: ignore[attr-defined]
     await a.answer_question("How many tanks?")
@@ -398,7 +414,7 @@ def test_is_temporal_order_negative(q: str) -> None:
 
 def test_compute_temporal_order_sorts_by_date() -> None:
     a = (
-        'The order is...\n'
+        "The order is...\n"
         'ORDER: [{"event": "Metropolitan", "date": "2023-05-10"}, '
         '{"event": "Science Museum", "date": "2023-01-02"}, '
         '{"event": "Modern Art", "date": "2023-03-15"}]'

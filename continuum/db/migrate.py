@@ -104,8 +104,7 @@ def apply_migrations(
         import psycopg
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise SystemExit(
-            "psycopg is required to run migrations.\n"
-            "  pip install 'psycopg[binary,pool]'"
+            "psycopg is required to run migrations.\n  pip install 'psycopg[binary,pool]'"
         ) from exc
 
     resolved = _resolve_dsn(dsn)
@@ -149,12 +148,18 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m continuum.db.migrate",
         description="Apply Continuum's SQL migrations to the configured Postgres.",
     )
-    p.add_argument("--dsn", default=None,
-                   help="Postgres DSN (default: ContinuumConfig.load().database.dsn)")
-    p.add_argument("--dry-run", action="store_true",
-                   help="list pending migrations without applying them")
-    p.add_argument("--migrations-dir", type=Path, default=None,
-                   help=f"directory of *.sql migrations (default: {_DEFAULT_DIR})")
+    p.add_argument(
+        "--dsn", default=None, help="Postgres DSN (default: ContinuumConfig.load().database.dsn)"
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="list pending migrations without applying them"
+    )
+    p.add_argument(
+        "--migrations-dir",
+        type=Path,
+        default=None,
+        help=f"directory of *.sql migrations (default: {_DEFAULT_DIR})",
+    )
     args = p.parse_args(argv)
 
     try:

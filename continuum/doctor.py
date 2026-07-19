@@ -106,7 +106,7 @@ def load_dotenv(root: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         if line.startswith("export "):
-            line = line[len("export "):]
+            line = line[len("export ") :]
         key, _, val = line.partition("=")
         key = key.strip()
         val = val.strip().strip('"').strip("'")
@@ -144,8 +144,12 @@ def _ping_provider(var: str, label: str, endpoint: str | None, key: str) -> Chec
             return Check(name, WARN, f"unexpected HTTP {resp.status}")
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
-            return Check(name, FAIL, f"{label} rejected the key (HTTP {exc.code})",
-                         hint=f"check {var} in your .env")
+            return Check(
+                name,
+                FAIL,
+                f"{label} rejected the key (HTTP {exc.code})",
+                hint=f"check {var} in your .env",
+            )
         return Check(name, WARN, f"{label} returned HTTP {exc.code}")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         return Check(name, WARN, f"could not reach {label}: {exc}")
@@ -159,16 +163,24 @@ def check_python(report: Report) -> None:
     if (v.major, v.minor) >= (3, 11):
         report.add("python", OK, f"{v.major}.{v.minor}.{v.micro}")
     else:
-        report.add("python", FAIL, f"{v.major}.{v.minor}.{v.micro}",
-                   hint="Continuum requires Python ≥ 3.11")
+        report.add(
+            "python",
+            FAIL,
+            f"{v.major}.{v.minor}.{v.micro}",
+            hint="Continuum requires Python ≥ 3.11",
+        )
 
 
 def check_env_file(report: Report, root: Path) -> None:
     if (root / ".env").exists():
         report.add(".env file", OK, "found")
     else:
-        report.add(".env file", WARN, "not found — using defaults / shell env",
-                   hint="cp .env.example .env  then fill in what you need")
+        report.add(
+            ".env file",
+            WARN,
+            "not found — using defaults / shell env",
+            hint="cp .env.example .env  then fill in what you need",
+        )
 
 
 def check_config(report: Report) -> Any:
@@ -180,16 +192,24 @@ def check_config(report: Report) -> Any:
         report.add("config loads", OK, "ContinuumConfig validated")
         return cfg
     except Exception as exc:  # pydantic.ValidationError or import error
-        report.add("config loads", FAIL, str(exc).splitlines()[0] if str(exc) else type(exc).__name__,
-                   hint="a CONTINUUM_* value failed validation — see the message above")
+        report.add(
+            "config loads",
+            FAIL,
+            str(exc).splitlines()[0] if str(exc) else type(exc).__name__,
+            hint="a CONTINUUM_* value failed validation — see the message above",
+        )
         return None
 
 
 def check_providers(report: Report, env: dict[str, str], *, ping: bool) -> None:
     found = detect_providers(env)
     if not found:
-        report.add("LLM provider key", WARN, "none set — offline path only",
-                   hint="set one of OPENROUTER_API_KEY / OPENAI_API_KEY / … for LLM features")
+        report.add(
+            "LLM provider key",
+            WARN,
+            "none set — offline path only",
+            hint="set one of OPENROUTER_API_KEY / OPENAI_API_KEY / … for LLM features",
+        )
         return
     labels = ", ".join(label for _, label, _ in found)
     report.add("LLM provider key", OK, f"{len(found)} found: {labels}")
@@ -204,11 +224,17 @@ def check_embeddings(report: Report, cfg: Any, *, full: bool) -> None:
     try:
         import sentence_transformers  # noqa: F401
     except Exception:
-        report.add("embeddings", WARN, f"model={model} — sentence-transformers not importable",
-                   hint="pip install sentence-transformers  (only needed for real embeddings)")
+        report.add(
+            "embeddings",
+            WARN,
+            f"model={model} — sentence-transformers not importable",
+            hint="pip install sentence-transformers  (only needed for real embeddings)",
+        )
         return
     if not full:
-        report.add("embeddings", OK, f"model={model} device={device} (load deferred; --full to embed)")
+        report.add(
+            "embeddings", OK, f"model={model} device={device} (load deferred; --full to embed)"
+        )
         return
     # --full: actually load the model + embed one string (downloads on first use).
     try:
@@ -231,8 +257,12 @@ def check_database(report: Report, cfg: Any) -> None:
     try:
         import psycopg
     except Exception:
-        report.add("database", WARN, "psycopg not installed — in-memory mode",
-                   hint="pip install 'psycopg[binary,pool]'  for the Postgres path")
+        report.add(
+            "database",
+            WARN,
+            "psycopg not installed — in-memory mode",
+            hint="pip install 'psycopg[binary,pool]'  for the Postgres path",
+        )
         return
     try:
         with psycopg.connect(dsn, connect_timeout=5) as conn:
@@ -243,18 +273,30 @@ def check_database(report: Report, cfg: Any) -> None:
             schema = conn.execute("SELECT to_regclass('public.memory_nodes')").fetchone()
             has_schema = bool(schema and schema[0])
             if not (ext and ext[0]):
-                report.add("database", WARN, f"connected ({safe}); pgvector NOT installed",
-                           hint="run `make db-migrate` (migration 001 runs CREATE EXTENSION vector)")
+                report.add(
+                    "database",
+                    WARN,
+                    f"connected ({safe}); pgvector NOT installed",
+                    hint="run `make db-migrate` (migration 001 runs CREATE EXTENSION vector)",
+                )
             elif not has_schema:
-                report.add("database", WARN,
-                           f"connected ({safe}); pgvector {ext[0]} but LTM schema NOT applied",
-                           hint="run `make db-migrate` to create memory_nodes + the rest")
+                report.add(
+                    "database",
+                    WARN,
+                    f"connected ({safe}); pgvector {ext[0]} but LTM schema NOT applied",
+                    hint="run `make db-migrate` to create memory_nodes + the rest",
+                )
             else:
-                report.add("database", OK,
-                           f"connected ({safe}); pgvector {ext[0]}; LTM schema present")
+                report.add(
+                    "database", OK, f"connected ({safe}); pgvector {ext[0]}; LTM schema present"
+                )
     except Exception as exc:
-        report.add("database", WARN, f"cannot reach {safe}: {str(exc).splitlines()[0]}",
-                   hint="run `make db-up` (or skip — the in-memory path needs no DB)")
+        report.add(
+            "database",
+            WARN,
+            f"cannot reach {safe}: {str(exc).splitlines()[0]}",
+            hint="run `make db-up` (or skip — the in-memory path needs no DB)",
+        )
 
 
 def _redact_dsn(dsn: str) -> str:
@@ -333,10 +375,16 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m continuum.doctor",
         description="Verify your Continuum .env / environment is set up correctly.",
     )
-    p.add_argument("--ping", action="store_true",
-                   help="validate each detected LLM provider key with a read-only API call")
-    p.add_argument("--full", action="store_true",
-                   help="also load the embedder and embed a string (downloads the model)")
+    p.add_argument(
+        "--ping",
+        action="store_true",
+        help="validate each detected LLM provider key with a read-only API call",
+    )
+    p.add_argument(
+        "--full",
+        action="store_true",
+        help="also load the embedder and embed a string (downloads the model)",
+    )
     p.add_argument("--json", action="store_true", help="emit a machine-readable JSON report")
     p.add_argument("--no-color", action="store_true", help="disable ANSI colour")
     args = p.parse_args(argv)

@@ -116,7 +116,7 @@ def test_min_count_filters_small_groups() -> None:
 
 def test_no_dedup_option_counts_raw() -> None:
     facts = [_f("tank", "goldfish tank"), _f("tank", "goldfish tank")]
-    assert aggregate(facts)[0].count == 1            # dedup default
+    assert aggregate(facts)[0].count == 1  # dedup default
     assert aggregate(facts, dedup=False)[0].count == 2
 
 
@@ -175,7 +175,9 @@ def test_relevant_summaries_fallback_when_no_match() -> None:
 
 
 async def test_extract_carries_quantity() -> None:
-    reply = '{"facts": [{"predicate": "session", "object": "Mon", "quantity": 2.5, "unit": "hours"}]}'
+    reply = (
+        '{"facts": [{"predicate": "session", "object": "Mon", "quantity": 2.5, "unit": "hours"}]}'
+    )
     facts = await extract_structured_facts("played 2.5h", completion_fn=_fake_llm(reply))
     assert facts[0].quantity == 2.5 and facts[0].unit == "hours"
 
@@ -194,14 +196,14 @@ async def test_disk_cache_serves_repeats_without_calling_llm(tmp_path: Path) -> 
     a = await cached("hello")
     b = await cached("hello")  # served from disk → no second call
     assert a == b == "resp:hello"
-    assert calls["n"] == 1                       # the LLM was hit exactly once
+    assert calls["n"] == 1  # the LLM was hit exactly once
     assert len(list(tmp_path.glob("*.txt"))) == 1  # one cached file written
 
     # a fresh wrapper over the SAME dir still hits the cache (persisted to disk)
     calls["n"] = 0
     cached2 = disk_cached(counting_fn, tmp_path, namespace="gpt-4o-mini")
     assert await cached2("hello") == "resp:hello"
-    assert calls["n"] == 0                       # zero credits on re-run
+    assert calls["n"] == 0  # zero credits on re-run
 
 
 async def test_disk_cache_namespace_separates(tmp_path: Path) -> None:
@@ -264,11 +266,11 @@ def test_scoped_count_question_positive(q: str) -> None:
 @pytest.mark.parametrize(
     "q",
     [
-        "How many tops have I bought from H&M so far?",       # unbounded total
-        "How many tanks do I currently have?",                 # current total
-        "How many model kits have I worked on or bought?",     # lifetime total
+        "How many tops have I bought from H&M so far?",  # unbounded total
+        "How many tanks do I currently have?",  # current total
+        "How many model kits have I worked on or bought?",  # lifetime total
         "How many fitness classes do I attend in a typical week?",  # rate, not window
-        "How many pre-1920 American coins do I have?",         # attribute filter, not time
+        "How many pre-1920 American coins do I have?",  # attribute filter, not time
         "How many sports have I played competitively in the past?",  # 'in the past' w/o unit = ever
     ],
 )
@@ -329,8 +331,8 @@ async def test_extract_salvage_carries_quantity() -> None:
     )
     facts = await extract_structured_facts("sessions", completion_fn=_fake_llm(reply))
     (d,) = aggregate(facts)
-    assert d.count == 3            # all three members survive salvage
-    assert d.total == 100         # 40 + 60 quantities preserved through salvage
+    assert d.count == 3  # all three members survive salvage
+    assert d.total == 100  # 40 + 60 quantities preserved through salvage
 
 
 async def test_salvage_skips_record_with_no_object_field() -> None:
@@ -382,8 +384,7 @@ def test_router_returns_total_for_sum_intent() -> None:
     # "how many hours total" → the SUM with unit, not the session count.
     # (predicate words must appear in the question for the strict match.)
     assert (
-        route_count_answer(facts, "How many hours total across my gaming sessions?")
-        == "140 hours"
+        route_count_answer(facts, "How many hours total across my gaming sessions?") == "140 hours"
     )
 
 
@@ -429,8 +430,8 @@ def test_router_declines_non_count_questions() -> None:
     facts = aggregate([_f("session", "a"), _f("session", "b")])
     assert route_count_answer(facts, "How long is my commute by session?") is None  # duration
     studio = aggregate([_f("studio", "a"), _f("studio", "b")])
-    assert route_count_answer(studio, "What yoga studio do I attend?") is None       # recall
-    assert route_count_answer(studio, "How often do I visit the studio?") is None    # frequency
+    assert route_count_answer(studio, "What yoga studio do I attend?") is None  # recall
+    assert route_count_answer(studio, "How often do I visit the studio?") is None  # frequency
 
 
 def test_router_declines_count_of_one() -> None:

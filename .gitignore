@@ -50,3 +50,9 @@ evals/**/.wiki_cache*/
 
 # v3 synthesis extraction cache (deterministic LLM call cache — large, regenerable)
 .synthesis_cache/
+
+# Website toolchain (dist/ already covered by Build artifacts above)
+node_modules/
+
+# One-off eval run artifact (control-arm failed question ids; regenerable)
+samples/control_failed_ids.json

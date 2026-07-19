@@ -81,7 +81,9 @@ def test_end_to_end_counts_via_aggregate() -> None:
     from continuum.promotion.synthesis import StructuredFact
 
     for f in facts:
-        structured.append(StructuredFact(subject="user", predicate=str(f["predicate"]), obj=str(f["object"])))
+        structured.append(
+            StructuredFact(subject="user", predicate=str(f["predicate"]), obj=str(f["object"]))
+        )
     (d,) = aggregate(structured)
     assert d.count == 3
     assert d.predicate == "top"
