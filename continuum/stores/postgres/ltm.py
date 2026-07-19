@@ -500,6 +500,49 @@ class PostgresLTM:
             )
         return out
 
+    # ── exact tag lookup (no similarity) ────────────────────────────────────
+
+    async def by_tags(
+        self,
+        tags: dict[str, Any],
+        *,
+        as_of: datetime | None = None,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Rows whose ``tags`` contain *tags* — an exact JSONB lookup, newest
+        valid-time first.
+
+        Deliberately **not** similarity-based. :meth:`search_hybrid` gates on a
+        dense/sparse channel *before* applying the filter, so a fact can be
+        excluded simply because the query text didn't resemble it — useless for
+        answering "what is the user's CURRENT residence?", which is a lookup, not
+        a search. *as_of* applies the bi-temporal window (a fact counts only if
+        it had already become valid and had not yet been superseded).
+        """
+        extra = ["tags @> %(filt)s::jsonb", "invalidated_at IS NULL"]
+        params: dict[str, Any] = {"filt": json.dumps(tags), "k": int(limit)}
+        if as_of is not None:
+            extra.append("(valid_from IS NULL OR valid_from <= %(as_of)s)")
+            extra.append("(valid_to IS NULL OR valid_to > %(as_of)s)")
+            params["as_of"] = as_of
+        if session_id is not None:
+            extra.append("tags @> %(sess)s::jsonb")
+            params["sess"] = json.dumps({"session_id": session_id})
+
+        sql = f"""
+            SELECT id, "text", kind, importance, confidence,
+                   created_at, tags, valid_from, valid_to
+            FROM   {self._table}
+            WHERE  {" AND ".join(extra)}
+            ORDER  BY valid_from DESC NULLS LAST, created_at DESC
+            LIMIT  %(k)s
+        """
+        async with self._connect() as conn:
+            cur = await self._exec(conn, sql, params, prepare=True)
+            rows = await cur.fetchall()
+        return [self._row_to_item(r) for r in rows]
+
     # ── neighbors (recursive CTE graph walk) ────────────────────────────────
 
     async def neighbors(

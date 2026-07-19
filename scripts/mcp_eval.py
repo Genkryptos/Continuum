@@ -40,8 +40,12 @@ import threading
 
 FACTS: list[dict[str, str]] = [
     {"text": "My name is Mayank and I build Continuum solo."},
-    {"text": "I live in Boston.", "occurred_at": "2026-01-10"},
-    {"text": "I moved from Boston to New York City.", "occurred_at": "2026-06-15"},
+    {"text": "I live in Boston.", "occurred_at": "2026-01-10", "attribute": "residence"},
+    {
+        "text": "I moved from Boston to New York City.",
+        "occurred_at": "2026-06-15",
+        "attribute": "residence",
+    },
     {"text": "My favorite programming language is Python."},
     {"text": "My favorite database is PostgreSQL with the pgvector extension."},
     {"text": "I drive a red Tesla Model 3."},
@@ -71,6 +75,8 @@ RECALL_QUERIES: list[dict[str, str]] = [
 
 CURRENT_CHECKS: list[dict[str, str]] = [
     {"subject": "user", "attribute": "residence", "expect": "New York"},
+    # bi-temporal: before the June move, the answer must be the OLD value
+    {"subject": "user", "attribute": "residence", "as_of": "2026-03-01", "expect": "Boston"},
 ]
 
 TIMEOUT_S = 180.0  # watchdog: kill the server if a reply never arrives
@@ -119,8 +125,9 @@ def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
 
     for f in FACTS:
         args = {"text": f["text"]}
-        if "occurred_at" in f:
-            args["occurred_at"] = f["occurred_at"]
+        for opt in ("occurred_at", "attribute"):
+            if opt in f:
+                args[opt] = f[opt]
         reqs.append(_rpc(mid, "tools/call", {"name": "remember", "arguments": args}))
         write_ids.add(mid)
         mid += 1
@@ -143,7 +150,11 @@ def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
                 "tools/call",
                 {
                     "name": "current",
-                    "arguments": {"subject": c["subject"], "attribute": c["attribute"]},
+                    "arguments": {
+                        "subject": c["subject"],
+                        "attribute": c["attribute"],
+                        **({"as_of": c["as_of"]} if "as_of" in c else {}),
+                    },
                 },
             )
         )

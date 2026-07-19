@@ -132,6 +132,68 @@ async def test_current_prefers_live_over_superseded() -> None:
     assert await mem.current("user", "residence") == "NYC"
 
 
+class _TagLTM(_FakeLTM):
+    """LTM that supports the exact attribute lookup (like PostgresLTM)."""
+
+    def __init__(self, rows: list[MemoryItem] | None = None) -> None:
+        super().__init__()
+        self.rows = rows or []
+        self.calls: list[tuple[dict[str, Any], Any]] = []
+
+    async def by_tags(
+        self, tags: dict[str, Any], *, as_of: Any = None, **_kw: Any
+    ) -> list[MemoryItem]:
+        self.calls.append((tags, as_of))
+        want = tags.get("attribute")
+        return [r for r in self.rows if (r.metadata or {}).get("attribute") == want]
+
+
+async def test_add_tags_the_attribute() -> None:
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("I moved to NYC", attribute="residence")
+    assert s.ltm.upserts[0].metadata.get("attribute") == "residence"
+
+
+async def test_current_prefers_exact_attribute_lookup() -> None:
+    # The exact lookup must win over fuzzy retrieval — and over a NEWER
+    # unrelated fact, which is what broke the retrieval-only version.
+    old = _item("Boston", valid_from=datetime(2026, 1, 10, tzinfo=UTC))
+    new = _item("New York City", valid_from=datetime(2026, 6, 15, tzinfo=UTC))
+    for it in (old, new):
+        it.metadata["attribute"] = "residence"
+    s = _FakeSession([_item("bought a laptop", valid_from=datetime(2026, 7, 20, tzinfo=UTC))])
+    s.ltm = _TagLTM([old, new])
+    mem = Memory(s)  # type: ignore[arg-type]
+    assert await mem.current("user", "residence") == "New York City"
+    assert s.ltm.calls[0][0] == {"attribute": "residence"}  # exact filter used
+
+
+async def test_current_returns_none_rather_than_guessing() -> None:
+    # A store that CAN answer attributes exactly is authoritative — including
+    # "no such fact". Falling back to retrieval here would invent a value.
+    s = _FakeSession([_item("I studied at IIT", valid_from=datetime(2026, 7, 20, tzinfo=UTC))])
+    s.ltm = _TagLTM([])  # lookup works, matches nothing
+    mem = Memory(s)  # type: ignore[arg-type]
+    assert await mem.current("user", "employer") is None
+
+
+async def test_current_as_of_is_passed_to_the_store() -> None:
+    s = _FakeSession()
+    s.ltm = _TagLTM([])
+    mem = Memory(s)  # type: ignore[arg-type]
+    when = datetime(2026, 3, 1, tzinfo=UTC)
+    await mem.current("user", "residence", as_of=when)
+    assert s.ltm.calls[0][1] == when  # bi-temporal point-in-time honoured
+
+
+async def test_current_falls_back_when_store_cannot_look_up() -> None:
+    # _FakeLTM has no by_tags → retrieval fallback still works (in-memory store).
+    hits = [_item("residence: NYC", valid_from=datetime(2026, 6, 1, tzinfo=UTC))]
+    mem = Memory(_FakeSession(hits))  # type: ignore[arg-type]
+    assert await mem.current("user", "residence") == "residence: NYC"
+
+
 async def test_current_ignores_newer_but_irrelevant_hits() -> None:
     # Regression: `current` used to take the newest of ALL hits, so an unrelated
     # fact recorded today outranked the real answer. `recall` is relevance-ranked,

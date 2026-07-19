@@ -53,19 +53,30 @@ async def _recall(mem: Memory, query: str, k: int = 8) -> list[dict[str, Any]]:
     return [_item_dict(h) for h in await mem.recall(query, k=k)]
 
 
-async def _remember(mem: Memory, text: str, occurred_at: str | None = None) -> str:
+async def _remember(
+    mem: Memory,
+    text: str,
+    occurred_at: str | None = None,
+    attribute: str | None = None,
+) -> str:
     when: datetime | None = None
     if occurred_at:
         try:
             when = datetime.fromisoformat(occurred_at)
         except ValueError:
             when = None
-    await mem.add(text, occurred_at=when)
+    await mem.add(text, occurred_at=when, attribute=attribute)
     return "stored"
 
 
-async def _current(mem: Memory, subject: str, attribute: str) -> str:
-    return (await mem.current(subject, attribute)) or "not found"
+async def _current(mem: Memory, subject: str, attribute: str, as_of: str | None = None) -> str:
+    when: datetime | None = None
+    if as_of:
+        try:
+            when = datetime.fromisoformat(as_of)
+        except ValueError:
+            when = None
+    return (await mem.current(subject, attribute, as_of=when)) or "not found"
 
 
 async def _timeline(
@@ -157,14 +168,24 @@ def build_server(
         return await _recall(await _ready(), query, k)
 
     @server.tool()
-    async def remember(text: str, occurred_at: str | None = None) -> str:
-        """Store a fact or turn in memory. occurred_at is an optional ISO date."""
-        return await _remember(await _ready(), text, occurred_at)
+    async def remember(
+        text: str, occurred_at: str | None = None, attribute: str | None = None
+    ) -> str:
+        """Store a fact or turn in memory.
+
+        occurred_at is an optional ISO date for when the fact became true.
+        attribute names what the fact is ABOUT ("residence", "employer", …) —
+        tag it and `current` can answer that attribute exactly.
+        """
+        return await _remember(await _ready(), text, occurred_at, attribute)
 
     @server.tool()
-    async def current(subject: str, attribute: str) -> str:
-        """The current value for an attribute after supersession (e.g. residence)."""
-        return await _current(await _ready(), subject, attribute)
+    async def current(subject: str, attribute: str, as_of: str | None = None) -> str:
+        """The current value for an attribute after supersession (e.g. residence).
+
+        as_of is an optional ISO date to ask what was current back then.
+        """
+        return await _current(await _ready(), subject, attribute, as_of)
 
     @server.tool()
     async def timeline(

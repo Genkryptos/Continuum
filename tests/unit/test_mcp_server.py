@@ -33,18 +33,20 @@ class _FakeMemory:
         self._recall: list[Any] = []
         self._current: str | None = None
         self._timeline: list[Any] = []
+        self.attributes: list[Any] = []
         self.starts = 0
 
     async def start(self) -> None:
         self.starts += 1
 
-    async def add(self, text: str, *, occurred_at: Any = None) -> None:
+    async def add(self, text: str, *, occurred_at: Any = None, attribute: Any = None) -> None:
         self.added.append((text, occurred_at))
+        self.attributes.append(attribute)
 
     async def recall(self, query: str, *, k: int = 8) -> list[Any]:
         return list(self._recall[:k])
 
-    async def current(self, subject: str, attribute: str) -> str | None:
+    async def current(self, subject: str, attribute: str, *, as_of: Any = None) -> str | None:
         return self._current
 
     async def timeline(self, entity: str, *, since: Any = None, until: Any = None) -> list[Any]:
@@ -87,6 +89,32 @@ async def test_remember_ignores_bad_date() -> None:
     m = _FakeMemory()
     await _remember(m, "trip", "not-a-date")  # type: ignore[arg-type]
     assert m.added[0][1] is None  # bad date → stored without occurred_at
+
+
+async def test_remember_forwards_attribute() -> None:
+    m = _FakeMemory()
+    captured: dict[str, Any] = {}
+
+    async def _spy(text: str, *, occurred_at: Any = None, attribute: Any = None) -> None:
+        captured.update(text=text, attribute=attribute)
+
+    m.add = _spy  # type: ignore[method-assign]
+    await _remember(m, "I moved to NYC", None, "residence")  # type: ignore[arg-type]
+    assert captured == {"text": "I moved to NYC", "attribute": "residence"}
+
+
+async def test_current_forwards_as_of() -> None:
+    m = _FakeMemory()
+    captured: dict[str, Any] = {}
+
+    async def _spy(subject: str, attribute: str, *, as_of: Any = None) -> str:
+        captured["as_of"] = as_of
+        return "Boston"
+
+    m.current = _spy  # type: ignore[method-assign]
+    out = await _current(m, "user", "residence", "2026-03-01")  # type: ignore[arg-type]
+    assert out == "Boston"
+    assert captured["as_of"] is not None and captured["as_of"].year == 2026
 
 
 async def test_current_returns_value_or_not_found() -> None:

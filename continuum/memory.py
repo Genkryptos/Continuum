@@ -198,10 +198,17 @@ class Memory:
         *,
         occurred_at: datetime | None = None,
         importance: float = 0.5,
+        attribute: str | None = None,
     ) -> None:
         """Remember a fact/turn. Appends to short-term memory and, when the
         session has long-term storage, upserts it there (supersession/dedup are
-        applied by the store's promoter where configured)."""
+        applied by the store's promoter where configured).
+
+        *attribute* names what the fact is **about** (``"residence"``,
+        ``"employer"``, …). Tagging it turns :meth:`current` from a fuzzy search
+        for an attribute *label* into an exact lookup — which is the difference
+        between reliably answering "where do I live now?" and hoping the phrasing
+        happens to embed close to the word "residence"."""
         sid = self._session.session_id
         when = occurred_at or datetime.now(UTC)
         await self._session.stm.append(
@@ -224,6 +231,7 @@ class Memory:
             created_at=when,
             importance=importance,
             embedding=vec,
+            metadata=({"attribute": attribute} if attribute else {}),
             # Valid time: when the fact became true in the world (as opposed to
             # when we recorded it). Without this the store has no temporal
             # ordering to reason over and every fact ties, so `current` cannot
@@ -338,10 +346,35 @@ class Memory:
         """Retrieve up to *k* memories relevant to *query*, best-first."""
         return await self._session.search(query, k=k)
 
-    async def current(self, subject: str, attribute: str) -> str | None:
-        """The user's CURRENT value for an attribute, after supersession — e.g.
+    async def current(
+        self,
+        subject: str,
+        attribute: str,
+        *,
+        as_of: datetime | None = None,
+    ) -> str | None:
+        """The CURRENT value for an attribute, after supersession — e.g.
         ``current("user", "residence")`` → the latest non-superseded value.
-        Returns ``None`` if nothing relevant is stored."""
+        ``None`` if nothing relevant is stored.
+
+        Facts written with ``add(..., attribute=...)`` are answered by an **exact
+        tag lookup** honouring valid time — deterministic, and immune to whether
+        the wording happens to embed near the attribute's name. Untagged facts
+        fall back to relevance-ranked retrieval, which is best-effort: an
+        attribute label ("user residence") is a poor semantic probe for a
+        sentence ("I moved from Boston to New York City").
+
+        *as_of* answers it **as of a past date** ("where did I live in March?")
+        rather than today, using the store's bi-temporal window.
+        """
+        when = as_of or datetime.now(UTC)
+        looked_up, exact = await self._current_by_tag(attribute, when)
+        if looked_up:
+            # The store can answer attributes exactly, so its answer is final —
+            # including "nothing". Guessing from fuzzy retrieval here would
+            # invent a value for an attribute we simply have no fact about,
+            # which is the confidently-wrong failure this API exists to avoid.
+            return exact
         hits = await self.recall(f"{subject} {attribute}", k=8)
         if not hits:
             return None
@@ -353,6 +386,27 @@ class Memory:
         # the topical set and valid time only breaks ties inside it.
         chosen = max(live[:_CURRENT_TOPICAL_WINDOW], key=_effective_time)
         return chosen.content or None
+
+    async def _current_by_tag(self, attribute: str, when: datetime) -> tuple[bool, str | None]:
+        """Exact attribute lookup → ``(did_lookup, value)``.
+
+        ``did_lookup`` is False only when the store cannot answer attributes at
+        all (no ``by_tags``, or it errored) — that is the one case where the
+        caller should fall back to retrieval. A successful lookup that matched
+        nothing returns ``(True, None)``: an honest "no such fact".
+        """
+        by_tags = getattr(self._session.ltm, "by_tags", None)
+        if by_tags is None:
+            return False, None
+        try:
+            rows = await by_tags({"attribute": attribute}, as_of=when)
+        except Exception:
+            log.debug("attribute lookup failed for %r — falling back", attribute, exc_info=True)
+            return False, None
+        live = [r for r in rows if not _is_superseded(r)] or list(rows)
+        if not live:
+            return True, None
+        return True, (max(live, key=_effective_time).content or None)
 
     async def timeline(
         self,

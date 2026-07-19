@@ -24,6 +24,17 @@ that the public API may still shift before 1.0.
   scenario with distractors; honors `CONTINUUM_DB_DSN` to eval the Postgres stack.
 - **`make mcp-install` / `mcp-smoke` / `mcp-serve` / `mcp-claude`** helpers.
 
+- **Attribute-keyed memory — `current` is now an exact lookup.** `add(text,
+  attribute="residence")` tags what a fact is *about*; `current(subject,
+  attribute, as_of=…)` then answers it via an exact JSONB tag lookup honouring
+  valid time (`PostgresLTM.by_tags`), instead of semantically searching for the
+  attribute's *name*. An attribute label ("user residence") is a poor probe for a
+  sentence ("I moved from Boston to New York City") — that mismatch, not ranking,
+  is why `current` was wrong. `as_of` answers "what was current in March?".
+  When the store can answer attributes exactly its answer is final, **including
+  "no such fact"** — it no longer invents a value for an attribute it has no data
+  for. Untagged facts keep the relevance-ranked fallback.
+
 ### Fixed
 - **Retrieval was query-independent on the Postgres path** (core bug, affected
   `session.search()` for every Postgres user — not just MCP). The stores return

@@ -75,9 +75,29 @@ the Postgres + embedder stack, where the relevant memory ranks first.
 | tool | signature | what it does |
 |---|---|---|
 | `recall` | `recall(query, k=8)` | retrieve up to `k` relevant memories, best-first |
-| `remember` | `remember(text, occurred_at?)` | store a fact/turn (`occurred_at` is an optional ISO date) |
-| `current` | `current(subject, attribute)` | the current value after supersession, e.g. `current("user","residence")` |
+| `remember` | `remember(text, occurred_at?, attribute?)` | store a fact/turn. `occurred_at` = when it became true; `attribute` = what it's *about* |
+| `current` | `current(subject, attribute, as_of?)` | the current value after supersession, e.g. `current("user","residence")`; `as_of` asks what was current back then |
 | `timeline` | `timeline(entity, since?, until?)` | bi-temporal history for an entity, oldest→newest |
+
+### Tag attributes so `current` is exact
+
+`current` asks about **one attribute**. Tag facts on write and it becomes an
+exact lookup honouring valid time, instead of a fuzzy search for the attribute's
+*name* (an attribute label like `"user residence"` is a poor semantic probe for a
+sentence like *"I moved from Boston to New York City"*):
+
+```python
+remember("I live in Boston",              occurred_at="2026-01-10", attribute="residence")
+remember("I moved from Boston to NYC",    occurred_at="2026-06-15", attribute="residence")
+
+current("user", "residence")                    # → "I moved from Boston to NYC"
+current("user", "residence", as_of="2026-03-01") # → "I live in Boston"  (bi-temporal)
+current("user", "employer")                      # → "not found"  (honest — no such fact)
+```
+
+Untagged facts still work via relevance-ranked retrieval, but that is best-effort.
+When the store can answer attributes exactly, its answer is final — including
+"no such fact", rather than guessing a wrong value.
 
 ## Notes
 
