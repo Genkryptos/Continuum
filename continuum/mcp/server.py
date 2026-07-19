@@ -67,7 +67,19 @@ async def _remember(
         except ValueError:
             when = None
     await mem.add(text, occurred_at=when, attribute=attribute)
-    return "stored"
+    # Report DURABILITY, not just success. A bare "stored" is indistinguishable
+    # between a real write and one into an ephemeral store that vanishes at
+    # exit — the caller believes it has memory and only finds out much later.
+    # This is the common misconfiguration: a DSN in the MCP registration is only
+    # picked up by NEW client sessions, so a session started earlier keeps
+    # writing to the in-memory fallback while reporting success.
+    if getattr(mem, "is_durable", True):
+        return "stored"
+    return (
+        "stored IN-MEMORY ONLY - this is NOT durable and will be lost when the "
+        "server exits. Set CONTINUUM_DB_DSN (and restart the client session) for "
+        "a persistent store."
+    )
 
 
 async def _current(mem: Memory, subject: str, attribute: str, as_of: str | None = None) -> str:

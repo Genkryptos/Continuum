@@ -91,6 +91,25 @@ async def test_remember_ignores_bad_date() -> None:
     assert m.added[0][1] is None  # bad date → stored without occurred_at
 
 
+async def test_remember_warns_when_the_store_is_not_durable() -> None:
+    # The silent-failure case: a client session started before CONTINUUM_DB_DSN
+    # was configured keeps writing to the in-memory fallback and reporting
+    # success. The ack must distinguish a real write from a vanishing one.
+    class _Ephemeral(_FakeMemory):
+        is_durable = False
+
+    out = await _remember(_Ephemeral(), "x")  # type: ignore[arg-type]
+    assert "NOT durable" in out
+    assert "CONTINUUM_DB_DSN" in out  # tells you how to fix it
+
+
+async def test_remember_is_terse_when_durable() -> None:
+    class _Durable(_FakeMemory):
+        is_durable = True
+
+    assert await _remember(_Durable(), "x") == "stored"  # type: ignore[arg-type]
+
+
 async def test_remember_forwards_attribute() -> None:
     m = _FakeMemory()
     captured: dict[str, Any] = {}

@@ -175,6 +175,22 @@ class Memory:
         """The wrapped :class:`ContinuumSession` (for advanced use / lifecycle)."""
         return self._session
 
+    @property
+    def is_durable(self) -> bool:
+        """Do writes survive this process?
+
+        False for the in-memory store, where :meth:`add` succeeds and the data
+        then disappears when the process exits. Callers that report success to a
+        human should say which of the two happened — "stored" is a lie if the
+        store evaporates, and the failure is otherwise invisible.
+        """
+        ltm = self._session.ltm
+        if ltm is None:
+            return False
+        from continuum.stores.in_memory.ltm import InMemoryLTM
+
+        return not isinstance(ltm, InMemoryLTM)
+
     async def start(self) -> None:
         """Bring the session online (bootstraps schemas / background workers)."""
         await self._session.start()

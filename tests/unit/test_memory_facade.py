@@ -74,6 +74,21 @@ def test_in_memory_factory_constructs() -> None:
     assert mem.session.ltm is not None  # in-memory LTM attached
 
 
+def test_is_durable_distinguishes_the_backends() -> None:
+    # Callers report success to humans; "stored" is a lie when the store
+    # evaporates at exit, and that failure is otherwise invisible.
+    assert Memory.in_memory().is_durable is False
+    pytest.importorskip("psycopg", reason="psycopg required for the Postgres backend")
+    mem = Memory.from_postgres("postgresql://u:p@localhost:5432/none", embeddings=False)
+    assert mem.is_durable is True
+
+
+async def test_is_durable_false_without_long_term_storage() -> None:
+    s = _FakeSession()
+    s.ltm = None
+    assert Memory(s).is_durable is False  # type: ignore[arg-type]
+
+
 def test_from_postgres_wires_hybrid_retriever() -> None:
     # Construction only — no .start(), so no DB connection / no model download
     # (embeddings=False keeps it dependency-light). Proves the production stack
