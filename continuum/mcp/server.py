@@ -19,6 +19,7 @@ testable without the MCP runtime); the FastMCP tools are thin wrappers.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -134,20 +135,36 @@ def build_server(
         settings["port"] = port
     server = FastMCP("continuum", **settings)
 
+    # The backing session must be started before use — that is when the Postgres
+    # connection pool opens and the background workers spin up. (In-memory needs
+    # nothing, which is why this was easy to miss.) Start it lazily on the first
+    # tool call, once, so the process still spawns instantly for stdio clients.
+    started = False
+    start_lock = asyncio.Lock()
+
+    async def _ready() -> Memory:
+        nonlocal started
+        if not started:
+            async with start_lock:
+                if not started:
+                    await mem.start()
+                    started = True
+        return mem
+
     @server.tool()
     async def recall(query: str, k: int = 8) -> list[dict[str, Any]]:
         """Retrieve up to k memories relevant to the query, best-first."""
-        return await _recall(mem, query, k)
+        return await _recall(await _ready(), query, k)
 
     @server.tool()
     async def remember(text: str, occurred_at: str | None = None) -> str:
         """Store a fact or turn in memory. occurred_at is an optional ISO date."""
-        return await _remember(mem, text, occurred_at)
+        return await _remember(await _ready(), text, occurred_at)
 
     @server.tool()
     async def current(subject: str, attribute: str) -> str:
         """The current value for an attribute after supersession (e.g. residence)."""
-        return await _current(mem, subject, attribute)
+        return await _current(await _ready(), subject, attribute)
 
     @server.tool()
     async def timeline(
@@ -156,7 +173,7 @@ def build_server(
         until: str | None = None,
     ) -> list[dict[str, Any]]:
         """Bi-temporal history for an entity, oldest→newest (ISO date bounds)."""
-        return await _timeline(mem, entity, since, until)
+        return await _timeline(await _ready(), entity, since, until)
 
     return server
 

@@ -37,6 +37,7 @@ from continuum.core.types import MemoryItem, MemoryTier
 if TYPE_CHECKING:
     from continuum.core.config import ContinuumConfig
     from continuum.core.protocols import LTMProtocol, RetrieverProtocol
+    from continuum.retrieval.embedding_query import EmbedderProtocol
 
 __all__ = ["Memory"]
 
@@ -44,9 +45,20 @@ __all__ = ["Memory"]
 class Memory:
     """High-level memory API for AI agents. Wraps a :class:`ContinuumSession`."""
 
-    def __init__(self, session: ContinuumSession, *, session_id: str | None = None) -> None:
-        """Wrap an existing session. Use :meth:`in_memory` for a zero-config one."""
+    def __init__(
+        self,
+        session: ContinuumSession,
+        *,
+        session_id: str | None = None,
+        embedder: EmbedderProtocol | None = None,
+    ) -> None:
+        """Wrap an existing session. Use :meth:`in_memory` for a zero-config one.
+
+        *embedder*, when given, is used to embed text **on write** so the LTM
+        dense channel has vectors to match against — the read side alone is not
+        enough (a stored item with no embedding is invisible to dense search)."""
         self._session = session
+        self._embedder = embedder
         if session_id is not None:
             self._session.session_id = session_id
 
@@ -122,7 +134,7 @@ class Memory:
             retriever=cast("RetrieverProtocol", retriever),
             session_id=session_id,
         )
-        return cls(session, session_id=session_id)
+        return cls(session, session_id=session_id, embedder=embedder)
 
     @property
     def session(self) -> ContinuumSession:
@@ -176,8 +188,21 @@ class Memory:
                     session_id=sid,
                     created_at=when,
                     importance=importance,
+                    embedding=await self._embed(text),
                 )
             )
+
+    async def _embed(self, text: str) -> list[float] | None:
+        """Dense vector for *text*, or None when no embedder is attached.
+
+        Degrades to None on failure — the item is still stored, just invisible
+        to the dense channel (sparse + recency still find it)."""
+        if self._embedder is None:
+            return None
+        try:
+            return list((await self._embedder.embed([text]))[0])
+        except Exception:
+            return None
 
     async def remember(self, text: str, *, occurred_at: datetime | None = None) -> None:
         """Explicit alias for :meth:`add` — reads well when storing a known fact."""

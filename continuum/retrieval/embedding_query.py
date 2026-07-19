@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     from continuum.core.protocols import RetrieverProtocol
     from continuum.core.types import ContextBundle, Query, TokenBudget
 
-__all__ = ["EmbeddingQueryRetriever"]
+__all__ = ["EmbedderProtocol", "EmbeddingQueryRetriever"]
 
 
-class _Embedder(Protocol):
+class EmbedderProtocol(Protocol):
     """Minimal structural type for the local embedding model."""
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
@@ -37,7 +37,7 @@ class EmbeddingQueryRetriever:
     (sparse + recency).
     """
 
-    def __init__(self, inner: RetrieverProtocol, embedder: _Embedder | None) -> None:
+    def __init__(self, inner: RetrieverProtocol, embedder: EmbedderProtocol | None) -> None:
         self._inner = inner
         self._embedder = embedder
 

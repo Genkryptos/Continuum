@@ -33,6 +33,10 @@ class _FakeMemory:
         self._recall: list[Any] = []
         self._current: str | None = None
         self._timeline: list[Any] = []
+        self.starts = 0
+
+    async def start(self) -> None:
+        self.starts += 1
 
     async def add(self, text: str, *, occurred_at: Any = None) -> None:
         self.added.append((text, occurred_at))
@@ -251,6 +255,22 @@ def test_main_http_transports(
     assert captured["transport"] == expected_transport
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 9001
+
+
+async def test_tools_start_the_backend_exactly_once() -> None:
+    # Regression: the server never called session.start(), so the Postgres
+    # connection pool was never opened and the first tool call hung. It must be
+    # started lazily on first use — once, no matter how many tools are called.
+    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    m = _FakeMemory()
+    server = build_server(memory=m)  # type: ignore[arg-type]
+    assert m.starts == 0  # not started at build time — spawn stays instant
+
+    await server.call_tool("remember", {"text": "a"})
+    assert m.starts == 1
+    await server.call_tool("recall", {"query": "a", "k": 1})
+    await server.call_tool("current", {"subject": "user", "attribute": "x"})
+    assert m.starts == 1  # idempotent — started once, not per call
 
 
 def test_build_server_applies_host_port() -> None:

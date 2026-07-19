@@ -34,6 +34,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 
 # ── scenario: facts (with distractors) + queries with known answers ───────────
 
@@ -71,6 +72,8 @@ RECALL_QUERIES: list[dict[str, str]] = [
 CURRENT_CHECKS: list[dict[str, str]] = [
     {"subject": "user", "attribute": "residence", "expect": "New York"},
 ]
+
+TIMEOUT_S = 180.0  # watchdog: kill the server if a reply never arrives
 
 TIMELINE_CHECKS: list[dict[str, object]] = [
     {"entity": "Boston", "expect_order": ["Boston", "New York"]},
@@ -112,21 +115,29 @@ def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
     ]
     mid = 100
     id_map: dict[int, tuple[str, int]] = {}  # request id -> (kind, index)
+    write_ids: set[int] = set()
 
     for f in FACTS:
         args = {"text": f["text"]}
         if "occurred_at" in f:
             args["occurred_at"] = f["occurred_at"]
         reqs.append(_rpc(mid, "tools/call", {"name": "remember", "arguments": args}))
+        write_ids.add(mid)
         mid += 1
+
+    # Queries are issued only AFTER every write has been acknowledged. MCP
+    # servers handle requests concurrently, so piping writes+reads together lets
+    # the fast reads race ahead of the slower writes — which measures a race,
+    # not retrieval quality.
+    queries: list[str] = []
     for i, q in enumerate(RECALL_QUERIES):
-        reqs.append(
+        queries.append(
             _rpc(mid, "tools/call", {"name": "recall", "arguments": {"query": q["query"], "k": k}})
         )
         id_map[mid] = ("recall", i)
         mid += 1
     for i, c in enumerate(CURRENT_CHECKS):
-        reqs.append(
+        queries.append(
             _rpc(
                 mid,
                 "tools/call",
@@ -139,29 +150,64 @@ def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
         id_map[mid] = ("current", i)
         mid += 1
     for i, t in enumerate(TIMELINE_CHECKS):
-        reqs.append(
+        queries.append(
             _rpc(mid, "tools/call", {"name": "timeline", "arguments": {"entity": t["entity"]}})
         )
         id_map[mid] = ("timeline", i)
         mid += 1
 
-    proc = subprocess.run(
-        cmd, input="\n".join(reqs) + "\n", capture_output=True, text=True, timeout=300
-    )
+    # Read replies as they stream rather than waiting for the process to exit:
+    # the Postgres backend starts background workers + a connection pool, so the
+    # server legitimately stays alive after stdin EOF. A watchdog kills it if a
+    # reply never arrives (killing makes readline() return '' → clean break).
     replies: dict[int, dict] = {}
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            m = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(m, dict) and isinstance(m.get("id"), int) and m["id"] in id_map:
-            replies[m["id"]] = m
-    if not replies:
-        sys.stderr.write("\n[mcp-eval] no tool replies — server stderr tail:\n")
-        sys.stderr.write("\n".join(proc.stderr.splitlines()[-12:]) + "\n")
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    watchdog = threading.Timer(TIMEOUT_S, proc.kill)
+    watchdog.start()
+
+    def _drain(want: set[int]) -> set[int]:
+        """Read replies until every id in *want* has arrived (or EOF)."""
+        assert proc.stdout
+        while want:
+            line = proc.stdout.readline()
+            if not line:  # EOF (or watchdog killed us)
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                m = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(m, dict) and isinstance(m.get("id"), int) and m["id"] in want:
+                replies[m["id"]] = m
+                want.discard(m["id"])
+        return want
+
+    missing: set[int] = set()
+    try:
+        assert proc.stdin
+        # Phase 1 — writes, and wait for every ack before reading anything.
+        proc.stdin.write("\n".join(reqs) + "\n")
+        proc.stdin.flush()
+        unacked = _drain(set(write_ids))
+        if unacked:
+            sys.stderr.write(f"[mcp-eval] warning: {len(unacked)} write(s) unacknowledged\n")
+        # Phase 2 — queries, now that memory is fully populated.
+        proc.stdin.write("\n".join(queries) + "\n")
+        proc.stdin.flush()
+        missing = _drain(set(id_map))
+    finally:
+        watchdog.cancel()
+        proc.kill()
+        stderr = (proc.stderr.read() if proc.stderr else "") or ""
+        proc.wait(timeout=10)
+
+    if missing:
+        sys.stderr.write(f"\n[mcp-eval] missing {len(missing)} repl(ies) — server stderr tail:\n")
+        sys.stderr.write("\n".join(stderr.splitlines()[-12:]) + "\n")
     return {mid_: {"reply": replies.get(mid_), "meta": meta} for mid_, meta in id_map.items()}
 
 
