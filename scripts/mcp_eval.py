@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""
+scripts/mcp_eval.py
+===================
+Deterministic **retrieval quality** eval for the Continuum MCP server — the
+reproducible version of "how does it perform with Claude?". It drives the same
+tools Claude calls (`remember` / `recall` / `current` / `timeline`), over a
+fixed scenario with known-correct answers, and scores:
+
+  • recall@1 / recall@3  — did the RIGHT memory come back, ranked well?
+  • current accuracy      — supersession resolves to the latest value?
+  • timeline accuracy      — bi-temporal history returned in order?
+
+No LLM / no judge: if the right memory is retrieved, Claude answers correctly —
+so retrieval accuracy is the honest proxy. The scenario has distractors, so
+recency-only ranking (the in-memory backend) scores low on recall@1, while the
+Postgres + embedder backend ranks the relevant fact first.
+
+Backend is whatever the server picks: set CONTINUUM_DB_DSN (after `make db-up &&
+make db-migrate`) to eval the production stack; unset for the in-memory baseline.
+
+    python3 scripts/mcp_eval.py                 # auto-locate continuum-mcp
+    python3 scripts/mcp_eval.py --k 3 --min-recall1 0.7
+    CONTINUUM_DB_DSN=postgresql://... python3 scripts/mcp_eval.py
+
+Exit 0 if it clears the thresholds, else 1.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+# ── scenario: facts (with distractors) + queries with known answers ───────────
+
+FACTS: list[dict[str, str]] = [
+    {"text": "My name is Mayank and I build Continuum solo."},
+    {"text": "I live in Boston.", "occurred_at": "2026-01-10"},
+    {"text": "I moved from Boston to New York City.", "occurred_at": "2026-06-15"},
+    {"text": "My favorite programming language is Python."},
+    {"text": "My favorite database is PostgreSQL with the pgvector extension."},
+    {"text": "I drive a red Tesla Model 3."},
+    {"text": "My dog is a corgi named Pixel."},
+    {"text": "My preferred code editor is Neovim."},
+    {"text": "I studied computer science at IIT."},
+    {"text": "My favorite cuisine is Japanese, especially ramen."},
+    {"text": "I play the acoustic guitar on weekends."},
+    {"text": "My coffee order is a flat white with oat milk."},
+    {"text": "Continuum v2.0.0 was released on 2026-07-19."},
+    {"text": "My laptop is a 14-inch MacBook Pro."},
+]
+
+# query -> substring that must appear in the retrieved memory to count as a hit
+RECALL_QUERIES: list[dict[str, str]] = [
+    {"query": "what car do I drive", "expect": "Tesla"},
+    {"query": "what is my pet's name", "expect": "Pixel"},
+    {"query": "which text editor do I use for coding", "expect": "Neovim"},
+    {"query": "what is my favorite programming language", "expect": "Python"},
+    {"query": "where did I go to university", "expect": "IIT"},
+    {"query": "which database do I prefer", "expect": "PostgreSQL"},
+    {"query": "what kind of food do I like", "expect": "Japanese"},
+    {"query": "what instrument do I play", "expect": "guitar"},
+    {"query": "how do I take my coffee", "expect": "flat white"},
+    {"query": "what laptop do I own", "expect": "MacBook"},
+]
+
+CURRENT_CHECKS: list[dict[str, str]] = [
+    {"subject": "user", "attribute": "residence", "expect": "New York"},
+]
+
+TIMELINE_CHECKS: list[dict[str, object]] = [
+    {"entity": "Boston", "expect_order": ["Boston", "New York"]},
+]
+
+
+# ── minimal MCP stdio client (newline-delimited JSON-RPC) ─────────────────────
+
+
+def _server_cmd(explicit: str | None) -> list[str]:
+    if explicit:
+        return [explicit]
+    found = shutil.which("continuum-mcp")
+    return [found] if found else [sys.executable, "-m", "continuum.mcp.server"]
+
+
+def _rpc(mid: int, method: str, params: dict | None = None) -> str:
+    msg: dict = {"jsonrpc": "2.0", "method": method}
+    if mid:
+        msg["id"] = mid
+    if params is not None:
+        msg["params"] = params
+    return json.dumps(msg)
+
+
+def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
+    """Store all facts, then issue every query, in one server process."""
+    reqs: list[str] = [
+        _rpc(
+            1,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "mcp-eval", "version": "0"},
+            },
+        ),
+        _rpc(0, "notifications/initialized"),
+    ]
+    mid = 100
+    id_map: dict[int, tuple[str, int]] = {}  # request id -> (kind, index)
+
+    for f in FACTS:
+        args = {"text": f["text"]}
+        if "occurred_at" in f:
+            args["occurred_at"] = f["occurred_at"]
+        reqs.append(_rpc(mid, "tools/call", {"name": "remember", "arguments": args}))
+        mid += 1
+    for i, q in enumerate(RECALL_QUERIES):
+        reqs.append(
+            _rpc(mid, "tools/call", {"name": "recall", "arguments": {"query": q["query"], "k": k}})
+        )
+        id_map[mid] = ("recall", i)
+        mid += 1
+    for i, c in enumerate(CURRENT_CHECKS):
+        reqs.append(
+            _rpc(
+                mid,
+                "tools/call",
+                {
+                    "name": "current",
+                    "arguments": {"subject": c["subject"], "attribute": c["attribute"]},
+                },
+            )
+        )
+        id_map[mid] = ("current", i)
+        mid += 1
+    for i, t in enumerate(TIMELINE_CHECKS):
+        reqs.append(
+            _rpc(mid, "tools/call", {"name": "timeline", "arguments": {"entity": t["entity"]}})
+        )
+        id_map[mid] = ("timeline", i)
+        mid += 1
+
+    proc = subprocess.run(
+        cmd, input="\n".join(reqs) + "\n", capture_output=True, text=True, timeout=300
+    )
+    replies: dict[int, dict] = {}
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            m = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(m, dict) and isinstance(m.get("id"), int) and m["id"] in id_map:
+            replies[m["id"]] = m
+    if not replies:
+        sys.stderr.write("\n[mcp-eval] no tool replies — server stderr tail:\n")
+        sys.stderr.write("\n".join(proc.stderr.splitlines()[-12:]) + "\n")
+    return {mid_: {"reply": replies.get(mid_), "meta": meta} for mid_, meta in id_map.items()}
+
+
+def _structured(reply: dict | None) -> object:
+    if not reply or "result" not in reply:
+        return None
+    return reply["result"].get("structuredContent", {}).get("result")
+
+
+# ── scoring ───────────────────────────────────────────────────────────────────
+
+
+def main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="mcp-eval", description="Continuum MCP retrieval eval")
+    p.add_argument("--server-cmd", default=None, help="path to continuum-mcp (default: auto)")
+    p.add_argument("--k", type=int, default=3, help="recall depth (recall@k), default 3")
+    p.add_argument("--min-recall1", type=float, default=0.0, help="fail below this recall@1")
+    args = p.parse_args(argv)
+
+    cmd = _server_cmd(args.server_cmd)
+    backend = (
+        "postgres"
+        if (os.environ.get("CONTINUUM_DB_DSN") or os.environ.get("DATABASE_URL"))
+        else "in-memory"
+    )
+    embeds = os.environ.get("CONTINUUM_MCP_EMBEDDINGS", "1") not in {"0", "false", "no", "off"}
+    print(f"[mcp-eval] server: {' '.join(cmd)}")
+    print(
+        f"[mcp-eval] backend: {backend}"
+        + (f" (embeddings={'on' if embeds else 'off'})" if backend == "postgres" else "")
+    )
+    print(
+        f"[mcp-eval] scenario: {len(FACTS)} facts, {len(RECALL_QUERIES)} recall queries, k={args.k}\n"
+    )
+
+    out = _run_session(cmd, args.k)
+
+    recall1 = recall_k = current_ok = timeline_ok = 0
+    recall_rows: list[str] = []
+    for entry in out.values():
+        kind, idx = entry["meta"]
+        data = _structured(entry["reply"])
+        if kind == "recall":
+            q = RECALL_QUERIES[idx]
+            hits = [str(d.get("content", "")) for d in data] if isinstance(data, list) else []
+            at1 = bool(hits) and q["expect"].lower() in hits[0].lower()
+            atk = any(q["expect"].lower() in h.lower() for h in hits[: args.k])
+            recall1 += at1
+            recall_k += atk
+            mark = "✓@1" if at1 else ("·@k" if atk else "✗  ")
+            recall_rows.append(f"  {mark}  {q['query'][:38]:38s} → want '{q['expect']}'")
+        elif kind == "current":
+            c = CURRENT_CHECKS[idx]
+            current_ok += bool(isinstance(data, str) and c["expect"].lower() in data.lower())
+        elif kind == "timeline":
+            t = TIMELINE_CHECKS[idx]
+            contents = [str(d.get("content", "")) for d in data] if isinstance(data, list) else []
+            blob = " || ".join(contents).lower()
+            order = [str(s).lower() for s in t["expect_order"]]  # type: ignore[union-attr]
+            positions = [blob.find(s) for s in order]
+            timeline_ok += bool(
+                all(pos >= 0 for pos in positions) and positions == sorted(positions)
+            )
+
+    n_recall = len(RECALL_QUERIES) or 1
+    print("recall (relevant memory ranked well?):")
+    print("\n".join(recall_rows))
+    r1 = recall1 / n_recall
+    rk = recall_k / n_recall
+    print(f"\n  recall@1 = {recall1}/{n_recall} = {r1:.0%}   (the fact ranked FIRST)")
+    print(f"  recall@{args.k} = {recall_k}/{n_recall} = {rk:.0%}   (in the top {args.k})")
+    print(f"  supersession (current) = {current_ok}/{len(CURRENT_CHECKS)}")
+    print(f"  timeline (ordered)     = {timeline_ok}/{len(TIMELINE_CHECKS)}")
+
+    passed = r1 >= args.min_recall1
+    print(
+        f"\n[mcp-eval] {'PASS ✓' if passed else 'FAIL ✗'}"
+        + (f"  (recall@1 {r1:.0%} < {args.min_recall1:.0%} gate)" if not passed else "")
+    )
+    if backend == "in-memory":
+        print(
+            "[mcp-eval] note: in-memory has NO retriever (recency only) — low recall@1 is"
+            " expected. Set CONTINUUM_DB_DSN for relevance-ranked recall."
+        )
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except subprocess.TimeoutExpired:
+        print("[mcp-eval] ✗ server timed out")
+        raise SystemExit(1) from None

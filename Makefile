@@ -18,7 +18,7 @@
         lint typecheck format check \
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
-        mcp-install mcp-smoke mcp-serve mcp-serve-http mcp-claude \
+        mcp-install mcp-smoke mcp-eval mcp-serve mcp-serve-http mcp-claude \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -150,6 +150,9 @@ mcp-install: ## Install the package + MCP extra (editable) — provides the `con
 
 mcp-smoke: ## Prove the MCP server works end-to-end (handshake + remember→recall); no Claude needed
 	@$(BENCH_PYTHON) scripts/mcp_smoke.py
+
+mcp-eval: ## Score MCP retrieval quality (recall@1/@3, supersession, timeline) over a fixed scenario. Set CONTINUUM_DB_DSN to eval the Postgres+embedder stack
+	@$(BENCH_PYTHON) scripts/mcp_eval.py $(ARGS)
 
 mcp-serve: ## Run the MCP server over stdio in the foreground (debug/manual — a stdio client spawns its own copy)
 	@$(BENCH_PYTHON) -m continuum.mcp.server

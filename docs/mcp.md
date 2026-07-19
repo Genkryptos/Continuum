@@ -7,12 +7,29 @@ supersession-aware memory with zero glue code.
 
 ```bash
 pip install "continuum-memory[mcp]"
-continuum-mcp          # runs over stdio
+continuum-mcp                       # stdio — an MCP client spawns this itself
+continuum-mcp --http --port 8000    # standalone always-on HTTP server (connect by URL)
 ```
 
-By default it uses a zero-config in-process store. To back it with Postgres
-(where the full supersession decider and bi-temporal history live), set
-`CONTINUUM_DB_DSN` (see `docs/config.md`) before launching.
+## Backends
+
+`continuum-mcp` picks its store from the environment:
+
+| Backend | Selected when | Recall | Persistence |
+|---|---|---|---|
+| **In-memory** (default) | no DSN set | recency only — **no retriever** | ephemeral: resets when the server process exits |
+| **Postgres + embedder** | `CONTINUUM_DB_DSN` set | dense + sparse hybrid, **relevance-ranked** | durable: survives restarts |
+
+```bash
+export CONTINUUM_DB_DSN=postgresql://user:pass@localhost:5432/continuum
+export CONTINUUM_MCP_EMBEDDINGS=0   # optional: sparse-only, skip the ~2.3GB bge-m3 download
+continuum-mcp
+```
+
+The Postgres backend needs a migrated database (`make db-up && make db-migrate`;
+see `docs/config.md`). The in-memory default is fine for demos, but its recall is
+recency-ranked — at scale the relevant memory gets buried, which also weakens
+`current` (it depends on recall surfacing the fact). Use Postgres for real recall.
 
 ## Add to a client
 
@@ -34,6 +51,24 @@ or `.mcp.json`):
 ```json
 { "mcpServers": { "continuum": { "command": "continuum-mcp" } } }
 ```
+
+**Claude Code, one-liner** (stdio, or point at the always-on HTTP server):
+
+```bash
+claude mcp add continuum -- continuum-mcp
+claude mcp add continuum --transport http http://127.0.0.1:8000/mcp   # HTTP daemon
+```
+
+## Test it
+
+```bash
+make mcp-smoke   # handshake + remember→recall round-trip (proves it works, no Claude)
+make mcp-eval    # scores retrieval: recall@1/@3, supersession, timeline
+```
+
+`mcp-eval` runs a fixed scenario with distractors. On the in-memory backend
+recall@1 is low (recency, no retriever); set `CONTINUUM_DB_DSN` and it measures
+the Postgres + embedder stack, where the relevant memory ranks first.
 
 ## Tools
 

@@ -169,12 +169,50 @@ def test_default_memory_without_dsn_is_in_memory(monkeypatch: pytest.MonkeyPatch
     assert mem.session is not None and mem.session.ltm is not None
 
 
-def test_default_memory_with_dsn_falls_back_gracefully(monkeypatch: pytest.MonkeyPatch) -> None:
-    # A DSN is set but no live DB — the server must still build an importable
-    # in-memory Memory rather than raising at import/construction time.
-    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://nobody@localhost:1/none")
-    mem = _default_memory()
-    assert mem.session is not None
+def test_default_memory_uses_postgres_when_dsn_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from continuum.mcp import server as srv
+
+    captured: dict[str, Any] = {}
+
+    def _fake_from_postgres(dsn: str, *, embeddings: bool = True) -> str:
+        captured["dsn"], captured["embeddings"] = dsn, embeddings
+        return "PG_MEMORY"
+
+    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://x:y@localhost:5432/db")
+    monkeypatch.delenv("CONTINUUM_MCP_EMBEDDINGS", raising=False)
+    monkeypatch.setattr(srv.Memory, "from_postgres", _fake_from_postgres)
+    assert srv._default_memory() == "PG_MEMORY"
+    assert captured == {"dsn": "postgresql://x:y@localhost:5432/db", "embeddings": True}
+
+
+def test_default_memory_embeddings_env_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
+    from continuum.mcp import server as srv
+
+    captured: dict[str, Any] = {}
+
+    def _fake_from_postgres(dsn: str, *, embeddings: bool = True) -> str:
+        captured["embeddings"] = embeddings
+        return "PG_MEMORY"
+
+    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://x/y")
+    monkeypatch.setenv("CONTINUUM_MCP_EMBEDDINGS", "0")
+    monkeypatch.setattr(srv.Memory, "from_postgres", _fake_from_postgres)
+    srv._default_memory()
+    assert captured["embeddings"] is False  # CONTINUUM_MCP_EMBEDDINGS=0 disables the embedder
+
+
+def test_default_memory_falls_back_when_postgres_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from continuum.mcp import server as srv
+
+    def _boom(dsn: str, *, embeddings: bool = True) -> object:
+        raise RuntimeError("no migrated DB")
+
+    monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://x/y")
+    monkeypatch.setattr(srv.Memory, "from_postgres", _boom)
+    mem = srv._default_memory()  # must not raise
+    assert mem.session.ltm is not None  # degraded to an in-memory Memory
 
 
 def test_main_builds_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:

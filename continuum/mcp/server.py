@@ -19,6 +19,7 @@ testable without the MCP runtime); the FastMCP tools are thin wrappers.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 __all__ = ["build_server", "main"]
+
+log = logging.getLogger(__name__)
 
 
 # ── tool logic (plain, testable) ──────────────────────────────────────────────
@@ -86,18 +89,27 @@ async def _timeline(
 
 
 def _default_memory() -> Memory:
-    """Postgres-backed session when a DSN is configured, else in-memory."""
-    if os.environ.get("CONTINUUM_DB_DSN") or os.environ.get("DATABASE_URL"):
-        # A full session (with the supersession decider) is built by the CLI
-        # wiring; fall back to in-memory here to keep the server importable
-        # without a live DB. Advanced users can inject their own Memory via
-        # build_server(memory=...).
-        try:
-            from continuum.core.config import ContinuumConfig
+    """Postgres-backed (durable, dense recall) when a DSN is configured, else
+    in-memory (ephemeral, recency recall).
 
-            return Memory(Memory.in_memory(config=ContinuumConfig()).session)
+    A DSN in ``CONTINUUM_DB_DSN`` / ``DATABASE_URL`` selects the production
+    stack via :meth:`Memory.from_postgres`. The local bge-m3 embedder is
+    attached by default (dense/semantic recall) — set ``CONTINUUM_MCP_EMBEDDINGS=0``
+    for a sparse-only, no-download setup. If the backend can't be built (no
+    migrated DB, missing extra), we log and fall back to in-memory so the server
+    still starts. Inject your own store with ``build_server(memory=...)``."""
+    dsn = os.environ.get("CONTINUUM_DB_DSN") or os.environ.get("DATABASE_URL")
+    if dsn:
+        embeddings = os.environ.get("CONTINUUM_MCP_EMBEDDINGS", "1").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        try:
+            return Memory.from_postgres(dsn, embeddings=embeddings)
         except Exception:
-            pass
+            log.exception("continuum-mcp: Postgres backend unavailable — using in-memory")
     return Memory.in_memory()
 
 

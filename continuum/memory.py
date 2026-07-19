@@ -36,7 +36,7 @@ from continuum.core.types import MemoryItem, MemoryTier
 
 if TYPE_CHECKING:
     from continuum.core.config import ContinuumConfig
-    from continuum.core.protocols import LTMProtocol
+    from continuum.core.protocols import LTMProtocol, RetrieverProtocol
 
 __all__ = ["Memory"]
 
@@ -71,6 +71,55 @@ class Memory:
             cfg,
             stm=InMemorySTM(),
             ltm=cast("LTMProtocol", InMemoryLTM()),
+            session_id=session_id,
+        )
+        return cls(session, session_id=session_id)
+
+    @classmethod
+    def from_postgres(
+        cls,
+        dsn: str | None = None,
+        *,
+        embeddings: bool = True,
+        session_id: str = "default",
+        config: ContinuumConfig | None = None,
+    ) -> Memory:
+        """A Postgres-backed memory with the full hybrid retriever — the
+        production stack, where **dense (semantic) recall** and durable
+        valid-time history actually work.
+
+        Requires a reachable, migrated database (``make db-up && make
+        db-migrate``). *dsn* overrides the configured DSN (else it comes from
+        ``continuum.yaml`` / ``CONTINUUM_DB_DSN``). *embeddings* attaches the
+        local bge-m3 embedder so the LTM dense channel fires — it downloads
+        ~2.3 GB on first use; pass ``embeddings=False`` for a sparse-only setup
+        with no model download. Call :meth:`start` (or use ``async with``)
+        before reading — that is when the connection pool opens."""
+        from continuum.core.config import ContinuumConfig as _Cfg
+        from continuum.retrieval import Retriever
+        from continuum.retrieval.embedding_query import EmbeddingQueryRetriever
+        from continuum.stores.postgres.ltm import PostgresLTM
+        from continuum.stores.stm.postgres_stm import PostgresSTM
+
+        cfg = config or _Cfg.load()
+        resolved_dsn = dsn or str(cfg.database.dsn)
+
+        embedder = None
+        if embeddings:
+            from continuum.embeddings import EmbeddingService
+
+            embedder = EmbeddingService(cfg.embedding)
+
+        stm = PostgresSTM(dsn=resolved_dsn)
+        ltm = PostgresLTM(dsn=resolved_dsn)
+        inner = Retriever(ltm=ltm, stm=stm, session_id=session_id)
+        retriever = EmbeddingQueryRetriever(inner, embedder)
+
+        session = ContinuumSession(
+            cfg,
+            stm=stm,
+            ltm=cast("LTMProtocol", ltm),
+            retriever=cast("RetrieverProtocol", retriever),
             session_id=session_id,
         )
         return cls(session, session_id=session_id)

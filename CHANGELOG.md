@@ -5,6 +5,31 @@ format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
 
+## [Unreleased]
+
+### Added
+- **`Memory.from_postgres(dsn, *, embeddings=True)`** — a production-stack factory
+  mirroring `Memory.in_memory()`: Postgres STM/LTM + the full hybrid retriever, so
+  `recall` is **relevance-ranked** (dense + sparse), not recency-ranked. The local
+  bge-m3 embedder attaches by default (`embeddings=False` for sparse-only, no
+  download).
+- **`EmbeddingQueryRetriever`** (`continuum.retrieval.embedding_query`) — embeds
+  `query.text` before delegating so the LTM dense channel fires; shared by the
+  chat REPL path and `from_postgres`.
+- **MCP HTTP transport** — `continuum-mcp --http` (Streamable-HTTP, `/mcp`) /
+  `--sse`, with `--host`/`--port`, for a standalone always-on server a client
+  connects to by URL. `make mcp-serve-http`.
+- **`make mcp-eval`** (`scripts/mcp_eval.py`) — deterministic retrieval scorecard
+  through the MCP tools (recall@1/@3, supersession, timeline) over a fixed
+  scenario with distractors; honors `CONTINUUM_DB_DSN` to eval the Postgres stack.
+- **`make mcp-install` / `mcp-smoke` / `mcp-serve` / `mcp-claude`** helpers.
+
+### Fixed
+- **MCP server now honors `CONTINUUM_DB_DSN`** — `_default_memory()` builds a real
+  Postgres-backed session (via `from_postgres`) instead of always falling back to
+  in-memory. `CONTINUUM_MCP_EMBEDDINGS=0` disables the embedder; if the backend
+  can't be built the server logs and degrades to in-memory rather than failing.
+
 ## [2.0.0] — 2026-07-19
 
 First public release. Turns Continuum from a research codebase into an

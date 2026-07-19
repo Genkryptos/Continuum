@@ -74,6 +74,21 @@ def test_in_memory_factory_constructs() -> None:
     assert mem.session.ltm is not None  # in-memory LTM attached
 
 
+def test_from_postgres_wires_hybrid_retriever() -> None:
+    # Construction only — no .start(), so no DB connection / no model download
+    # (embeddings=False keeps it dependency-light). Proves the production stack
+    # gets a real retriever (dense/sparse), unlike in_memory() which has none.
+    pytest.importorskip("psycopg", reason="psycopg required for the Postgres backend")
+    from continuum.retrieval.embedding_query import EmbeddingQueryRetriever
+
+    mem = Memory.from_postgres(
+        "postgresql://u:p@localhost:5432/none", embeddings=False, session_id="s1"
+    )
+    assert mem.session.retriever is not None
+    assert isinstance(mem.session.retriever, EmbeddingQueryRetriever)
+    assert mem.session.session_id == "s1"
+
+
 # ── write path ────────────────────────────────────────────────────────────────
 
 
