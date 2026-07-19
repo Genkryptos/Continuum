@@ -56,11 +56,11 @@
 
   <h2>The numbers, honestly</h2>
   <div class="nums">
-    <div class="num"><b>~74–76%</b><span>LongMemEval-S (gpt-oss-120b reader, llama-3.3 judge)</span></div>
+    <div class="num"><b>~74%</b><span>LongMemEval-S (gpt-oss-120b reader, llama-3.3 judge)</span></div>
     <div class="num"><b>100%</b><span>scripted supersession &amp; as-of-date correctness</span></div>
     <div class="num"><b>~5k</b><span>tokens per query (Mem0-competitive)</span></div>
   </div>
-  <p class="note">Single-run LongMemEval numbers carry ±3–5pp reader variance; we report a same-setup control (73.8%) and the best mandate-clean config (75.6%). See the report.</p>
+  <p class="note">LongMemEval-S is ~74% (73.6–75.6% across repeated runs; gpt-oss-120b has ±3–5pp variance). The read-side additions are within that noise of the 73.8% control — the reproducible wins are the 100% deterministic benches. See the report.</p>
 
   <h2>Use it in three lines</h2>
   <pre><code>pip install continuum-memory
@@ -81,12 +81,12 @@ continuum-mcp        # exposes recall / remember / current / timeline as tools</
     <tr><th>System</th><th>Approach</th><th class="r">LongMemEval-S*</th></tr>
     <tr><td>Mem0</td><td>auto-extract → vector + graph + KV</td><td class="r">~49%</td></tr>
     <tr><td>Zep</td><td>bi-temporal knowledge graph</td><td class="r">~63.8%</td></tr>
-    <tr><td><b>Continuum</b></td><td>tiered + supersession + bi-temporal</td><td class="r"><b>~74–76%</b></td></tr>
+    <tr><td><b>Continuum</b></td><td>tiered + supersession + bi-temporal</td><td class="r"><b>~74%</b></td></tr>
   </table>
   <p class="note">*Not perfectly comparable across setups/readers — directional. Continuum's edge is temporal / supersession correctness.</p>
 
   <h2>What we tried that didn't work</h2>
-  <p>We spent real effort proving four ideas <em>wrong</em> — counting in code, a deterministic answer router, evidence distillation, temporal date-math — all net-negative, because you can't bolt deterministic machinery onto a mid-size model's unreliable intermediate outputs. The two things that helped were better prompting and sampling. The negative results, and the measurement mistake that made them look good at first, are in the <a href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">report</a>.</p>
+  <p>We spent real effort proving four ideas <em>wrong</em> — counting in code, a deterministic answer router, evidence distillation, temporal date-math — all net-negative, because you can't bolt deterministic machinery onto a mid-size model's unreliable intermediate outputs. The prompt/sampling levers we kept are about accuracy-neutral (within noise) — the reproducible wins are the deterministic supersession benches above. The negative results, and the measurement mistake that made them look good at first, are in the <a href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">report</a>.</p>
 
   <footer>
     Continuum is the state layer under your reasoner — not a reasoning engine.

@@ -29,19 +29,24 @@ context) failing, not the memory layer. Concretely, with a `gpt-oss-120b` reader
 
 **The pattern:** you cannot bolt deterministic machinery onto `gpt-oss`'s
 intermediate outputs — its counts, extractions, and date-specs are too
-unreliable. The levers that *did* help were **better prompting** (a bounded
-preference-application pass: +20pp on preference questions) and **sampling**
-(vote-of-3 self-consistency: ~+2pp overall, and it tames run-to-run noise).
+unreliable. The only levers that *didn't hurt* were **prompting** (a bounded
+reflect pass) and **sampling** (vote-of-3), and even those are approximately
+accuracy-neutral overall (within run-to-run noise) — vote-3 mainly *stabilises*
+the number rather than raising it.
 
 ## The benchmark number has real variance
 
 `gpt-oss-120b` (via OpenRouter, MoE routing + batch nondeterminism) has ~±3–5pp
-per-category run-to-run variance. A single run is not a stable estimate. On a
-**same-setup control** (no reflect, no synthesis), the full LongMemEval-S judged
-number is ~73.8%; the best mandate-clean config (bounded reflect + vote-3) is
-~75.6%. A higher single-run figure elsewhere is a favorable draw, not a
-reproducible headline — always compare against a same-setup control and average
-noise before claiming a delta.
+per-category run-to-run variance. **A single run is not a stable estimate.** On a
+**same-setup control** the full LongMemEval-S judged number is ~73.8%; repeated
+runs of the best mandate-clean config (bounded reflect + vote-3) landed 73.6% and
+75.6% — i.e. **~74%, within noise of the control**. We initially read one 80%
+draw on single-session-preference as a "+20pp win"; it did **not** reproduce (a
+fresh run put it at 60%, tied with the no-reflect control — that category swung
+53/60/70/80% across runs on 30 rubric-judged questions). Always compare against a
+same-setup control and average the noise before claiming a delta; the
+reproducible wins here are the deterministic supersession / bi-temporal benches,
+not the LongMemEval per-category deltas.
 
 **Methodology note (the lesson we paid for):** measuring "recovery" only on a
 set of known failures *structurally overstates* gains — a failure can improve or

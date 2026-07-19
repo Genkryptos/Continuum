@@ -25,13 +25,14 @@ It's five verbs (`add` / `recall` / `current` / `timeline` / `remember`) or an
 MCP server you drop into Claude Code / Cursor with zero glue.
 
 **The honest part.** On LongMemEval-S (500 Q, `gpt-oss-120b` reader,
-`llama-3.3-70b` judge) Continuum lands ~**74–76%**, and on the scripted
+`llama-3.3-70b` judge) Continuum lands ~**74%**, and on the scripted
 supersession / as-of-date benches it's **100%** (vs 38% / 75% for a naive store).
 But I also spent a week proving four "obvious" ideas *wrong* — having the memory
 layer count in code, route deterministic answers, distill context, compute dates
 in code. All net-negative: you can't bolt deterministic machinery onto a
-mid-size model's unreliable intermediate outputs. The two things that helped were
-better *prompting* and *sampling* — not a bigger model.
+mid-size model's unreliable intermediate outputs. The prompt/sampling levers I
+kept are about accuracy-neutral (within run-to-run noise); the robust,
+reproducible wins are the deterministic supersession/as-of benches.
 
 And a methodology lesson I paid for: **measuring gains only on known failures
 overstates them** (a failure can't regress). It took a same-setup control to see
@@ -59,7 +60,7 @@ invalidated, not deleted, so "current" reads always know the live value) and
 retroactive corrections). Five-verb Python API, or an MCP server for Claude
 Code / Cursor.
 
-It's ~74–76% on LongMemEval-S (gpt-oss-120b reader, llama-3.3 judge) and 100% on
+It's ~74% on LongMemEval-S (gpt-oss-120b reader, llama-3.3 judge) and 100% on
 scripted supersession/as-of benches. I also wrote up, in full, four ideas that
 *didn't* work (deterministic counting/router/distillation/date-math — all
 net-negative) and the measurement mistake that made them look good at first

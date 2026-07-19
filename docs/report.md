@@ -64,13 +64,19 @@ showed the true effect was ~neutral. Always carry a control.
 | config | judged |
 |---|---:|
 | same-setup baseline (no additions) | 73.8% |
-| + bounded reflect (preference/KU) + vote-3 self-consistency | **75.6%** |
+| + bounded reflect (preference/KU) + vote-3, run A | 75.6% |
+| + bounded reflect (preference/KU) + vote-3, run B (fresh) | 73.6% |
 
-`gpt-oss-120b` has ~±3–5pp per-category run-to-run variance (MoE routing + batch
-nondeterminism), so a single run is not a stable estimate — a higher figure
-elsewhere is a favorable draw, not a reproducible headline. The clean,
-per-category win is **preference application: 60% → 80% (+20pp)**, delivered by a
-single bounded prompt pass — not a bigger model.
+**The LongMemEval-S number is ~74% (73.6–75.6% across runs).** `gpt-oss-120b` has
+~±3–5pp per-category run-to-run variance (MoE routing + batch nondeterminism), so
+a single run is not a stable estimate — the 76.4% quoted in earlier notes was a
+favorable draw. Critically, the read-side additions (reflect + vote-3) land
+**within that noise of the baseline** — approximately accuracy-neutral overall.
+Even the most promising per-category signal, single-session-preference, swung
+53 / 60 / 70 / 80% across runs on just 30 rubric-judged questions: we first read
+one 80% draw as a "+20pp win", but it did **not** reproduce (a fresh run put it
+back at 60%, tied with the no-reflect control). The reproducible wins are the
+deterministic benches in §3 — not the LongMemEval per-category deltas.
 
 ## 5. What did NOT work (the honest core)
 
@@ -89,12 +95,12 @@ intermediate outputs — its counts, extractions, and date-specs are too
 unreliable, so the code faithfully computes the wrong thing. Both *more* context
 (distractors) and *less* context (dropped members) lowered accuracy.
 
-**What did help:** better *prompting* (the bounded reflect pass) and *sampling*
-(vote-of-3), because neither trusts a fragile intermediate step.
-
-**The ceiling on this reader is ~76%, and the residual is reader-bound**
-(counting via coreference, inference) — a stronger reader moves it, the memory
-layer does not.
+**What did NOT hurt:** *prompting* (the bounded reflect pass) and *sampling*
+(vote-of-3) are approximately accuracy-neutral (within run-to-run noise) — vote-3
+mainly *stabilises* the number rather than raising it. That's the honest ceiling:
+the deterministic levers hurt, the prompt/sample levers are neutral, and the
+residual error is **reader-bound** (counting via coreference, inference). A
+stronger reader moves it; the memory layer does not.
 
 ## 6. Positioning
 
@@ -102,7 +108,7 @@ layer does not.
 |---|---|---:|
 | Mem0 | auto-extract → vector+graph+KV | ~49% |
 | Zep | bi-temporal knowledge graph | ~63.8% |
-| **Continuum** | tiered + supersession + bi-temporal, honest measurement | **~74–76%** |
+| **Continuum** | tiered + supersession + bi-temporal, honest measurement | **~74%** |
 
 \*Numbers are not perfectly comparable across setups/readers; treat as
 directional. Continuum's edge is temporal/supersession correctness, at

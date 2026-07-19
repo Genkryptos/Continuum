@@ -24,30 +24,33 @@ It is *not* a reasoning engine. The framework's value-prop is **what the layer b
 
 ## Why this exists — the headline measurements
 
-| benchmark | Continuum | baseline | delta |
-|---|---|---|---|
-| **LongMemEval-S** (500 Q, judged, gpt-oss-120b) | **73.8 % → 75.6 %** | 60.8 % (v1.0) · 34.4 % (May ceiling) | same-setup control → best config (see note ↓) |
-| ↳ **multi-session** (v2.0 over-fetch + rerank) | **69.9 %** | 57.9 % (v1.1) | **+12.0 pp** (n=133 A/B; net +16 questions) |
-| ↳ **temporal-reasoning** (v1.1 date-surfacing fix) | **75.2 %** | 41.4 % (v1.0) | **+34 pp** over v1.0 |
-| ↳ knowledge-update (supersession-recency) | **66.7 %** | 51.3 % (v1.0) | flat under v2.0 (within ±3.8 pp noise) |
-| **Supersession correctness** (50 scripted updates) | **100 %** | 38 % | **+62 pp** |
-| **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % | **+25 pp** |
-| Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % | tied (recency signal absent) |
-| Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) | framework overhead |
+The robust, **reproducible** wins are the deterministic ones (they don't move
+between runs); the LongMemEval number is honest but carries reader variance.
+
+| benchmark | Continuum | naive baseline |
+|---|---|---|
+| **Supersession correctness** (50 scripted updates) | **100 %** | 38 % |
+| **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % |
+| **LongMemEval-S** (500 Q, judged, gpt-oss-120b) | **~74 %** (73.6 – 75.6 % across repeated runs) | 60.8 % (v1.0) · 34.4 % (May ceiling) |
+| ↳ same-setup per-category (control run) | multi-session 62 % · temporal 75 % · KU 64 % · assistant 96 % · user 91 % | — |
+| Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % (tied — recency signal absent) |
+| Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) |
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
-> **Honest headline (v3 verification).** A full-500 run against a **same-setup
-> control** puts the judged number at **73.8 %** (baseline) and **75.6 %** (best
-> mandate-clean config: a bounded reflect pass + vote-of-3 self-consistency).
-> `gpt-oss-120b` has ~±3–5 pp per-category run-to-run variance, so the **76.4 %**
-> quoted in earlier v2.0 notes was a *favorable single run*, not a reproducible
-> headline — and the per-category figures below carry the same variance. The
-> clean, robust win is **preference application: 60 % → 80 %**, from prompting
-> (not a bigger model). We also disproved four "have the memory layer fix the
-> reader" levers (synthesis, router, distillation, temporal code-math — all
-> net-negative). Full methodology, the negative results, and the control:
-> [docs/limitations.md](docs/limitations.md) · [docs/report.md](docs/report.md).
+> **Honest headline — read this.** On LongMemEval-S the judged number is **~74 %**
+> (73.6 – 75.6 % across repeated same-setup runs). `gpt-oss-120b` has ~±3–5 pp
+> per-category run-to-run variance, so **a single run is not a stable estimate**:
+> the **76.4 %** in earlier v2.0 notes was a favorable draw, and read-side
+> additions (a bounded reflect pass + vote-of-3) are **within that noise of the
+> no-additions baseline (73.8 %)** — approximately accuracy-neutral overall.
+> Per-category figures swing between runs and should not be read as fixed. The
+> **reproducible** wins are the two **deterministic** benches above — supersession
+> and bi-temporal "as of date Y", both **100 %** — which don't move. We also
+> disproved four "have the memory layer fix the reader" levers (synthesis,
+> router, distillation, temporal code-math — all net-negative), and learned the
+> methodology lesson that measuring gains only on known failures overstates them.
+> Full write-up: [docs/limitations.md](docs/limitations.md) · [docs/report.md](docs/report.md).
 
 > **v2.0** — **72.8% → 76.4% judged** (full-500, gpt-oss-120b), from one
 > **architecture-native retrieval lever** — no new model, no compression:
