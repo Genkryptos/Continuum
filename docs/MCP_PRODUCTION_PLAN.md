@@ -80,7 +80,14 @@ Defer until 0.1 and 1.1 land.
 
 ## Phase 2 — Reliability at scale
 
-### 2.1 Scale test (unknown territory)
+### 2.1 Scale test — ✅ DONE (latency + index; semantic-quality-at-scale still open)
+**Measured** (scripts/scale_test.py, `make scale-test`), recall p95 vs rows:
+1k → 9ms · 10k → 44ms · 50k → 129ms — all under the 200ms target. The planner
+adapts: seq-scan at 10k (cheaper than HNSW there), switching to the HNSW index
+at 50k. No pathology; latency is bounded well into tens of thousands of rows.
+Caveat: this stresses the pgvector/pg_trgm QUERY path with random vectors — it
+does NOT measure semantic recall@k at 10k with real distractors (that needs the
+embedder; deferred as a smaller, slower test).
 **Problem:** tested at 62 memories; real use is thousands. Index behaviour,
 `recall` precision, and latency at 10k+ rows are unmeasured.
 **Fix:** a harness that loads 10k–100k memories and measures recall@k, p95, and

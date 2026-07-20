@@ -18,7 +18,7 @@
         lint typecheck format check \
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
-        mcp-install mcp-smoke mcp-eval mcp-bench mcp-serve mcp-serve-http mcp-claude \
+        mcp-install mcp-smoke mcp-eval mcp-bench scale-test mcp-serve mcp-serve-http mcp-claude \
         repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
@@ -159,6 +159,9 @@ mcp-eval: ## Score MCP retrieval quality (recall@1/@3, supersession, timeline) o
 
 mcp-bench: ## Measure MCP tool latency (p50/p95 + embedder-vs-DB breakdown). Set MCP_BENCH_DSN for a THROWAWAY Postgres; never touches your live store
 	@$(BENCH_PYTHON) scripts/mcp_bench.py $(if $(MCP_BENCH_DSN),--dsn $(MCP_BENCH_DSN)) $(ARGS)
+
+scale-test: ## Load 1k/10k/50k rows and measure recall latency + index usage. Requires SCALE_DSN (a THROWAWAY Postgres)
+	@$(BENCH_PYTHON) scripts/scale_test.py $(if $(SCALE_DSN),--dsn $(SCALE_DSN)) $(ARGS)
 
 mcp-serve: ## Run the MCP server over stdio in the foreground (debug/manual — a stdio client spawns its own copy)
 	@$(BENCH_PYTHON) -m continuum.mcp.server
