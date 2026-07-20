@@ -396,7 +396,7 @@ class Memory:
         # SQL, but this fallback previously ignored *as_of* entirely and happily
         # answered "what was true in year 1?" with a fact recorded in 2026 —
         # silently wrong in exactly the query time-travel exists to serve.
-        hits = [h for h in hits if _effective_time(h) <= when]
+        hits = [h for h in hits if _as_utc(_effective_time(h)) <= _as_utc(when)]
         if not hits:
             return None
         live = [h for h in hits if not _is_superseded(h)] or hits
@@ -474,6 +474,17 @@ class Memory:
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Make *dt* timezone-aware (assuming UTC) so comparisons never raise.
+
+    Callers mix both kinds: the stores return aware timestamps, while an ISO
+    date parsed from a tool argument (``datetime.fromisoformat("2027-01-01")``)
+    is naive. Comparing the two raises TypeError, which surfaces to the client
+    as a failed tool call rather than an answer.
+    """
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def _cosine(a: list[float] | None, b: list[float] | None) -> float:

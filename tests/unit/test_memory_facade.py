@@ -257,6 +257,17 @@ async def test_current_fallback_honours_as_of() -> None:
     )
 
 
+async def test_current_accepts_a_naive_as_of() -> None:
+    # The as_of filter compared the store's AWARE timestamps against a NAIVE
+    # datetime, raising TypeError — which reached the client as a failed tool
+    # call. The MCP layer always produces naive datetimes
+    # (`datetime.fromisoformat("2027-01-01")`), so every explicit as_of crashed.
+    fact = _item("residence: Bhilai", valid_from=datetime(2026, 1, 1, tzinfo=UTC))
+    mem = Memory(_FakeSession([fact]))  # type: ignore[arg-type]
+    assert await mem.current("user", "residence", as_of=datetime(2027, 1, 1)) == "residence: Bhilai"
+    assert await mem.current("user", "residence", as_of=datetime(1, 1, 1)) is None
+
+
 async def test_current_none_when_empty() -> None:
     mem = Memory(_FakeSession([]))  # type: ignore[arg-type]
     assert await mem.current("user", "residence") is None
