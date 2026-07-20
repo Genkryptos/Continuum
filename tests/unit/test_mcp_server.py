@@ -39,7 +39,9 @@ class _FakeMemory:
     async def start(self) -> None:
         self.starts += 1
 
-    async def add(self, text: str, *, occurred_at: Any = None, attribute: Any = None) -> None:
+    async def add(
+        self, text: str, *, occurred_at: Any = None, attribute: Any = None, split: bool = False
+    ) -> None:
         self.added.append((text, occurred_at))
         self.attributes.append(attribute)
 
@@ -114,7 +116,9 @@ async def test_remember_forwards_attribute() -> None:
     m = _FakeMemory()
     captured: dict[str, Any] = {}
 
-    async def _spy(text: str, *, occurred_at: Any = None, attribute: Any = None) -> None:
+    async def _spy(
+        text: str, *, occurred_at: Any = None, attribute: Any = None, split: bool = False
+    ) -> None:
         captured.update(text=text, attribute=attribute)
 
     m.add = _spy  # type: ignore[method-assign]

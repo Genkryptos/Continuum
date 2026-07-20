@@ -66,7 +66,11 @@ async def _remember(
             when = datetime.fromisoformat(occurred_at)
         except ValueError:
             when = None
-    await mem.add(text, occurred_at=when, attribute=attribute)
+    # split=True by default: callers hand us whole sentences as they were said,
+    # and a compound one embeds between its topics and matches neither well.
+    # The splitter is conservative — it returns the text untouched unless every
+    # part stands alone as its own fact.
+    await mem.add(text, occurred_at=when, attribute=attribute, split=True)
     # Report DURABILITY, not just success. A bare "stored" is indistinguishable
     # between a real write and one into an ephemeral store that vanishes at
     # exit — the caller believes it has memory and only finds out much later.

@@ -215,6 +215,7 @@ class Memory:
         occurred_at: datetime | None = None,
         importance: float = 0.5,
         attribute: str | None = None,
+        split: bool = False,
     ) -> None:
         """Remember a fact/turn. Appends to short-term memory and, when the
         session has long-term storage, upserts it there (supersession/dedup are
@@ -224,7 +225,28 @@ class Memory:
         ``"employer"``, …). Tagging it turns :meth:`current` from a fuzzy search
         for an attribute *label* into an exact lookup — which is the difference
         between reliably answering "where do I live now?" and hoping the phrasing
-        happens to embed close to the word "residence"."""
+        happens to embed close to the word "residence".
+
+        *split* stores a compound statement as separate atomic facts. One
+        embedding covers the whole string, so "We're going with Postgres 16,
+        pgvector needs 0.8 or newer" sits between two topics and matches
+        "what database are we using?" *worse* than an unrelated memory
+        (cos 0.479 vs 0.522). Split, the same content scores 0.614 and ranks
+        first. The splitter is conservative and returns the text unchanged when
+        a split would be unsafe, so it is safe to pass unconditionally."""
+        if split:
+            from continuum.promotion.clause_split import split_facts
+
+            facts = split_facts(text)
+            if len(facts) > 1:
+                for fact in facts:
+                    await self.add(
+                        fact,
+                        occurred_at=occurred_at,
+                        importance=importance,
+                        attribute=attribute,
+                    )
+                return
         sid = self._session.session_id
         when = occurred_at or datetime.now(UTC)
         await self._session.stm.append(
