@@ -228,10 +228,48 @@ def _default_memory() -> Memory:
             "off",
         }
         try:
-            return Memory.from_postgres(dsn, embeddings=embeddings)
+            return Memory.from_postgres(dsn, embeddings=embeddings, **_supersession_kwargs())
         except Exception:
             log.exception("continuum-mcp: Postgres backend unavailable — using in-memory")
     return Memory.in_memory()
+
+
+def _supersession_kwargs() -> dict[str, Any]:
+    """Decider wiring for :meth:`Memory.from_postgres`, or ``{}`` to leave it off.
+
+    Enabled by ``CONTINUUM_MCP_SUPERSESSION=1``. Off by default and refused
+    without an API key: the decider asks an LLM to adjudicate contradictions, and
+    with no LLM it returns NOOP for the ambiguous band — which, honoured, would
+    silently discard the new fact.
+
+    With it on, "pricing is 9 dollars" followed by "switched to 12 dollars"
+    retires the first instead of leaving both to compete in recall.
+    """
+    if (os.environ.get("CONTINUUM_MCP_SUPERSESSION") or "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {}
+    from continuum.promotion.openrouter import (
+        build_openrouter_completion_fn,
+        resolve_openrouter_key,
+    )
+
+    key = resolve_openrouter_key()
+    if not key:
+        log.warning(
+            "continuum-mcp: CONTINUUM_MCP_SUPERSESSION is set but no OPENROUTER_API_KEY "
+            "was found — supersession stays OFF (enabling it without an LLM would drop facts)"
+        )
+        return {}
+    model = (os.environ.get("CONTINUUM_MCP_SUPERSESSION_MODEL") or "openai/gpt-4o-mini").strip()
+    log.warning("continuum-mcp: supersession ENABLED via %s", model)
+    return {
+        "supersession_completion_fn": build_openrouter_completion_fn(key),
+        "supersession_model": model,
+    }
 
 
 def build_server(

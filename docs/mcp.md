@@ -61,6 +61,30 @@ For Claude Code you can additionally warm the backend before the first prompt
 with a `SessionStart` hook in `.claude/settings.local.json`, which also removes
 the one-off model-load latency from your first memory call.
 
+## Supersession (optional, needs an LLM)
+
+Without it, a fact and its later correction both sit in the store competing for
+the same query — "pricing is 9 dollars" can outrank "switched to 12 dollars",
+because relevance has no idea which is current. Turn it on and each write is
+routed through the Mem0 ADD/UPDATE/DELETE decider, which retires or merges the
+fact it replaces:
+
+```bash
+export CONTINUUM_MCP_SUPERSESSION=1
+export OPENROUTER_API_KEY=...                       # or put it in .env
+export CONTINUUM_MCP_SUPERSESSION_MODEL=openai/gpt-4o-mini   # optional
+```
+
+Measured on a five-write scenario, `recall@1` on changed facts went **1/3 -> 3/3**:
+"Pricing will be 9 dollars" was retired, and "Target launch is end of Q3" plus
+"Launch slipped to Q4" were merged into a single current fact.
+
+**Off by default, and refused without a key.** The decider only consults the LLM
+for the ambiguous similarity band (contradictions sit around cosine 0.6-0.8);
+with no LLM it returns NOOP there, and honouring that would silently discard the
+new fact. It costs one small completion per write that has near neighbours, and
+it rewrites text when merging.
+
 ## Add to a client
 
 **Claude Desktop / Claude Code** — add to your MCP config (`claude_desktop_config.json`

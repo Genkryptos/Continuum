@@ -445,6 +445,36 @@ async def test_unreachable_backend_errors_instead_of_crashing(
     assert len(await server.list_tools()) == 4
 
 
+def test_supersession_is_off_unless_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    from continuum.mcp.server import _supersession_kwargs
+
+    monkeypatch.delenv("CONTINUUM_MCP_SUPERSESSION", raising=False)
+    assert _supersession_kwargs() == {}
+
+
+def test_supersession_refuses_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Enabling the decider with no LLM is worse than leaving it off: the
+    # ambiguous band returns NOOP, which would silently discard the new fact.
+    from continuum.mcp import server as srv
+
+    monkeypatch.setenv("CONTINUUM_MCP_SUPERSESSION", "1")
+    monkeypatch.setattr("continuum.promotion.openrouter.resolve_openrouter_key", lambda *a, **k: "")
+    assert srv._supersession_kwargs() == {}
+
+
+def test_supersession_wires_model_and_fn_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from continuum.mcp import server as srv
+
+    monkeypatch.setenv("CONTINUUM_MCP_SUPERSESSION", "yes")
+    monkeypatch.setenv("CONTINUUM_MCP_SUPERSESSION_MODEL", "openai/gpt-4o-mini")
+    monkeypatch.setattr(
+        "continuum.promotion.openrouter.resolve_openrouter_key", lambda *a, **k: "k-123"
+    )
+    kw = srv._supersession_kwargs()
+    assert kw["supersession_model"] == "openai/gpt-4o-mini"
+    assert callable(kw["supersession_completion_fn"])
+
+
 def test_build_server_applies_host_port() -> None:
     pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
     server = build_server(memory=_FakeMemory(), host="0.0.0.0", port=9123)  # type: ignore[arg-type]

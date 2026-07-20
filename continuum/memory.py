@@ -110,6 +110,7 @@ class Memory:
         *,
         embeddings: bool = True,
         supersession_completion_fn: CompletionFn | None = None,
+        supersession_model: str = "openai/gpt-4o-mini",
         session_id: str = "default",
         config: ContinuumConfig | None = None,
     ) -> Memory:
@@ -154,7 +155,13 @@ class Memory:
             from continuum.core.config import PromoterConfig
             from continuum.promotion.mem0_promoter import Mem0Promoter
 
-            decider = Mem0Promoter(PromoterConfig(), completion_fn=supersession_completion_fn)
+            # The model id must match the provider's namespace — PromoterConfig
+            # defaults to "gpt-4o-mini", which OpenRouter rejects without the
+            # "openai/" prefix.
+            decider = Mem0Promoter(
+                PromoterConfig(llm_model=supersession_model),
+                completion_fn=supersession_completion_fn,
+            )
 
         stm = PostgresSTM(dsn=resolved_dsn)
         ltm = PostgresLTM(dsn=resolved_dsn)
