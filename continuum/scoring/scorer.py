@@ -122,11 +122,33 @@ class Scorer:
     # ── recency (reinforcement-aware exponential decay) ─────────────────────
 
     def _recency(self, item: MemoryItem, now: datetime) -> float:
-        ref = item.last_access or item.created_at
+        ref = self._recency_basis(item)
+        now, ref = _as_utc(now), _as_utc(ref)
         age_hours = max(0.0, (now - ref).total_seconds() / 3600.0)
         base = math.exp(-age_hours / self.config.tau_hours)
         strength = 1.0 + math.log1p(max(0, item.access_count))
         return min(1.0, base * strength)
+
+    @staticmethod
+    def _recency_basis(item: MemoryItem) -> datetime:
+        """When this fact became true, preferring **valid** time over transaction time.
+
+        ``created_at`` is stamped at INSERT, so a batch of facts describing
+        different weeks all look equally new and recency stops discriminating
+        entirely — which is why an outdated "pricing is 9 dollars" could outrank
+        the later "switched to 12 dollars". Valid time is what "how current is
+        this?" actually means; we fall back to ``created_at`` when a store does
+        not record it.
+        """
+        vr = item.valid_range
+        if vr is not None and vr.valid_from is not None:
+            return vr.valid_from
+        return item.last_access or item.created_at
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Make *dt* aware (assuming UTC) so mixed naive/aware inputs cannot raise."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 __all__ = ["Scorer"]
