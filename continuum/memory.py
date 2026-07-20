@@ -238,6 +238,7 @@ class Memory:
         occurred_at: datetime | None = None,
         importance: float = 0.5,
         attribute: str | None = None,
+        auto_attribute: bool = False,
         split: bool = False,
     ) -> None:
         """Remember a fact/turn. Appends to short-term memory and, when the
@@ -278,8 +279,16 @@ class Memory:
                         occurred_at=occurred_at,
                         importance=importance,
                         attribute=attribute,
+                        auto_attribute=auto_attribute,
                     )
                 return
+        # Infer the attribute when the caller did not give one, so `current` can
+        # answer it exactly. Conservative — extract_attribute returns None unless
+        # confident, and an explicit *attribute* always wins.
+        if attribute is None and auto_attribute:
+            from continuum.promotion.attribute_extract import extract_attribute
+
+            attribute = extract_attribute(text)
         sid = self._session.session_id
         when = occurred_at or datetime.now(UTC)
         await self._session.stm.append(

@@ -100,6 +100,24 @@ def test_current_is_exact_and_bitemporal(e2e_dsn: str) -> None:
         c.close()
 
 
+# ── changed facts resolve correctly with NO manual tags (auto-attribute) ──────
+
+
+def test_current_works_without_manual_tags(e2e_dsn: str) -> None:
+    from tests.e2e.conftest import MCPClient
+
+    # Plain conversation — the caller never passes `attribute`. The remember tool
+    # auto-infers it, so current() resolves the superseding value deterministically.
+    c = MCPClient(e2e_dsn)
+    try:
+        c.tool("remember", text="I live in Boston.", occurred_at="2026-01-01")
+        c.tool("remember", text="I moved to New York City.", occurred_at="2026-06-01")
+        _, residence = c.tool("current", subject="user", attribute="residence")
+        assert "New York" in residence  # the correction, not the stale "Boston"
+    finally:
+        c.close()
+
+
 # ── the durability lie: a write that never persists must not report success ───
 
 

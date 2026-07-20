@@ -123,6 +123,27 @@ async def test_add_input_hygiene() -> None:
     assert len(s.ltm.upserts[-1].content or "") == MAX_FACT_CHARS
 
 
+async def test_auto_attribute_tags_on_write() -> None:
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("I live in Boston.", auto_attribute=True)
+    assert s.ltm.upserts[0].metadata.get("attribute") == "residence"
+
+
+async def test_explicit_attribute_beats_auto() -> None:
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("I live in Boston.", attribute="home_city", auto_attribute=True)
+    assert s.ltm.upserts[0].metadata.get("attribute") == "home_city"
+
+
+async def test_auto_attribute_off_by_default() -> None:
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("I live in Boston.")  # no auto_attribute
+    assert "attribute" not in (s.ltm.upserts[0].metadata or {})
+
+
 async def test_recall_clamps_k() -> None:
     captured: dict[str, int] = {}
 

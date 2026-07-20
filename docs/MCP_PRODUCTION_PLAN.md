@@ -101,7 +101,7 @@ untested); TTL or importance-based pruning. **Effort:** M.
 
 ## Phase 3 — Retrieval quality
 
-### 3.1 Changed-facts reliability
+### 3.1 Changed-facts reliability — ✅ DONE (deterministic attribute auto-extraction on write, 0 false-tags on the adversarial set; current() resolves changed facts with no manual tags, no LLM)
 **Problem (measured):** without `attribute` tags, changed facts rank the stale
 version first. The decider catches ~half (gpt-4o-mini is a noisy judge:
 Infosys→Nimbus retired, Nimbus→Stripe and Air→Pro missed at identical cosine).
