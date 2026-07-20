@@ -243,6 +243,20 @@ async def test_current_ignores_newer_but_irrelevant_hits() -> None:
     assert await mem.current("user", "residence") == "residence: NYC"
 
 
+async def test_current_fallback_honours_as_of() -> None:
+    # Found by adversarial testing: the exact tag lookup applies the bi-temporal
+    # window in SQL, but the retrieval fallback ignored `as_of` entirely and
+    # answered "what was true in year 1?" with a fact recorded in 2026.
+    fact = _item("residence: Bhilai", valid_from=datetime(2026, 1, 1, tzinfo=UTC))
+    mem = Memory(_FakeSession([fact]))  # type: ignore[arg-type]
+    assert await mem.current("user", "residence") == "residence: Bhilai"
+    assert await mem.current("user", "residence", as_of=datetime(1, 1, 1, tzinfo=UTC)) is None
+    assert (
+        await mem.current("user", "residence", as_of=datetime(2027, 1, 1, tzinfo=UTC))
+        == "residence: Bhilai"
+    )
+
+
 async def test_current_none_when_empty() -> None:
     mem = Memory(_FakeSession([]))  # type: ignore[arg-type]
     assert await mem.current("user", "residence") is None

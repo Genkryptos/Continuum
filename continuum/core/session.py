@@ -410,7 +410,13 @@ class ContinuumSession:
         Uses the retriever when available; otherwise (or if retrieval keeps
         failing) falls back to the most-recent STM items so the caller still
         gets a useful, correct — if shallower — result.
+
+        A non-positive *k* returns nothing. Guarded because ``items[:k]`` with a
+        negative k is a Python slice — ``k=-5`` silently returned "everything
+        except the last five" instead of no results.
         """
+        if k <= 0:
+            return []
         q = Query(
             text=query,
             session_id=self.session_id,

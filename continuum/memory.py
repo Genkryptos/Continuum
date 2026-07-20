@@ -392,6 +392,11 @@ class Memory:
             # which is the confidently-wrong failure this API exists to avoid.
             return exact
         hits = await self.recall(f"{subject} {attribute}", k=8)
+        # Honour the bi-temporal window here too. The exact lookup applies it in
+        # SQL, but this fallback previously ignored *as_of* entirely and happily
+        # answered "what was true in year 1?" with a fact recorded in 2026 —
+        # silently wrong in exactly the query time-travel exists to serve.
+        hits = [h for h in hits if _effective_time(h) <= when]
         if not hits:
             return None
         live = [h for h in hits if not _is_superseded(h)] or hits
