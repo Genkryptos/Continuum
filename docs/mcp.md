@@ -99,6 +99,31 @@ with no LLM it returns NOOP there, and honouring that would silently discard the
 new fact. It costs one small completion per write that has near neighbours, and
 it rewrites text when merging.
 
+## Automatic recall (Claude Code hook)
+
+By default memory only fires when Claude decides to call `recall`. To make it
+fire on **every** turn, register a `UserPromptSubmit` hook that recalls against
+the prompt and injects the hits as context:
+
+```jsonc
+// .claude/settings.local.json
+{ "hooks": { "UserPromptSubmit": [ { "hooks": [ {
+  "type": "command",
+  "command": "CONTINUUM_DB_DSN=postgresql://…/continuum python -m continuum.mcp.recall_hook",
+  "timeout": 8
+} ] } ] } }
+```
+
+It reads the prompt on stdin and emits `additionalContext`. Design:
+
+- **Never blocks the prompt** — no DB, bad input, or any error prints nothing and
+  exits 0, so the turn proceeds untouched.
+- **Fast**: a fresh process per prompt cannot load the 2.3GB embedder (~7s each),
+  so it uses **sparse** recall — sub-second. Use the same namespace as the server.
+- Env: `CONTINUUM_MCP_NAMESPACE` (scope), `CONTINUUM_RECALL_HOOK_K` (default 5),
+  `CONTINUUM_RECALL_HOOK_EMBEDDINGS=1` (dense; only worthwhile against a warm
+  process, not the per-prompt hook).
+
 ## Add to a client
 
 **Claude Desktop / Claude Code** — add to your MCP config (`claude_desktop_config.json`

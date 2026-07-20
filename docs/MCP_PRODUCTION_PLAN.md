@@ -58,7 +58,7 @@ fact still lands. **Acceptance:** e2e proves no write is ever lost. **Effort:** 
 
 ## Phase 1 — Make it *memory*, not *a tool Claude sometimes calls*
 
-### 1.1 Automatic recall
+### 1.1 Automatic recall — ✅ DONE (UserPromptSubmit hook: continuum.mcp.recall_hook, sparse, never blocks)
 **Problem (proven):** everything good this cycle happened because the tools were
 called explicitly. In a real session Claude must *choose* to `recall`, so memory
 fires only when it thinks to look.
