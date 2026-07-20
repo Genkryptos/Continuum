@@ -47,7 +47,7 @@ neither can recall or `current` the other's. **Effort:** M (schema + every query
 **Decision needed:** scope granularity — per-user? per-project? per-agent? Default
 to a single `namespace` string and let the operator choose what it means.
 
-### 0.2 No silent data loss under the decider
+### 0.2 No silent data loss under the decider — ✅ DONE (unit tests: decider raising AND un-adjudicated NOOP both fall back to a plain upsert; the write always lands)
 **Problem:** with supersession on but the LLM unavailable mid-run, a NOOP on the
 ambiguous band would drop the new fact. Currently guarded by falling back to ADD,
 but there is no test proving it under a *flaky* (not absent) LLM.

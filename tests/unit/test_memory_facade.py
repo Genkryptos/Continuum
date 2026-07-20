@@ -35,6 +35,13 @@ class _FakeLTM:
         self.upserts.append(item)
         return item.id
 
+    async def search_hybrid(self, q: Any, k: int = 8) -> list[Any]:
+        return []
+
+    async def update(self, target: Any, patch: Any) -> None: ...
+
+    async def invalidate(self, target: Any) -> None: ...
+
 
 class _FakeSession:
     """Minimal ContinuumSession stand-in for the facade."""
@@ -159,6 +166,35 @@ async def test_recall_clamps_k() -> None:
     assert captured["k"] == MAX_RECALL_K
     await mem.recall("q", k=-5)
     assert captured["k"] == 0
+
+
+async def test_no_data_loss_when_the_decider_raises() -> None:
+    # Phase 0.2: with supersession on but the LLM flaky (erroring/timing out),
+    # the write must still land — never silently dropped. _decided_write catches
+    # any decider failure and falls back to a plain upsert.
+    class _FlakyDecider:
+        async def decide_operation(self, fact: Any, neighbors: Any) -> Any:
+            raise TimeoutError("LLM timed out")
+
+    s = _FakeSession()
+    mem = Memory(s, decider=_FlakyDecider())  # type: ignore[arg-type]
+    await mem.add("I moved to New York City.")
+    assert [i.content for i in s.ltm.upserts] == ["I moved to New York City."]
+
+
+async def test_no_data_loss_on_unadjudicated_noop() -> None:
+    # An un-short-circuited NOOP means "could not decide" (typically no LLM), not
+    # "this is a duplicate" — honouring it would discard the fact. Falls back.
+    class _NoopDecider:
+        async def decide_operation(self, fact: Any, neighbors: Any) -> Any:
+            from continuum.promotion.mem0_promoter import Decision
+
+            return Decision(op="NOOP", target_id=None, rationale="no llm", short_circuited=False)
+
+    s = _FakeSession()
+    mem = Memory(s, decider=_NoopDecider())  # type: ignore[arg-type]
+    await mem.add("I moved to New York City.")
+    assert [i.content for i in s.ltm.upserts] == ["I moved to New York City."]
 
 
 async def test_add_writes_stm_and_ltm() -> None:
