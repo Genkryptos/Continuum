@@ -92,7 +92,7 @@ index size; tune HNSW `ef`/`m` if needed. **Acceptance:** documented curves; p95
 rows. **Fix:** use the optimizer strategies already in the tree (currently
 untested); TTL or importance-based pruning. **Effort:** M.
 
-### 2.3 Deduplication
+### 2.3 Deduplication — ✅ DONE (assembler dedups LTM+STM by content, LTM copy wins)
 **Problem (observed):** `recall` returns LTM+STM duplicates of the same fact
 ("Alice lives in Paris" twice). **Fix:** collapse by content/id in the assembler.
 **Effort:** S.
@@ -119,7 +119,7 @@ reranker exists but is off by default; enable + measure. **Effort:** S–M.
 
 ## Phase 4 — Operability & packaging
 
-### 4.1 Input hygiene
+### 4.1 Input hygiene — ✅ DONE (empty→no-op, text capped at MAX_FACT_CHARS, k clamped to MAX_RECALL_K)
 Length cap on `text` (100k chars is embedded today), reject empty strings, cap
 `k`. All found adversarially. **Effort:** S.
 

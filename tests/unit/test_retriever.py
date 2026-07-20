@@ -161,6 +161,31 @@ def test_satisfies_retriever_protocol() -> None:
     assert isinstance(Retriever(), RetrieverProtocol)
 
 
+class TestDedup:
+    """A fact written by Memory.add lands in both LTM and STM, so recall used to
+    return it twice. The assembler dedups by content, LTM copy winning."""
+
+    async def test_stm_echo_of_an_ltm_fact_is_dropped(self) -> None:
+        ltm = FakeLTM([_si("I live in Boston", 0.9)])
+        stm = FakeSTM([_mi("I live in Boston", role="user"), _mi("unrelated turn", role="user")])
+        r = Retriever(
+            RetrieverConfig(), ltm=ltm, stm=stm, scorer=FakeScorer({"I live in Boston": 0.9})
+        )
+        bundle = await r.retrieve(_q(), BUDGET)
+        contents = [i.content for i in bundle.items]
+        assert contents.count("I live in Boston") == 1  # once, not twice
+        assert "unrelated turn" in contents  # distinct STM turns still kept
+        assert bundle.messages[0]["role"] == "system"  # the surviving copy is the LTM one
+
+    async def test_empty_content_items_are_dropped(self) -> None:
+        ltm = FakeLTM([_si("real fact", 0.9), _si("", 0.5)])
+        r = Retriever(
+            RetrieverConfig(), ltm=ltm, stm=FakeSTM([]), scorer=FakeScorer({"real fact": 0.9})
+        )
+        bundle = await r.retrieve(_q(), BUDGET)
+        assert [i.content for i in bundle.items] == ["real fact"]
+
+
 class TestRetrievalRelevanceSurvivesScoring:
     """Regression: the stores return hits WITHOUT their embedding vector, so the
     real Scorer computed ``cosine(query.embedding, None) == 0`` as the relevance

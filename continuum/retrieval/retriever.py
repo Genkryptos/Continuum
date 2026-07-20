@@ -393,6 +393,15 @@ class Retriever:
 
     # ── 7. Assembly ─────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _keep(item: MemoryItem, seen: set[str]) -> bool:
+        """True the first time a non-empty content is encountered; records it."""
+        key = (item.content or "").strip().lower()
+        if not key or key in seen:
+            return False
+        seen.add(key)
+        return True
+
     def _assemble(
         self,
         budget: TokenBudget,
@@ -403,18 +412,32 @@ class Retriever:
     ) -> ContextBundle:
         ltm = [si.item for si in ltm_items]
         # Prompt order: durable facts → project summaries → recent turns.
-        items = ltm + mtm_items + stm_items
+        # Dedup by content across tiers, first occurrence wins: a fact written by
+        # Memory.add lands in BOTH the LTM store and the STM buffer, so recall
+        # otherwise returns it twice (and the durable LTM copy, which sorts
+        # first, is the one worth keeping). Empty-content items are dropped.
+        seen: set[str] = set()
+        items: list[MemoryItem] = []
         messages: list[dict[str, str]] = []
+        t_ltm = t_mtm = t_stm = 0
         for it in ltm:
-            messages.append({"role": "system", "content": it.content})
+            if self._keep(it, seen):
+                items.append(it)
+                messages.append({"role": "system", "content": it.content})
+                t_ltm += self._count(it.content)
         for it in mtm_items:
-            messages.append({"role": "system", "content": it.content})
+            if self._keep(it, seen):
+                items.append(it)
+                messages.append({"role": "system", "content": it.content})
+                t_mtm += self._count(it.content)
         for it in stm_items:
-            messages.append({"role": str(it.metadata.get("role", "user")), "content": it.content})
+            if self._keep(it, seen):
+                items.append(it)
+                messages.append(
+                    {"role": str(it.metadata.get("role", "user")), "content": it.content}
+                )
+                t_stm += self._count(it.content)
 
-        t_ltm = sum(self._count(i.content) for i in ltm)
-        t_mtm = sum(self._count(i.content) for i in mtm_items)
-        t_stm = sum(self._count(i.content) for i in stm_items)
         breakdown = {"stm": t_stm, "mtm": t_mtm, "ltm": t_ltm}
 
         debug.update({"ltm_final": len(ltm), "mtm": len(mtm_items), "stm": len(stm_items)})

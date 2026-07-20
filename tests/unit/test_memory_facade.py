@@ -107,6 +107,39 @@ def test_from_postgres_wires_hybrid_retriever() -> None:
 # ── write path ────────────────────────────────────────────────────────────────
 
 
+async def test_add_input_hygiene() -> None:
+    from continuum.memory import MAX_FACT_CHARS
+
+    s = _FakeSession()
+    mem = Memory(s)  # type: ignore[arg-type]
+    await mem.add("")  # empty
+    await mem.add("   ")  # whitespace
+    assert s.stm.items == [] and s.ltm.upserts == []  # both no-ops, no junk rows
+
+    await mem.add("  padded fact  ")  # stripped
+    assert s.stm.items[0].content == "padded fact"
+
+    await mem.add("x" * (MAX_FACT_CHARS + 5000))  # oversized → truncated, not embedded whole
+    assert len(s.ltm.upserts[-1].content or "") == MAX_FACT_CHARS
+
+
+async def test_recall_clamps_k() -> None:
+    captured: dict[str, int] = {}
+
+    class _S(_FakeSession):
+        async def search(self, query: str, k: int = 10) -> list[MemoryItem]:
+            captured["k"] = k
+            return []
+
+    from continuum.memory import MAX_RECALL_K
+
+    mem = Memory(_S())  # type: ignore[arg-type]
+    await mem.recall("q", k=1_000_000)
+    assert captured["k"] == MAX_RECALL_K
+    await mem.recall("q", k=-5)
+    assert captured["k"] == 0
+
+
 async def test_add_writes_stm_and_ltm() -> None:
     s = _FakeSession()
     mem = Memory(s)  # type: ignore[arg-type]

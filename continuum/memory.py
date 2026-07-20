@@ -48,6 +48,13 @@ log = logging.getLogger(__name__)
 #: breaks ties inside this window; beyond it, a hit is about something else.
 _CURRENT_TOPICAL_WINDOW = 3
 
+#: Longest text a single memory keeps. One embedding covers the whole string, so
+#: a huge blob is one meaningless vector and a bloated row; truncate instead.
+MAX_FACT_CHARS = 8000
+
+#: Upper bound on recall k, so an absurd request cannot ask for a giant result.
+MAX_RECALL_K = 100
+
 __all__ = ["Memory"]
 
 
@@ -249,7 +256,17 @@ class Memory:
         "what database are we using?" *worse* than an unrelated memory
         (cos 0.479 vs 0.522). Split, the same content scores 0.614 and ranks
         first. The splitter is conservative and returns the text unchanged when
-        a split would be unsafe, so it is safe to pass unconditionally."""
+        a split would be unsafe, so it is safe to pass unconditionally.
+
+        Input hygiene: an empty/whitespace string is a no-op (a zero-length row
+        is noise that recall would still return), and text past
+        :data:`MAX_FACT_CHARS` is truncated rather than embedded whole — a
+        100k-char blob is one useless vector and a large row."""
+        text = text.strip()
+        if not text:
+            return
+        if len(text) > MAX_FACT_CHARS:
+            text = text[:MAX_FACT_CHARS]
         if split:
             from continuum.promotion.clause_split import split_facts
 
@@ -397,7 +414,11 @@ class Memory:
     # ── read ─────────────────────────────────────────────────────────────────
 
     async def recall(self, query: str, *, k: int = 8) -> list[MemoryItem]:
-        """Retrieve up to *k* memories relevant to *query*, best-first."""
+        """Retrieve up to *k* memories relevant to *query*, best-first.
+
+        *k* is clamped to ``[0, MAX_RECALL_K]`` — a caller-supplied ``k`` of a
+        million is not a reason to build a million-row result."""
+        k = min(max(k, 0), MAX_RECALL_K)
         return await self._session.search(query, k=k)
 
     async def current(
