@@ -144,14 +144,24 @@ jobs:
           # under test find the same DB without hard-coding credentials.
           CONTINUUM_DB_DSN: postgresql://myuser:mypassword@localhost:5432/mydb
 
+      # ── End-to-end (real continuum-mcp binary over stdio) ────────────────
+      # Drives the shipped tool the way a client does, against a throwaway
+      # migrated DB — sparse-only, so no embedder download. This is the layer
+      # that catches cross-seam bugs unit tests pass straight through.
+      - name: Run end-to-end tests
+        run: python -m pytest tests/e2e -v -m e2e
+        env:
+          CONTINUUM_DB_DSN: postgresql://myuser:mypassword@localhost:5432/mydb
+
       # ── Full suite + coverage ─────────────────────────────────────────────
-      # The acceptance gate is excluded here: it spawns its OWN coverage
-      # subprocess, so re-running it inside this coverage run would double
-      # the work and nest coverage processes. It gets a dedicated step below.
+      # acceptance is excluded (it spawns its OWN coverage subprocess); e2e is
+      # excluded because it runs the server in a SEPARATE process and so adds no
+      # in-process coverage — it already ran as its own step above.
       - name: Run full suite with coverage
         run: |
           python -m pytest tests \
             --ignore=tests/acceptance \
+            --ignore=tests/e2e \
             --cov=continuum \
             --cov-report=term-missing \
             --cov-report=xml \

@@ -14,7 +14,7 @@
 # Requires: Python ≥ 3.11, pip packages from `make install-dev`
 
 .DEFAULT_GOAL := help
-.PHONY: test test-fast test-integration test-cov benchmark \
+.PHONY: test test-fast test-integration test-e2e test-cov benchmark \
         lint typecheck format check \
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
@@ -55,6 +55,9 @@ test-fast: ## Run only unit tests — no external dependencies required
 
 test-integration: ## Run only integration tests — PostgreSQL must be running
 	$(PYTEST) $(TESTS)/integration -v -m integration
+
+test-e2e: ## End-to-end: drive the real continuum-mcp binary against Postgres (needs a DB + the [mcp] extra)
+	$(BENCH_PYTHON) -m pytest $(TESTS)/e2e -v -m e2e
 
 test-cov: ## Run all tests with HTML + terminal coverage; fail below 80 %
 	$(PYTEST) $(TESTS) \
