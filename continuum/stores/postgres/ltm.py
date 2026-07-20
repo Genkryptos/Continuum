@@ -161,6 +161,7 @@ class PostgresLTM:
         embedding_type: str = "halfvec",
         rrf_k: int = DEFAULT_RRF_K,
         trgm_threshold: float = DEFAULT_TRGM_THRESHOLD,
+        namespace: str = "default",
         pool_min_size: int = 2,
         pool_max_size: int = 10,
     ) -> None:
@@ -168,6 +169,10 @@ class PostgresLTM:
             raise ValueError("Provide one of: dsn, pool, or conn_factory.")
         if not embedding_type.isalpha():
             raise ValueError(f"embedding_type must be a bare identifier, got {embedding_type!r}")
+        # Tenant scope. Every read filters on it and every write stamps it, so
+        # one database can hold isolated stores. Migration 005 defaults existing
+        # rows and this field to 'default', so an unscoped caller is unchanged.
+        self._namespace = namespace
         self._dsn = dsn
         self._pool = pool
         self._owns_pool = False
@@ -270,6 +275,7 @@ class PostgresLTM:
             "valid_to": vt,
             "source_ids": list(source_ids) if source_ids else None,
             "tags": json.dumps(tags),
+            "namespace": self._namespace,
         }
         if item.embedding is not None:
             emb_sql = f"%(embedding)s::{self._embedding_type}"
@@ -281,12 +287,12 @@ class PostgresLTM:
             INSERT INTO {self._table}
                 (id, layer, "text", kind, confidence, importance,
                  embedding, source_ids, valid_from, valid_to, tags,
-                 created_at, updated_at)
+                 namespace, created_at, updated_at)
             VALUES
                 (%(id)s, 'LTM', %(text)s, %(kind)s, %(confidence)s,
                  %(importance)s, {emb_sql}, %(source_ids)s,
                  %(valid_from)s, %(valid_to)s, %(tags)s::jsonb,
-                 now(), now())
+                 %(namespace)s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 "text"      = EXCLUDED."text",
                 kind        = EXCLUDED.kind,
@@ -394,8 +400,9 @@ class PostgresLTM:
 
         # Optional bi-temporal point-in-time + JSONB tag filter, shared by
         # both channels and the outer query.
-        extra = ["n.invalidated_at IS NULL"]
-        cte_extra = ["invalidated_at IS NULL"]
+        extra = ["n.invalidated_at IS NULL", "n.namespace = %(ns)s"]
+        cte_extra = ["invalidated_at IS NULL", "namespace = %(ns)s"]
+        params["ns"] = self._namespace
         if q.metadata_filter:
             extra.append("n.tags @> %(filt)s::jsonb")
             cte_extra.append("tags @> %(filt)s::jsonb")
@@ -526,8 +533,8 @@ class PostgresLTM:
         difference between "no fact has that attribute" and "attributes aren't
         used here", and therefore between answering honestly and guessing.
         """
-        extra = ["invalidated_at IS NULL"]
-        params: dict[str, Any] = {"k": int(limit)}
+        extra = ["invalidated_at IS NULL", "namespace = %(ns)s"]
+        params: dict[str, Any] = {"k": int(limit), "ns": self._namespace}
         if tags:
             extra.append("tags @> %(filt)s::jsonb")
             params["filt"] = json.dumps(tags)
@@ -596,6 +603,7 @@ class PostgresLTM:
                 FROM   {self._edges} e
                 JOIN   {self._table} tn
                        ON tn.id = e.target_id AND tn.invalidated_at IS NULL
+                       AND tn.namespace = %(ns)s
                 WHERE  e.source_id = %(seed)s
                   AND  e.invalidated_at IS NULL
                 UNION ALL
@@ -607,6 +615,7 @@ class PostgresLTM:
                       AND e.invalidated_at IS NULL
                 JOIN   {self._table} tn
                        ON tn.id = e.target_id AND tn.invalidated_at IS NULL
+                       AND tn.namespace = %(ns)s
                 WHERE  w.depth < %(maxd)s
                   AND  NOT e.target_id = ANY(w.path)
             )
@@ -617,6 +626,7 @@ class PostgresLTM:
             FROM   walk w
             JOIN   {self._table} n
                    ON n.id = w.target_id AND n.invalidated_at IS NULL
+                   AND n.namespace = %(ns)s
             ORDER  BY w.depth, w.edge_id
             LIMIT  %(cap)s
         """
@@ -624,7 +634,7 @@ class PostgresLTM:
             cur = await self._exec(
                 conn,
                 sql,
-                {"seed": seed, "maxd": max_depth, "cap": _NEIGHBOR_CAP},
+                {"seed": seed, "maxd": max_depth, "cap": _NEIGHBOR_CAP, "ns": self._namespace},
                 prepare=True,
             )
             rows = await cur.fetchall()

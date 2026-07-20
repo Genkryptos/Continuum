@@ -229,15 +229,23 @@ def test_default_memory_uses_postgres_when_dsn_set(monkeypatch: pytest.MonkeyPat
 
     captured: dict[str, Any] = {}
 
-    def _fake_from_postgres(dsn: str, *, embeddings: bool = True) -> str:
-        captured["dsn"], captured["embeddings"] = dsn, embeddings
+    def _fake_from_postgres(dsn: str, *, embeddings: bool = True, **kw: Any) -> str:
+        captured["dsn"], captured["embeddings"], captured["namespace"] = (
+            dsn,
+            embeddings,
+            kw.get("namespace"),
+        )
+        captured["session_id"] = kw.get("session_id")
         return "PG_MEMORY"
 
     monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://x:y@localhost:5432/db")
     monkeypatch.delenv("CONTINUUM_MCP_EMBEDDINGS", raising=False)
     monkeypatch.setattr(srv.Memory, "from_postgres", _fake_from_postgres)
     assert srv._default_memory() == "PG_MEMORY"
-    assert captured == {"dsn": "postgresql://x:y@localhost:5432/db", "embeddings": True}
+    assert captured["dsn"] == "postgresql://x:y@localhost:5432/db"
+    assert captured["embeddings"] is True
+    assert captured["namespace"] == "default"
+    assert captured["session_id"] == "default"  # STM bound to the namespace
 
 
 def test_default_memory_embeddings_env_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -245,7 +253,7 @@ def test_default_memory_embeddings_env_toggle(monkeypatch: pytest.MonkeyPatch) -
 
     captured: dict[str, Any] = {}
 
-    def _fake_from_postgres(dsn: str, *, embeddings: bool = True) -> str:
+    def _fake_from_postgres(dsn: str, *, embeddings: bool = True, **kw: Any) -> str:
         captured["embeddings"] = embeddings
         return "PG_MEMORY"
 

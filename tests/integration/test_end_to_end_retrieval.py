@@ -57,8 +57,12 @@ from continuum.stores.stm.postgres_stm import PostgresSTM  # noqa: E402
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIG_002 = REPO_ROOT / "migrations" / "002_pgvector_upgrade.sql"
-MIG_003 = REPO_ROOT / "migrations" / "003_lexical_search.sql"
+# Every idempotent migration beyond 001 (which conftest.postgres_db applies),
+# in order. Globbed rather than hard-coded so a new migration is picked up
+# automatically — 005 (namespace) was missed exactly because this was a fixed list.
+_LATER_MIGRATIONS = sorted(
+    p for p in (REPO_ROOT / "migrations").glob("0*.sql") if not p.name.startswith("001")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -229,8 +233,8 @@ class FakeReranker:
 
 async def test_query_to_context_assembly(postgres_db: str) -> None:
     # ── 0. Reach the Phase 0.1 DB state (idempotent) ─────────────────────────
-    _apply(postgres_db, MIG_002)  # → embedding halfvec(1024) + HNSW
-    _apply(postgres_db, MIG_003)  # → pg_trgm GIN
+    for mig in _LATER_MIGRATIONS:  # 002 halfvec/HNSW, 003 pg_trgm, 004 policy, 005 namespace …
+        _apply(postgres_db, mig)
 
     session_id = f"e2e-{uuid.uuid4().hex[:8]}"
     query_text = "What does Alice do?"

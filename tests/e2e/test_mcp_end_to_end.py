@@ -40,6 +40,36 @@ def test_memory_persists_across_sessions(e2e_dsn: str) -> None:
         reader.close()
 
 
+# ── tenant isolation: two namespaces on one database never see each other ─────
+
+
+def test_namespaces_are_isolated(e2e_dsn: str) -> None:
+    from tests.e2e.conftest import MCPClient
+
+    # The exact leak Phase 0.1 fixes: without scoping, Alice's recall returned
+    # Bob's fact. Two servers on the same DB, different CONTINUUM_MCP_NAMESPACE.
+    alice = MCPClient(e2e_dsn, CONTINUUM_MCP_NAMESPACE="alice")
+    bob = MCPClient(e2e_dsn, CONTINUUM_MCP_NAMESPACE="bob")
+    try:
+        alice.tool("remember", text="Alice lives in Paris.", attribute="residence")
+        bob.tool("remember", text="Bob lives in Tokyo.", attribute="residence")
+
+        _, a_hits = alice.tool("recall", query="where does the person live", k=8)
+        a_text = " ".join(h["content"] for h in a_hits)
+        assert "Paris" in a_text and "Tokyo" not in a_text  # no cross-tenant leak
+
+        _, b_hits = bob.tool("recall", query="where does the person live", k=8)
+        b_text = " ".join(h["content"] for h in b_hits)
+        assert "Tokyo" in b_text and "Paris" not in b_text
+
+        # current() is scoped too, not just recall.
+        _, a_cur = alice.tool("current", subject="user", attribute="residence")
+        assert "Paris" in a_cur and "Tokyo" not in a_cur
+    finally:
+        alice.close()
+        bob.close()
+
+
 # ── attribute-keyed current(): exact SQL, no embedder, honours valid time ─────
 
 

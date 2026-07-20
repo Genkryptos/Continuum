@@ -227,8 +227,18 @@ def _default_memory() -> Memory:
             "no",
             "off",
         }
+        namespace = (os.environ.get("CONTINUUM_MCP_NAMESPACE") or "default").strip() or "default"
         try:
-            return Memory.from_postgres(dsn, embeddings=embeddings, **_supersession_kwargs())
+            return Memory.from_postgres(
+                dsn,
+                embeddings=embeddings,
+                namespace=namespace,
+                # STM is keyed by session_id, not namespace — bind it to the
+                # namespace too, or a second tenant's "recent turns" (which
+                # `recall` also reads) would leak. LTM scoping alone is not enough.
+                session_id=namespace,
+                **_supersession_kwargs(),
+            )
         except Exception:
             log.exception("continuum-mcp: Postgres backend unavailable — using in-memory")
     return Memory.in_memory()

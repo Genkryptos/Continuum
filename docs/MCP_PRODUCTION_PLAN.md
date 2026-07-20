@@ -35,7 +35,7 @@ by someone who is not us.
 
 ## Phase 0 — Correctness & safety blockers (nothing ships public without these)
 
-### 0.1 Tenant scoping (the #1 blocker)
+### 0.1 Tenant scoping (the #1 blocker) — ✅ DONE (migration 005, namespace on every LTM query + STM bound to it; e2e isolation test)
 **Problem (proven):** LTM has no session/user/agent column and no filter anywhere.
 Alice's `recall("lives in")` returned Bob's fact. `recall` and `current` leak
 across every session — and across your own projects, since one database is shared.

@@ -111,6 +111,7 @@ class Memory:
         embeddings: bool = True,
         supersession_completion_fn: CompletionFn | None = None,
         supersession_model: str = "openai/gpt-4o-mini",
+        namespace: str = "default",
         session_id: str = "default",
         config: ContinuumConfig | None = None,
     ) -> Memory:
@@ -134,7 +135,12 @@ class Memory:
         ``cosine("I live in Boston", "I moved from Boston to New York") = 0.81``,
         between ``add_threshold`` 0.5 and ``noop_threshold`` 0.97 — where only
         the model can adjudicate. With no LLM the decider returns ``NOOP`` and
-        the new fact would be **dropped**, so we never enable it implicitly."""
+        the new fact would be **dropped**, so we never enable it implicitly.
+
+        *namespace* is the tenant scope. Facts are written under it and every
+        read is filtered to it, so two ``Memory.from_postgres(..., namespace=…)``
+        on the same database never see each other's memories. Defaults to
+        ``"default"`` — one shared store — which is what a single user wants."""
         from continuum.core.config import ContinuumConfig as _Cfg
         from continuum.retrieval import Retriever
         from continuum.retrieval.embedding_query import EmbeddingQueryRetriever
@@ -164,7 +170,10 @@ class Memory:
             )
 
         stm = PostgresSTM(dsn=resolved_dsn)
-        ltm = PostgresLTM(dsn=resolved_dsn)
+        # namespace scopes LTM: one database can hold isolated stores, so a
+        # recall/current can never surface another tenant's facts. STM is already
+        # scoped per session_id, a finer (ephemeral) axis.
+        ltm = PostgresLTM(dsn=resolved_dsn, namespace=namespace)
         inner = Retriever(ltm=ltm, stm=stm, session_id=session_id)
         retriever = EmbeddingQueryRetriever(inner, embedder)
 

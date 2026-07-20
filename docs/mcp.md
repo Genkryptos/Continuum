@@ -61,6 +61,20 @@ For Claude Code you can additionally warm the backend before the first prompt
 with a `SessionStart` hook in `.claude/settings.local.json`, which also removes
 the one-off model-load latency from your first memory call.
 
+## Isolation (multi-user / multi-project)
+
+By default all memory lives in one shared store (`namespace = "default"`). To keep
+tenants apart on a single database, set a namespace per server:
+
+```bash
+export CONTINUUM_MCP_NAMESPACE=alice     # or a project name, an agent id, ...
+```
+
+Every write is stamped with it and every read (`recall`, `current`, `timeline`,
+graph expansion, and the short-term buffer) is filtered to it, so two namespaces
+on the same database can never surface each other's facts. Without this, one
+global store was shared across every session, user, and project.
+
 ## Supersession (optional, needs an LLM)
 
 Without it, a fact and its later correction both sit in the store competing for
