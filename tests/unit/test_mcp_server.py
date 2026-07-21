@@ -8,6 +8,8 @@ no network. Skips cleanly if the optional `mcp` extra isn't installed.
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -462,6 +464,78 @@ async def test_unreachable_backend_errors_instead_of_crashing(
         await server.call_tool("remember", {"text": "x"})
     # …and the server is still usable afterwards.
     assert len(await server.list_tools()) == 4
+
+
+@pytest.fixture
+def mcp_logs(caplog: pytest.LogCaptureFixture) -> Iterator[pytest.LogCaptureFixture]:
+    """
+    Capture continuum's MCP logs.
+
+    `_configure_logging` deliberately sets `propagate = False` on the `continuum`
+    logger (FastMCP installs its own root handler; propagating would double every
+    line). That also detaches caplog's root handler, so attach it to `continuum`
+    directly rather than weakening the production wiring for the test's benefit.
+    """
+    import logging
+
+    logger = logging.getLogger("continuum")
+    before_level, before_propagate = logger.level, logger.propagate
+    logger.addHandler(caplog.handler)
+    logger.setLevel(logging.INFO)  # not DEBUG: INFO is the level tool activity must reach
+    try:
+        yield caplog
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(before_level)
+        logger.propagate = before_propagate
+
+
+def test_observe_logs_success_with_timing(mcp_logs: pytest.LogCaptureFixture) -> None:
+    from continuum.mcp.server import _observe
+
+    with _observe("recall", query="x") as obs:
+        obs("hits=%d", 3)
+    rec = mcp_logs.records[-1]
+    assert "tool=recall" in rec.message and "query=x" in rec.message and "hits=3" in rec.message
+    assert "ms]" in rec.message  # duration recorded
+
+
+def test_observe_logs_and_reraises_on_failure(mcp_logs: pytest.LogCaptureFixture) -> None:
+    from continuum.mcp.server import _observe
+
+    # A failing tool must not be invisible — that silence is what hid this
+    # project's worst bugs.
+    with pytest.raises(ValueError, match="boom"), _observe("remember") as _obs:
+        raise ValueError("boom")
+    assert any("tool=remember" in r.message and "FAILED" in r.message for r in mcp_logs.records)
+
+
+def test_configure_logging_defaults_quiet(monkeypatch: pytest.MonkeyPatch) -> None:
+    import logging
+
+    from continuum.mcp.server import _configure_logging
+
+    monkeypatch.delenv("CONTINUUM_MCP_LOG_LEVEL", raising=False)
+    _configure_logging()
+    assert logging.getLogger("continuum").level == logging.WARNING
+    monkeypatch.setenv("CONTINUUM_MCP_LOG_LEVEL", "INFO")
+    _configure_logging()
+    assert logging.getLogger("continuum").level == logging.INFO
+
+
+def test_tool_logs_never_go_to_stdout() -> None:
+    # stdout is the stdio protocol channel: one log line on it corrupts the
+    # JSON-RPC stream. No handler we install may point there.
+    import logging
+
+    from continuum.mcp.server import _configure_logging
+
+    _configure_logging()
+    handlers = [
+        h for h in logging.getLogger("continuum").handlers if isinstance(h, logging.StreamHandler)
+    ]
+    assert handlers  # something must actually be logging
+    assert all(h.stream is not sys.stdout for h in handlers)
 
 
 def test_supersession_is_off_unless_asked(monkeypatch: pytest.MonkeyPatch) -> None:

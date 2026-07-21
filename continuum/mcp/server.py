@@ -23,6 +23,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -206,6 +207,55 @@ async def _autostart(dsn: str, *, timeout: float = 60.0) -> bool:
     return False
 
 
+# ── observability ─────────────────────────────────────────────────────────────
+
+
+def _configure_logging() -> None:
+    """Send logs to **stderr** (stdout is the stdio protocol channel — logging
+    there would corrupt it). Level from ``CONTINUUM_MCP_LOG_LEVEL`` (default
+    WARNING, so the server is quiet unless asked; set INFO to trace every tool
+    call). The server is otherwise a black box, which is exactly what hid this
+    project's worst bugs — a silent fallback, a write that never persisted."""
+    level = (os.environ.get("CONTINUUM_MCP_LOG_LEVEL") or "WARNING").upper()
+    root = logging.getLogger("continuum")
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("continuum-mcp %(levelname)s %(name)s: %(message)s"))
+        root.addHandler(handler)
+        # Don't also propagate to the root logger — FastMCP installs its own
+        # handler there, which would print every continuum line a second time.
+        root.propagate = False
+    root.setLevel(getattr(logging, level, logging.WARNING))
+
+
+@contextlib.contextmanager
+def _observe(tool: str, **fields: Any) -> Any:
+    """Time a tool call and log one INFO line: name, inputs, result, duration.
+
+    Yields a callable to record the result (``obs("hits=%d", n)``). An exception
+    is logged at ERROR with its timing, then re-raised — a failing tool is no
+    longer invisible.
+    """
+    import time
+
+    start = time.perf_counter()
+    detail: list[str] = []
+
+    def _record(fmt: str, *args: Any) -> None:
+        detail.append(fmt % args if args else fmt)
+
+    ctx = " ".join(f"{k}={v}" for k, v in fields.items() if v is not None)
+    try:
+        yield _record
+    except Exception:
+        ms = (time.perf_counter() - start) * 1000
+        log.exception("tool=%s %s FAILED [%.0fms]", tool, ctx, ms)
+        raise
+    else:
+        ms = (time.perf_counter() - start) * 1000
+        log.info("tool=%s %s %s [%.0fms]", tool, ctx, " ".join(detail), ms)
+
+
 # ── server assembly ───────────────────────────────────────────────────────────
 
 
@@ -295,6 +345,7 @@ def build_server(
     """
     from mcp.server.fastmcp import FastMCP
 
+    _configure_logging()
     mem = memory or _default_memory()
     settings: dict[str, Any] = {}
     if host is not None:
@@ -342,7 +393,10 @@ def build_server(
     @server.tool()
     async def recall(query: str, k: int = 8) -> list[dict[str, Any]]:
         """Retrieve up to k memories relevant to the query, best-first."""
-        return await _recall(await _ready(), query, k)
+        with _observe("recall", query=query, k=k) as obs:
+            hits = await _recall(await _ready(), query, k)
+            obs("hits=%d", len(hits))
+            return hits
 
     @server.tool()
     async def remember(
@@ -354,7 +408,10 @@ def build_server(
         attribute names what the fact is ABOUT ("residence", "employer", …) —
         tag it and `current` can answer that attribute exactly.
         """
-        return await _remember(await _ready(), text, occurred_at, attribute)
+        with _observe("remember", chars=len(text), attribute=attribute) as obs:
+            ack = await _remember(await _ready(), text, occurred_at, attribute)
+            obs("durable=%s", not ack.startswith("stored IN-MEMORY"))
+            return ack
 
     @server.tool()
     async def current(subject: str, attribute: str, as_of: str | None = None) -> str:
@@ -362,7 +419,10 @@ def build_server(
 
         as_of is an optional ISO date to ask what was current back then.
         """
-        return await _current(await _ready(), subject, attribute, as_of)
+        with _observe("current", attribute=attribute, as_of=as_of) as obs:
+            value = await _current(await _ready(), subject, attribute, as_of)
+            obs("found=%s", value != "not found")
+            return value
 
     @server.tool()
     async def timeline(
@@ -371,7 +431,10 @@ def build_server(
         until: str | None = None,
     ) -> list[dict[str, Any]]:
         """Bi-temporal history for an entity, oldest→newest (ISO date bounds)."""
-        return await _timeline(await _ready(), entity, since, until)
+        with _observe("timeline", entity=entity) as obs:
+            items = await _timeline(await _ready(), entity, since, until)
+            obs("items=%d", len(items))
+            return items
 
     return server
 

@@ -130,10 +130,18 @@ reranker exists but is off by default; enable + measure. **Effort:** S–M.
 Length cap on `text` (100k chars is embedded today), reject empty strings, cap
 `k`. All found adversarially. **Effort:** S.
 
-### 4.2 Observability
+### 4.2 Observability — ✅ DONE (`CONTINUUM_MCP_LOG_LEVEL`; one line per tool call with inputs, outcome and latency; failures logged with a traceback instead of vanishing)
 Structured logs / counters for: what was recalled, hit/miss, latency, backend
 fallbacks, decider decisions. Today failures are silent by design — the exact
 property that hid this cycle's worst bugs. **Effort:** M.
+
+**Shipped:** `_observe()` wraps all four tools —
+`tool=recall query=… k=3 hits=1 [18ms]`, `tool=remember chars=17 durable=True [87ms]`,
+plus `found=` / `items=`. Quiet at WARNING by default; **stderr only**, because on
+stdio transport stdout is the JSON-RPC channel (verified against the live server:
+zero log bytes on stdout). Exceptions log `FAILED` + traceback and re-raise.
+Backend-unreachable and autostart paths already logged. Not done: counters/metrics
+export and decider-decision logging — add when something consumes them.
 
 ### 4.3 Install & secrets story
 `pip install continuum-memory[mcp]` clean-venv path; the MCP registration

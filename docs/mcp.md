@@ -211,6 +211,30 @@ retrieval — best-effort, and only as good as the probe. But once the store *do
 use attribute tags, its lookup is authoritative: an attribute with no fact
 returns "not found" instead of inventing one from an unrelated memory.
 
+## Seeing what it did
+
+The server is silent by default — an MCP client shows you tool *results*, never
+why a `recall` came back thin. Turn on the log to find out:
+
+```bash
+export CONTINUUM_MCP_LOG_LEVEL=INFO   # WARNING (default) · INFO · DEBUG
+```
+
+```
+continuum-mcp INFO continuum.mcp.server: tool=remember chars=17 durable=True [87ms]
+continuum-mcp INFO continuum.mcp.server: tool=recall query=where do I live k=3 hits=1 [18ms]
+```
+
+Every line carries the tool, its inputs, the outcome (`hits=`, `durable=`,
+`found=`) and wall-clock latency; a failing tool logs `FAILED` with a traceback
+and still returns a proper MCP error to the client. `hits=0` on a query you
+expected to match is the signal that retrieval — not the client — is the problem.
+
+Logs go to **stderr only**: on the stdio transport stdout *is* the JSON-RPC
+channel, and a single stray line there corrupts the session. In Claude Code they
+land in the MCP server log (`claude mcp` shows the path); over HTTP/SSE they go
+to the terminal running the daemon.
+
 ## Notes
 
 - Only the memory layer is exposed — no research/eval flags.
