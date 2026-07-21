@@ -133,14 +133,33 @@ the stative set). Precision over recall — a missed fact costs one `remember`.
 
 ## Phase 2 — Reliability at scale
 
-### 2.1 Scale test — ✅ DONE (latency + index; semantic-quality-at-scale still open)
+### 2.1 Scale test — ✅ DONE (latency, index, AND semantic recall at scale — the last one found the ef_search bug)
 **Measured** (scripts/scale_test.py, `make scale-test`), recall p95 vs rows:
 1k → 9ms · 10k → 44ms · 50k → 129ms — all under the 200ms target. The planner
 adapts: seq-scan at 10k (cheaper than HNSW there), switching to the HNSW index
 at 50k. No pathology; latency is bounded well into tens of thousands of rows.
-Caveat: this stresses the pgvector/pg_trgm QUERY path with random vectors — it
+~~Caveat: this stresses the pgvector/pg_trgm QUERY path with random vectors — it
 does NOT measure semantic recall@k at 10k with real distractors (that needs the
-embedder; deferred as a smaller, slower test).
+embedder; deferred as a smaller, slower test).~~
+
+**Caveat closed, and it was hiding a real bug.** Measured on 3,020 *real* facts
+(clustered personal statements) with 20 needles: recall@1/@3/@8 all sat at
+**75%** — identical at every depth, which is the signature of a candidate-pool
+problem rather than a ranking one. Four of the five missing needles were the
+**true nearest neighbour by exact cosine**; pgvector's HNSW index at its default
+`ef_search=40` simply never returned them, so RRF never saw them.
+
+| `hnsw.ef_search` | needles in the pool | p50 | p95 |
+|---|---:|---:|---:|
+| 40 (pgvector default) | 13/20 | 0.9ms | 12.2ms |
+| 200 | 19/20 | 0.3ms | 0.5ms |
+| **400** (now the default) | **20/20** | 0.5ms | 0.7ms |
+
+The default cost 35% of retrievable memories for *no* speed benefit — a fuller
+graph walk terminates more predictably than one stuck in a cluster. End-to-end
+after the fix: **75% → 95% recall@1**, +13ms on a ~130ms call. The last miss
+("can I eat prawns" → "deathly allergic to shellfish") is a genuine embedder
+limit: bge-m3 ranks a distractor above it by cosine, at rank 16.
 **Problem:** tested at 62 memories; real use is thousands. Index behaviour,
 `recall` precision, and latency at 10k+ rows are unmeasured.
 **Fix:** a harness that loads 10k–100k memories and measures recall@k, p95, and

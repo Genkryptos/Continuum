@@ -77,6 +77,14 @@ DEFAULT_TABLE = "memory_nodes"
 DEFAULT_EDGES = "memory_edges"
 DEFAULT_RRF_K = 60
 DEFAULT_TRGM_THRESHOLD = 0.25
+#: Session ``hnsw.ef_search`` for the dense channel. pgvector's default of 40 is
+#: tuned for speed and loses real memories: measured on 3,020 clustered personal
+#: facts, only 13/20 needles reached the candidate pool at 40, versus 20/20 at
+#: 400 — for **no** latency benefit (p50 0.9ms -> 0.5ms, p95 12.2ms -> 0.7ms; a
+#: fuller graph walk terminates more predictably than a stuck one). Against a
+#: ~100ms recall dominated by the embedder this is free. Lower it only if a very
+#: large store makes the index scan itself expensive.
+DEFAULT_HNSW_EF_SEARCH = 400
 _NEIGHBOR_CAP = 500
 
 # Columns a partial ``update(patch)`` is allowed to touch. The keys are the
@@ -148,6 +156,11 @@ class PostgresLTM:
         RRF constant (default 60, per Cormack et al. 2009).
     trgm_threshold:
         Session ``pg_trgm.similarity_threshold`` for the sparse channel.
+    hnsw_ef_search:
+        Session ``hnsw.ef_search`` for the dense channel — how hard pgvector
+        looks before giving up. Its default (40) silently drops good matches
+        once the planner starts using the index; see
+        :data:`DEFAULT_HNSW_EF_SEARCH`.
     pool_min_size / pool_max_size:
         Sizing for the lazily-created DSN pool.
     """
@@ -163,6 +176,7 @@ class PostgresLTM:
         embedding_type: str = "halfvec",
         rrf_k: int = DEFAULT_RRF_K,
         trgm_threshold: float = DEFAULT_TRGM_THRESHOLD,
+        hnsw_ef_search: int = DEFAULT_HNSW_EF_SEARCH,
         namespace: str = "default",
         pool_min_size: int = 2,
         pool_max_size: int = 10,
@@ -184,6 +198,7 @@ class PostgresLTM:
         self._embedding_type = embedding_type
         self._rrf_k = rrf_k
         self._trgm_threshold = trgm_threshold
+        self._hnsw_ef_search = max(1, int(hnsw_ef_search))
         self._pool_min = pool_min_size
         self._pool_max = pool_max_size
 
@@ -671,6 +686,11 @@ class PostgresLTM:
                 await conn.execute(
                     f"SET pg_trgm.similarity_threshold = {float(self._trgm_threshold)}"
                 )
+            if "q" in params:
+                # Without this the dense channel is quietly approximate: the
+                # index returns whatever cluster the graph walk landed in, and
+                # the right memory never reaches the RRF fusion at all.
+                await conn.execute(f"SET hnsw.ef_search = {int(self._hnsw_ef_search)}")
             cur = await self._exec(conn, sql, params, prepare=True)
             rows = await cur.fetchall()
 
