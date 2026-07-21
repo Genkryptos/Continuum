@@ -15,7 +15,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -26,6 +26,7 @@ from continuum.core.types import (
     Edge,
     MemoryItem,
     MemoryTier,
+    PrunePolicy,
     Query,
     ScoredItem,
 )
@@ -60,11 +61,13 @@ class MockConnection:
         *,
         search_rows: list[dict[str, Any]] | None = None,
         neighbor_rows: list[dict[str, Any]] | None = None,
+        prune_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.executed: list[tuple[str, Any]] = []
         self.prepared: list[bool] = []
         self._search = search_rows or []
         self._neighbors = neighbor_rows or []
+        self._prune = prune_rows or []
 
     async def execute(
         self, sql: str, params: Any = None, *, prepare: bool = False, **_: Any
@@ -77,6 +80,8 @@ class MockConnection:
             return MockCursor(self._neighbors)
         if "ORDER  BY rrf DESC" in sql:
             return MockCursor(self._search)
+        if "ORDER BY COALESCE(last_access" in sql:
+            return MockCursor(self._prune)
         return MockCursor()  # INSERT / UPDATE
 
 
@@ -361,3 +366,108 @@ class TestNeighbors:
     async def test_empty_graph(self) -> None:
         conn = MockConnection(neighbor_rows=[])
         assert await _ltm(conn).neighbors(N1) == []
+
+
+# ---------------------------------------------------------------------------
+# prune (forgetting)
+# ---------------------------------------------------------------------------
+
+
+def _prune_row(nid: uuid.UUID, text: str) -> dict[str, Any]:
+    return {"id": str(nid), "text": text}
+
+
+class TestPrune:
+    @staticmethod
+    def _policy(**kw: Any) -> PrunePolicy:
+        kw.setdefault("unused_for", timedelta(days=90))
+        return PrunePolicy(**kw)
+
+    async def test_dry_run_reports_but_never_writes(self) -> None:
+        # The safety property: a dry run must be readable proof of what WOULD
+        # happen, not a preview that already happened.
+        conn = MockConnection(prune_rows=[_prune_row(N1, "old fact"), _prune_row(N2, "older")])
+        report = await _ltm(conn).prune(self._policy(), dry_run=True)
+
+        assert report.matched == 2
+        assert report.pruned == 0 and report.dry_run is True
+        assert report.samples == ("old fact", "older")
+        assert not any(sql.lstrip().startswith("UPDATE") for sql, _ in conn.executed)
+
+    async def test_apply_invalidates_the_matched_rows(self) -> None:
+        conn = MockConnection(prune_rows=[_prune_row(N1, "old fact")])
+        report = await _ltm(conn).prune(self._policy(), dry_run=False)
+
+        assert report.matched == 1 and report.pruned == 1 and report.dry_run is False
+        update_sql, update_params = conn.executed[-1]
+        assert update_sql.lstrip().startswith("UPDATE")
+        assert "SET invalidated_at" in update_sql
+        assert "DELETE" not in update_sql  # bi-temporal: retire, never destroy
+        assert update_params["ids"] == [N1]
+        # Re-pruning an already-retired row must be a no-op, as with invalidate().
+        assert "invalidated_at IS NULL" in update_sql
+
+    async def test_scoped_to_this_namespace(self) -> None:
+        # Forgetting must never reach across tenants — the same bug class as the
+        # cross-namespace recall leak.
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn, namespace="alice").prune(self._policy())
+        sql, params = conn.executed[0]
+        assert "namespace = %(ns)s" in sql and params["ns"] == "alice"
+
+    async def test_only_superseded_facts_by_default(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy())
+        sql, params = conn.executed[0]
+        assert "valid_to IS NOT NULL" in sql  # the fact is no longer true
+        assert "valid_to <= %(at)s" in sql
+        assert params["at"] is not None
+
+    async def test_superseded_only_false_widens_the_net(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy(superseded_only=False))
+        sql, _ = conn.executed[0]
+        assert "valid_to IS NOT NULL" not in sql
+
+    async def test_unused_cutoff_falls_back_to_created_at(self) -> None:
+        # A row nobody ever read has last_access NULL; it must still age out.
+        now = datetime(2026, 7, 1, tzinfo=UTC)
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy(unused_for=timedelta(days=30)), now=now)
+        sql, params = conn.executed[0]
+        assert "COALESCE(last_access, created_at) <= %(cutoff)s" in sql
+        assert params["cutoff"] == datetime(2026, 6, 1, tzinfo=UTC)
+
+    async def test_coldest_first_within_the_limit(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy(limit=25))
+        sql, params = conn.executed[0]
+        assert "ORDER BY COALESCE(last_access, created_at) ASC" in sql
+        assert "LIMIT %(lim)s" in sql and params["lim"] == 25
+
+    async def test_optional_ceilings_are_omitted_when_unset(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy())
+        sql, params = conn.executed[0]
+        assert "importance" not in sql and "access_count" not in sql
+        assert "max_imp" not in params and "max_acc" not in params
+
+    async def test_ceilings_are_bound_when_set(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy(max_importance=0.2, max_access_count=0))
+        sql, params = conn.executed[0]
+        assert "COALESCE(importance, 0) <= %(max_imp)s" in sql
+        assert "COALESCE(access_count, 0) <= %(max_acc)s" in sql
+        assert params["max_imp"] == 0.2 and params["max_acc"] == 0
+
+    async def test_nothing_matched_writes_nothing(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        report = await _ltm(conn).prune(self._policy(), dry_run=False)
+        assert report.matched == 0 and report.pruned == 0
+        assert len(conn.executed) == 1  # the SELECT only
+
+    def test_policy_rejects_nonsense(self) -> None:
+        with pytest.raises(ValueError, match="unused_for"):
+            PrunePolicy(unused_for=timedelta(days=-1))
+        with pytest.raises(ValueError, match="limit"):
+            PrunePolicy(unused_for=timedelta(days=1), limit=0)

@@ -163,6 +163,22 @@ async def main():
 asyncio.run(main())
 ```
 
+On the Postgres path there is a sixth verb, `forget` — maintenance for a store
+that would otherwise only ever grow:
+
+```python
+report = await mem.forget(unused_for=timedelta(days=180))   # dry run by default
+print(report.matched, report.samples)                        # see it before you mean it
+await mem.forget(unused_for=timedelta(days=180), dry_run=False)
+```
+
+It is deliberately timid: only facts that are **no longer true** (superseded)
+*and* untouched for `unused_for` are eligible, it is scoped to the namespace,
+capped by `limit`, and it **retires** rows the same way supersession does —
+`invalidated_at` is set, nothing is deleted, so a policy you regret is
+recoverable. Nothing prunes on a timer, and it is not exposed as an MCP tool:
+an agent should not be able to decide to forget things about you.
+
 Or plug it into any MCP client (Claude Code, Cursor, …) with zero glue — see
 [docs/mcp.md](docs/mcp.md): `pip install "continuum-memory[mcp]"` then `continuum-mcp`.
 

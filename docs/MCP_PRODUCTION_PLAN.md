@@ -94,10 +94,34 @@ embedder; deferred as a smaller, slower test).
 index size; tune HNSW `ef`/`m` if needed. **Acceptance:** documented curves; p95
 < 200ms at 10k. **Effort:** M.
 
-### 2.2 Forgetting / pruning
+### 2.2 Forgetting / pruning — ✅ DONE (`Memory.forget()` / `PostgresLTM.prune()`: policy-driven, namespace-scoped, dry-run by default, retires rather than deletes)
 **Problem:** memory only grows. No eviction, no decay, no summarisation of stale
 rows. **Fix:** use the optimizer strategies already in the tree (currently
 untested); TTL or importance-based pruning. **Effort:** M.
+
+**Correction to the plan as written:** the optimizer strategies were the wrong
+tool and they are not untested (`test_score_prune.py` et al). They prune the
+*context bundle* at assembly time to fit a token budget — they never touch the
+store. Store-level forgetting was genuinely new work.
+
+**Shipped:** `PrunePolicy(unused_for, superseded_only=True, max_importance,
+max_access_count, limit)` → one namespace-scoped SQL select, then a bulk
+`invalidated_at` close. Same primitive as supersession, so a forgotten fact
+leaves `recall`, `current` and `timeline` **together** — no half-forgotten state
+where history contradicts the current answer — and the row stays on disk, so a
+bad policy is recoverable by hand. Coldest rows go first within `limit`.
+
+Deliberate limits: nothing prunes on a timer, `dry_run=True` is the default, and
+**it is not exposed as an MCP tool** — an agent should not be able to decide to
+forget things about the user. Scope is long-term memory: a turn still in the
+current session's STM buffer keeps surfacing for that session (STM is
+session-scoped and transient), proven by an e2e test that checks the *next*
+session sees nothing.
+
+Tests: 11 unit (mock connection; dry-run-never-writes, namespace scoping and the
+superseded predicate each verified to fail when broken) + 5 e2e against real
+Postgres, including "still-true facts survive even when nobody reads them" and
+"another namespace is never touched".
 
 ### 2.3 Deduplication — ✅ DONE (assembler dedups LTM+STM by content, LTM copy wins)
 **Problem (observed):** `recall` returns LTM+STM duplicates of the same fact

@@ -8,6 +8,16 @@ that the public API may still shift before 1.0.
 ## [Unreleased]
 
 ### Added
+- **Forgetting — `Memory.forget()` / `PostgresLTM.prune()`.** Memory only ever
+  grew; there was no eviction of any kind. Pruning is expressed as the same
+  bi-temporal close as supersession (`invalidated_at`), so a forgotten fact
+  leaves `recall`, `current` and `timeline` **together** and the row survives on
+  disk for recovery — never a `DELETE`. Defaults are deliberately timid: only
+  facts whose valid-time window has closed (superseded) *and* that nobody has
+  read for `unused_for` are eligible, scoped to the namespace, capped by
+  `limit`, and **dry-run by default**. `superseded_only=False` widens it to
+  facts that are still true. Nothing prunes on a timer, and it is **not** an MCP
+  tool — an agent should not be able to decide to forget things about you.
 - **MCP observability** — `CONTINUUM_MCP_LOG_LEVEL` (default `WARNING`, quiet).
   At `INFO` every tool call logs one line with its inputs, outcome and latency
   (`tool=recall query=… k=3 hits=1 [18ms]`); a failing tool logs `FAILED` with a

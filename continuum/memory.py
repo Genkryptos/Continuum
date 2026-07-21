@@ -30,11 +30,17 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from continuum.core.session import ContinuumSession
-from continuum.core.types import BiTemporalRange, MemoryItem, MemoryTier
+from continuum.core.types import (
+    BiTemporalRange,
+    MemoryItem,
+    MemoryTier,
+    PrunePolicy,
+    PruneReport,
+)
 
 if TYPE_CHECKING:
     from continuum.core.config import ContinuumConfig
@@ -419,6 +425,59 @@ class Memory:
     async def remember(self, text: str, *, occurred_at: datetime | None = None) -> None:
         """Explicit alias for :meth:`add` — reads well when storing a known fact."""
         await self.add(text, occurred_at=occurred_at)
+
+    # ── forget ───────────────────────────────────────────────────────────────
+
+    async def forget(
+        self,
+        *,
+        unused_for: timedelta,
+        superseded_only: bool = True,
+        max_importance: float | None = None,
+        max_access_count: int | None = None,
+        limit: int = 1000,
+        dry_run: bool = True,
+    ) -> PruneReport:
+        """Retire memories nobody reads that are no longer true.
+
+        Memory that only grows is memory that gets slower and noisier forever,
+        but forgetting is the one operation a memory system cannot take back —
+        so it is **explicit, scoped and dry-run by default**. Nothing prunes on
+        a timer; you call this.
+
+        By default only *superseded* facts are eligible: those whose valid-time
+        window has closed because a newer fact replaced them. Pass
+        ``superseded_only=False`` to also forget facts that are still true.
+
+        Scope: this prunes **long-term** memory. A turn still sitting in the
+        current session's short-term buffer keeps surfacing in that session's
+        `recall` until the buffer rolls over — STM is session-scoped and
+        transient, so the next session sees the fact gone. This is maintenance,
+        not "delete this thing right now".
+
+        Returns a :class:`~continuum.stores.postgres.ltm.PruneReport`; with
+        ``dry_run=True`` (the default) nothing is written and ``pruned`` is 0.
+
+        Raises
+        ------
+        NotImplementedError:
+            If the backing store cannot prune (the in-memory demo store).
+        """
+        prune = getattr(self._session.ltm, "prune", None)
+        if prune is None:
+            raise NotImplementedError(
+                "This store cannot forget — Memory.forget() needs a Postgres-backed "
+                "store (Memory.from_postgres(...) or CONTINUUM_DB_DSN)."
+            )
+        policy = PrunePolicy(
+            unused_for=unused_for,
+            superseded_only=superseded_only,
+            max_importance=max_importance,
+            max_access_count=max_access_count,
+            limit=limit,
+        )
+        report: PruneReport = await prune(policy, dry_run=dry_run)
+        return report
 
     # ── read ─────────────────────────────────────────────────────────────────
 

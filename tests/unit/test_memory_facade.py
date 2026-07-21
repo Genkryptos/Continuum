@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from continuum import Memory, MemoryItem, MemoryTier
-from continuum.core.types import BiTemporalRange
+from continuum.core.types import BiTemporalRange, PruneReport
 
 pytestmark = pytest.mark.unit
 
@@ -503,4 +503,58 @@ async def test_lifecycle_start_aclose_and_context_manager() -> None:
     assert calls == ["start", "aclose"]  # __aenter__ / __aexit__ drive lifecycle
 
 
-_ = timedelta  # keep import referenced for future date-math tests
+# ── forget (store-level pruning) ──────────────────────────────────────────────
+
+
+class _PruningLTM(_FakeLTM):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[tuple[Any, bool]] = []
+
+    async def prune(self, policy: Any, *, dry_run: bool = True) -> PruneReport:
+        self.calls.append((policy, dry_run))
+        return PruneReport(matched=3, pruned=0 if dry_run else 3, dry_run=dry_run)
+
+
+async def test_forget_is_a_dry_run_unless_told_otherwise() -> None:
+    # Forgetting is the one operation memory cannot undo. A caller who forgets
+    # to say dry_run=False must get a report, not an empty store.
+    session = _FakeSession()
+    session.ltm = _PruningLTM()  # type: ignore[assignment]
+    mem = Memory(session)  # type: ignore[arg-type]
+
+    report = await mem.forget(unused_for=timedelta(days=90))
+
+    assert report.dry_run is True and report.pruned == 0 and report.matched == 3
+    _, dry_run = session.ltm.calls[0]  # type: ignore[attr-defined]
+    assert dry_run is True
+
+
+async def test_forget_passes_the_policy_through() -> None:
+    session = _FakeSession()
+    session.ltm = _PruningLTM()  # type: ignore[assignment]
+    mem = Memory(session)  # type: ignore[arg-type]
+
+    report = await mem.forget(
+        unused_for=timedelta(days=30),
+        superseded_only=False,
+        max_importance=0.25,
+        max_access_count=0,
+        limit=10,
+        dry_run=False,
+    )
+
+    policy, dry_run = session.ltm.calls[0]  # type: ignore[attr-defined]
+    assert policy.unused_for == timedelta(days=30)
+    assert policy.superseded_only is False
+    assert policy.max_importance == 0.25 and policy.max_access_count == 0
+    assert policy.limit == 10
+    assert dry_run is False and report.pruned == 3
+
+
+async def test_forget_says_so_when_the_store_cannot() -> None:
+    # The in-memory demo store has no prune; silently reporting "0 forgotten"
+    # would read as "nothing to forget" rather than "this cannot forget".
+    mem = Memory(_FakeSession())  # type: ignore[arg-type]
+    with pytest.raises(NotImplementedError, match="Postgres"):
+        await mem.forget(unused_for=timedelta(days=1))

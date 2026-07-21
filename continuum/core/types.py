@@ -45,7 +45,7 @@ Promotion
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
@@ -593,3 +593,58 @@ class PromotionScope:
         if self.session_id is not None:
             return f"session:{self.session_id}"
         return "global"
+
+
+# ── forgetting ────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class PrunePolicy:
+    """What counts as forgettable.
+
+    The defaults are deliberately timid: a fact is only a candidate once it is
+    **no longer true** *and* nobody has read it in a long time. Forgetting a
+    currently-valid fact because it happens to be unpopular is how a memory
+    system loses the thing you were counting on it for.
+
+    Attributes
+    ----------
+    unused_for:
+        Retire only rows untouched for at least this long. "Touched" is
+        ``last_access``, falling back to ``created_at`` for rows never read.
+    superseded_only:
+        Require a closed valid-time window (``valid_to`` in the past) — i.e.
+        the fact has been replaced by a newer one. Set False to also forget
+        facts that are still true; do that knowingly.
+    max_importance / max_access_count:
+        Optional ceilings. ``None`` disables the check.
+    limit:
+        Blast radius. One call never retires more than this many rows.
+    """
+
+    unused_for: timedelta
+    superseded_only: bool = True
+    max_importance: float | None = None
+    max_access_count: int | None = None
+    limit: int = 1000
+
+    def __post_init__(self) -> None:
+        if self.unused_for < timedelta(0):
+            raise ValueError("unused_for must not be negative")
+        if self.limit <= 0:
+            raise ValueError("limit must be positive")
+
+
+@dataclass(frozen=True)
+class PruneReport:
+    """Outcome of :meth:`PostgresLTM.prune`.
+
+    ``matched`` is what the policy selected; ``pruned`` is what was actually
+    retired — 0 on a dry run. ``samples`` carries a few of the affected texts so
+    a caller can eyeball the policy before trusting it.
+    """
+
+    matched: int
+    pruned: int
+    dry_run: bool
+    samples: tuple[str, ...] = ()

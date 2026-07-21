@@ -63,6 +63,8 @@ from continuum.core.types import (
     Edge,
     MemoryItem,
     MemoryTier,
+    PrunePolicy,
+    PruneReport,
     Query,
     ScoreBreakdown,
     ScoredItem,
@@ -370,6 +372,75 @@ class PostgresLTM:
         async with self._connect() as conn:
             await self._exec(conn, sql, {"id": str(_as_uuid(id)), "at": when})
         log.debug("LTM invalidate id=%s at=%s", id, when)
+
+    # ── prune (bulk invalidate by policy — still no DELETE) ─────────────────
+
+    async def prune(
+        self,
+        policy: PrunePolicy,
+        *,
+        dry_run: bool = True,
+        now: datetime | None = None,
+    ) -> PruneReport:
+        """Retire every row matching *policy*, within this store's namespace.
+
+        Forgetting is the same bi-temporal close as :meth:`invalidate`, applied
+        in bulk: rows are **not** deleted, they stop being visible. Every read
+        filters ``invalidated_at IS NULL``, so a pruned fact leaves `recall`,
+        `current` *and* `timeline` together — there is no half-forgotten state
+        where history disagrees with the current answer.
+
+        ``dry_run=True`` (the default) selects and reports without writing. A
+        destructive maintenance operation should have to be asked for twice.
+        """
+        at = now or datetime.now(UTC)
+        cutoff = at - policy.unused_for
+        where = [
+            "namespace = %(ns)s",
+            "invalidated_at IS NULL",
+            "COALESCE(last_access, created_at) <= %(cutoff)s",
+        ]
+        params: dict[str, Any] = {
+            "ns": self._namespace,
+            "cutoff": cutoff,
+            "lim": policy.limit,
+        }
+        if policy.superseded_only:
+            # A closed valid-time window in the past = the fact is no longer true.
+            where.append("valid_to IS NOT NULL AND valid_to <= %(at)s")
+            params["at"] = at
+        if policy.max_importance is not None:
+            where.append("COALESCE(importance, 0) <= %(max_imp)s")
+            params["max_imp"] = policy.max_importance
+        if policy.max_access_count is not None:
+            where.append("COALESCE(access_count, 0) <= %(max_acc)s")
+            params["max_acc"] = policy.max_access_count
+
+        # Oldest-touched first, so a `limit`-capped run forgets the coldest rows
+        # rather than an arbitrary slice.
+        select = (
+            f'SELECT id, "text" FROM {self._table} '
+            f"WHERE {' AND '.join(where)} "
+            f"ORDER BY COALESCE(last_access, created_at) ASC "
+            f"LIMIT %(lim)s"
+        )
+        async with self._connect() as conn:
+            cur = await self._exec(conn, select, params)
+            rows = list(await cur.fetchall())
+            matched = len(rows)
+            samples = tuple(str(r["text"])[:80] for r in rows[:5])
+            if dry_run or not rows:
+                log.info("LTM prune ns=%s matched=%d dry_run=%s", self._namespace, matched, dry_run)
+                return PruneReport(matched=matched, pruned=0, dry_run=dry_run, samples=samples)
+
+            update = (
+                f"UPDATE {self._table} SET invalidated_at = %(at)s "
+                f"WHERE id = ANY(%(ids)s) AND invalidated_at IS NULL"
+            )
+            ids = [_as_uuid(r["id"]) for r in rows]
+            await self._exec(conn, update, {"at": at, "ids": ids})
+        log.info("LTM prune ns=%s matched=%d pruned=%d", self._namespace, matched, matched)
+        return PruneReport(matched=matched, pruned=matched, dry_run=False, samples=samples)
 
     # ── hybrid search (single SQL: dense ⊕ sparse ⊕ RRF) ────────────────────
 
