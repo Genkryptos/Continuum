@@ -186,10 +186,29 @@ of magnitude:
 
 **HNSW at our setting matches exact scan exactly.** The index loses nothing on
 realistic data; `ef_search=400` recovers precisely the loss the default caused.
-The remaining 7 are genuine retrieval difficulty — at 47k the needle is simply
-not in the true top-24 by cosine — and recall falling from 18/20 at 18k to 13/20
-at 47k is competition, not a defect. Both are the embedder's limit, not the
-store's, and are the honest number to quote for a large store.
+
+**End to end, through `Memory.recall` (dense ⊕ sparse ⊕ RRF), a 47k store
+answers 15/20 = 75% at k=8** — better than the dense channel alone, because the
+lexical side recovers two the embedder misses.
+
+The remaining five are the embedder's semantic limit, and the product levers are
+now exhausted rather than untried:
+
+| lever | result |
+|---|---|
+| `hnsw.ef_search` 40 → 400 | **fixed a real loss** (8/20 → 13/20 dense) |
+| candidate pool 24 → 100 → 250 | **no change** (15/20 throughout, +3ms) |
+| final `k` 8 → 20 | **no change** (15/20) |
+| cross-encoder reranker | **worse** (see 3.2) |
+
+Widening the pool does not help because the needle is in neither channel's top
+250 — questions like "who does my taxes" → *"My accountant is called Filipa
+Rego"* need world knowledge bge-m3 does not supply against 47k competitors.
+Recall degrading with store size (18/20 at 18k → 15/20 at 47k) is therefore a
+property of the embedder, not a defect to fix, and 75% at 47k is the honest
+number to quote. The next real gain would come from a better embedding model or
+query expansion (`hyde_fn` exists, unused, and costs an LLM call per query) —
+not from tuning what is already there.
 **Problem:** tested at 62 memories; real use is thousands. Index behaviour,
 `recall` precision, and latency at 10k+ rows are unmeasured.
 **Fix:** a harness that loads 10k–100k memories and measures recall@k, p95, and
