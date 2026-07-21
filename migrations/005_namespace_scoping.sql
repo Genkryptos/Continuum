@@ -39,4 +39,15 @@ CREATE INDEX IF NOT EXISTS memory_nodes_ns_live_idx
     ON memory_nodes (namespace)
     WHERE invalidated_at IS NULL;
 
+-- -----------------------------------------------------------------------------
+-- STEP 3 — Bookkeeping. Every other migration records itself here; this one
+-- did not, so it re-ran on every `make db-migrate` forever and the migration
+-- log claimed it had never been applied. Harmless only because the DDL above
+-- is idempotent — a migration that cannot report itself applied is exactly the
+-- one whose real failure would go unnoticed.
+-- -----------------------------------------------------------------------------
+INSERT INTO schema_migrations (version, description)
+VALUES ('005', 'Namespace scoping: memory_nodes.namespace + live partial index')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;

@@ -97,6 +97,17 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **Migration 005 never recorded itself.** It applied correctly but skipped the
+  `schema_migrations` bookkeeping every other migration does, so it re-ran on
+  every `make db-migrate` forever and the migration log claimed it had never
+  been applied. Harmless only because its DDL is idempotent — a migration that
+  cannot report itself applied is exactly the one whose real failure would go
+  unnoticed. Existing stores self-heal on the next migrate.
+- **Migration 006: HNSW rebuilt with `m=32, ef_construction=200`.** 002 used
+  pgvector's speed-first defaults. Measured on 50,020 embedded memories whose
+  answers an exact scan ranks first: the denser graph found 12/20 versus 9/20
+  **and answered faster** (p50 2.1ms vs 4.2ms) — a well-connected graph
+  converges instead of wandering. Build cost ~12s at 50k.
 - **Dense recall silently degraded at scale — `hnsw.ef_search` is now set.**
   pgvector's HNSW default (`ef_search=40`) is tuned for speed and quietly drops
   good matches once the planner starts using the index, which every real store
