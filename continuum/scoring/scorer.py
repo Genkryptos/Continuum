@@ -131,18 +131,30 @@ class Scorer:
 
     @staticmethod
     def _recency_basis(item: MemoryItem) -> datetime:
-        """When this fact became true, preferring **valid** time over transaction time.
+        """**Transaction** time — how long since we learned or last used this.
 
-        ``created_at`` is stamped at INSERT, so a batch of facts describing
-        different weeks all look equally new and recency stops discriminating
-        entirely — which is why an outdated "pricing is 9 dollars" could outrank
-        the later "switched to 12 dollars". Valid time is what "how current is
-        this?" actually means; we fall back to ``created_at`` when a store does
-        not record it.
+        This deliberately does *not* use valid time. Basing decay on
+        ``valid_from`` conflates "this describes an old event" with "this
+        memory is stale", and the two are not the same: a fact you learned
+        yesterday about last January is fresh knowledge. Measured cost of
+        getting that wrong — dating a fact buried it:
+
+            query "where do I live now"
+            relevance 1.000, recency 0.000 → "I live in Boston."      (rank 5)
+            relevance 0.914, recency 0.005 → "I moved … to New York"  (rank 7)
+            relevance 0.830, recency 0.999 → "I play the guitar…"     (rank 1)
+
+        The dated facts were the only ones carrying ``valid_from``, so the
+        0.20 recency weight outweighed their relevance lead and the undated
+        noise won. Stating *when* a fact became true made it harder to recall —
+        exactly backwards.
+
+        Choosing between competing versions of the same fact is supersession's
+        job, not decay's: ``valid_to`` retires the old version, and
+        :meth:`continuum.Memory.current` resolves the live one through an exact
+        valid-time lookup. Valid time still drives ``current``, ``timeline`` and
+        ``as_of`` — it just no longer distorts generic recall.
         """
-        vr = item.valid_range
-        if vr is not None and vr.valid_from is not None:
-            return vr.valid_from
         return item.last_access or item.created_at
 
 

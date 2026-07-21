@@ -73,6 +73,24 @@ RECALL_QUERIES: list[dict[str, str]] = [
     {"query": "what laptop do I own", "expect": "MacBook"},
 ]
 
+# The set above shares content words with its facts ("what car do I *drive*" →
+# "I *drive* a red Tesla"), so the lexical channel alone can carry it — it says
+# little about semantic recall. These ask the same questions with **no word in
+# common** with the target fact, so only the dense channel can answer them. This
+# is the honest paraphrase number.
+PARAPHRASE_QUERIES: list[dict[str, str]] = [
+    {"query": "what do I commute in", "expect": "Tesla"},
+    {"query": "tell me about my pet", "expect": "Pixel"},
+    {"query": "what do I write software in", "expect": "Neovim"},
+    {"query": "which coding language do I reach for", "expect": "Python"},
+    {"query": "where did I get my degree", "expect": "IIT"},
+    {"query": "how do I store my data", "expect": "PostgreSQL"},
+    {"query": "what should we order for dinner", "expect": "Japanese"},
+    {"query": "do I have any musical hobbies", "expect": "guitar"},
+    {"query": "what is my usual morning drink", "expect": "flat white"},
+    {"query": "what machine do I work on", "expect": "MacBook"},
+]
+
 CURRENT_CHECKS: list[dict[str, str]] = [
     {"subject": "user", "attribute": "residence", "expect": "New York"},
     # bi-temporal: before the June move, the answer must be the OLD value
@@ -142,6 +160,12 @@ def _run_session(cmd: list[str], k: int) -> dict[int, dict]:
             _rpc(mid, "tools/call", {"name": "recall", "arguments": {"query": q["query"], "k": k}})
         )
         id_map[mid] = ("recall", i)
+        mid += 1
+    for i, q in enumerate(PARAPHRASE_QUERIES):
+        queries.append(
+            _rpc(mid, "tools/call", {"name": "recall", "arguments": {"query": q["query"], "k": k}})
+        )
+        id_map[mid] = ("paraphrase", i)
         mid += 1
     for i, c in enumerate(CURRENT_CHECKS):
         queries.append(
@@ -257,19 +281,27 @@ def main(argv: list[str]) -> int:
     out = _run_session(cmd, args.k)
 
     recall1 = recall_k = current_ok = timeline_ok = 0
+    para1 = para_k = 0
     recall_rows: list[str] = []
+    para_rows: list[str] = []
     for entry in out.values():
         kind, idx = entry["meta"]
         data = _structured(entry["reply"])
-        if kind == "recall":
-            q = RECALL_QUERIES[idx]
+        if kind in ("recall", "paraphrase"):
+            q = (RECALL_QUERIES if kind == "recall" else PARAPHRASE_QUERIES)[idx]
             hits = [str(d.get("content", "")) for d in data] if isinstance(data, list) else []
             at1 = bool(hits) and q["expect"].lower() in hits[0].lower()
             atk = any(q["expect"].lower() in h.lower() for h in hits[: args.k])
-            recall1 += at1
-            recall_k += atk
             mark = "✓@1" if at1 else ("·@k" if atk else "✗  ")
-            recall_rows.append(f"  {mark}  {q['query'][:38]:38s} → want '{q['expect']}'")
+            row = f"  {mark}  {q['query'][:38]:38s} → want '{q['expect']}'"
+            if kind == "recall":
+                recall1 += at1
+                recall_k += atk
+                recall_rows.append(row)
+            else:
+                para1 += at1
+                para_k += atk
+                para_rows.append(row)
         elif kind == "current":
             c = CURRENT_CHECKS[idx]
             current_ok += bool(isinstance(data, str) and c["expect"].lower() in data.lower())
@@ -290,7 +322,14 @@ def main(argv: list[str]) -> int:
     rk = recall_k / n_recall
     print(f"\n  recall@1 = {recall1}/{n_recall} = {r1:.0%}   (the fact ranked FIRST)")
     print(f"  recall@{args.k} = {recall_k}/{n_recall} = {rk:.0%}   (in the top {args.k})")
-    print(f"  supersession (current) = {current_ok}/{len(CURRENT_CHECKS)}")
+    n_para = len(PARAPHRASE_QUERIES) or 1
+    p1, pk = para1 / n_para, para_k / n_para
+    print("\nparaphrase (no word shared with the fact \u2014 dense channel only):")
+    print("\n".join(para_rows))
+    print(f"\n  recall@1 = {para1}/{n_para} = {p1:.0%}")
+    print(f"  recall@{args.k} = {para_k}/{n_para} = {pk:.0%}")
+
+    print(f"\n  supersession (current) = {current_ok}/{len(CURRENT_CHECKS)}")
     print(f"  timeline (ordered)     = {timeline_ok}/{len(TIMELINE_CHECKS)}")
 
     passed = r1 >= args.min_recall1

@@ -263,3 +263,39 @@ def test_full_formula_matches_spec() -> None:
     composite = 0.45 * relevance + 0.25 * importance + 0.20 * recency + 0.10 * confidence
     assert s.breakdown(item, q, NOW).composite == pytest.approx(composite)
     assert s.score(item, q, NOW) == pytest.approx(composite * 1.1)
+
+
+# ── recency basis: transaction time, not valid time ───────────────────────────
+
+
+def test_dating_a_fact_does_not_make_it_look_stale() -> None:
+    """A fact you learned today about last January is fresh *knowledge*.
+
+    Basing decay on ``valid_from`` conflated "describes an old event" with
+    "stale memory", and cost real recall: the only facts carrying valid time
+    were the ones the user had dated, so they got recency ~0 and lost to
+    undated noise written seconds earlier — despite ranking first on relevance.
+    """
+    from continuum.core.types import BiTemporalRange
+
+    scorer = Scorer(ScoringConfig())
+    long_ago = NOW - timedelta(days=365)
+
+    dated = _item(created_at=NOW)
+    dated.valid_range = BiTemporalRange(valid_from=long_ago)
+    undated = _item(created_at=NOW)
+
+    q = Query(text="q")
+    assert scorer.breakdown(dated, q, NOW).recency == pytest.approx(
+        scorer.breakdown(undated, q, NOW).recency
+    )
+    assert scorer.breakdown(dated, q, NOW).recency > 0.9  # learned now → fresh
+
+
+def test_recency_still_decays_with_transaction_age() -> None:
+    # The guard above must not flatten recency altogether.
+    scorer = Scorer(ScoringConfig())
+    q = Query(text="q")
+    fresh = scorer.breakdown(_item(created_at=NOW), q, NOW).recency
+    old = scorer.breakdown(_item(created_at=NOW - timedelta(days=365)), q, NOW).recency
+    assert fresh > old
