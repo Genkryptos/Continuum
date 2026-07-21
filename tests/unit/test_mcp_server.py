@@ -101,6 +101,40 @@ async def test_remember_ignores_bad_date() -> None:
     assert m.added[0][1] is None  # bad date → stored without occurred_at
 
 
+@pytest.mark.parametrize(
+    ("raw", "year"),
+    [("2026-03-15", 2026), ("2026-03-15T09:30:00", 2026), ("2019", 2019), (" 2019 ", 2019)],
+)
+def test_parse_when_accepts_iso_and_a_bare_year(raw: str, year: int) -> None:
+    from continuum.mcp.server import _parse_when
+
+    parsed = _parse_when(raw)
+    assert parsed is not None and parsed.year == year
+
+
+@pytest.mark.parametrize("raw", ["03/15/2026", "last Tuesday", "2026-13-45", "", "  ", "soon"])
+def test_parse_when_refuses_what_it_cannot_trust(raw: str) -> None:
+    # 03/15/2026 is March 15th to an American and invalid elsewhere. Guessing
+    # writes a false claim about WHEN something was true, which is what current()
+    # and as_of() reason over — worse than recording no date at all.
+    from continuum.mcp.server import _parse_when
+
+    assert _parse_when(raw) is None
+
+
+async def test_remember_says_so_when_it_drops_a_date() -> None:
+    # Silently discarding it leaves the caller believing the fact is anchored.
+    m = _FakeMemory()
+    out = await _remember(m, "I joined the team.", "last Tuesday")  # type: ignore[arg-type]
+    assert "not understood" in out and "NO date was recorded" in out
+    assert m.added[0][1] is None  # stored, just undated
+
+
+async def test_remember_is_quiet_when_the_date_parsed() -> None:
+    m = _FakeMemory()
+    assert await _remember(m, "I joined.", "2026-03-15") == "stored"  # type: ignore[arg-type]
+
+
 async def test_remember_warns_when_the_store_is_not_durable() -> None:
     # The silent-failure case: a client session started before CONTINUUM_DB_DSN
     # was configured keeps writing to the in-memory fallback and reporting
@@ -111,6 +145,41 @@ async def test_remember_warns_when_the_store_is_not_durable() -> None:
     out = await _remember(_Ephemeral(), "x")  # type: ignore[arg-type]
     assert "NOT durable" in out
     assert "CONTINUUM_DB_DSN" in out  # tells you how to fix it
+
+
+async def test_remember_does_not_claim_to_store_nothing() -> None:
+    # Memory.add no-ops on empty text, so "stored" would report a write that
+    # never happened — the same lie the durability message exists to prevent.
+    m = _FakeMemory()
+    for blank in ("", "   ", "\n\t "):
+        out = await _remember(m, blank)  # type: ignore[arg-type]
+        assert "nothing to store" in out
+    assert m.added == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "host: 10.0.0.4\nport: 5432\nuser: svc_app\npassword: hunter2",
+        "our openai key is sk-proj-abc123def456ghi789jkl",
+        "AKIAIOSFODNN7EXAMPLE is the access key",
+        "token ghp_16C7e42F292c6912E7710c838347Ae178B4a",
+    ],
+)
+async def test_remember_refuses_credentials(text: str) -> None:
+    # This tool is called by the MODEL, usually while summarising something the
+    # user pasted — "they asked for it" is not a safe assumption. A key written
+    # here lands in a backed-up database and gets recalled into later prompts.
+    m = _FakeMemory()
+    out = await _remember(m, text)  # type: ignore[arg-type]
+    assert out.startswith("REFUSED")
+    assert m.added == []  # and nothing reached the store
+
+
+async def test_remember_still_stores_ordinary_facts() -> None:
+    m = _FakeMemory()
+    assert await _remember(m, "the db is postgres 16.10") == "stored"  # type: ignore[arg-type]
+    assert len(m.added) == 1
 
 
 async def test_remember_is_terse_when_durable() -> None:

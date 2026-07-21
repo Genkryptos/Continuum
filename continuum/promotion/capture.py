@@ -37,6 +37,13 @@ What it refuses
 
 Everything here is a heuristic over English surface form. It will miss facts.
 That is the intended failure direction.
+
+**English only, and this is asymmetric with the rest of the system.** Retrieval
+is multilingual — bge-m3 answers an English question with a Portuguese or Hindi
+memory — but these rules are regexes over English word order, so
+``"Eu moro em Lisboa."`` captures nothing. It fails *safe* (silence, never a
+wrong capture), but a non-English user should know their turns are being
+skipped and keep using ``remember`` explicitly.
 """
 
 from __future__ import annotations

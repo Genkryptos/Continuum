@@ -70,6 +70,18 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`remember` stored credentials and lied about empty writes.** Pasting a
+  config (`password: hunter2`) wrote the secret straight into Postgres — the
+  secret filter existed only on the automatic-capture path, not on the explicit
+  tool the *model* calls while summarising what a user pasted. It now refuses
+  credential-shaped text with a reason. An empty string replied `"stored"` while
+  storing nothing; it now says so.
+- **An unparseable `occurred_at` was dropped in silence.** `03/15/2026`,
+  `last Tuesday` and `2026-13-45` all returned a bare `"stored"`, leaving the
+  caller believing the fact was anchored in time — which is what `current` and
+  `as_of` reason over. Unparsed dates are now reported in the ack, and a bare
+  year (`2019`) is accepted. Ambiguous formats stay refused rather than guessed:
+  `03/15` is March 15th to an American and invalid to most of the world.
 - **`current` answered with the stale fact after a dated correction.** Found by
   using the thing, not by the suite — which stayed green because both existing
   tests dated *both* facts. Real conversations don't: you state a standing fact

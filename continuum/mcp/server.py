@@ -55,18 +55,60 @@ async def _recall(mem: Memory, query: str, k: int = 8) -> list[dict[str, Any]]:
     return [_item_dict(h) for h in await mem.recall(query, k=k)]
 
 
+def _parse_when(raw: str) -> datetime | None:
+    """ISO date/datetime, or a bare year. ``None`` when it cannot be trusted.
+
+    Deliberately narrow. ``03/15/2026`` is March 15th to an American and
+    invalid to most of the world, and guessing wrong writes a false claim about
+    *when something was true* — worse than recording no date at all. A bare year
+    is unambiguous, so it is accepted as January 1st.
+    """
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+    if len(text) == 4 and text.isdigit():
+        try:
+            return datetime(int(text), 1, 1)
+        except ValueError:
+            return None
+    return None
+
+
 async def _remember(
     mem: Memory,
     text: str,
     occurred_at: str | None = None,
     attribute: str | None = None,
 ) -> str:
+    # Say what actually happened. `Memory.add` no-ops on empty text, so a bare
+    # "stored" here would report a write that never occurred — the same lie the
+    # durability message below exists to prevent.
+    if not text or not text.strip():
+        return "nothing to store (empty text) - no memory was written"
+
+    # Refuse credential-shaped content outright. This tool is called by the
+    # MODEL, usually while summarising something the user pasted, so "they asked
+    # for it" is not a safe assumption — and a key written here lands in a
+    # database that gets backed up and recalled into future prompts. Refusing
+    # loudly beats storing quietly: the caller can say what it skipped.
+    from continuum.promotion.capture import looks_like_secret
+
+    if looks_like_secret(text):
+        return (
+            "REFUSED - this looks like a credential (API key, token, password, "
+            "card or ID number) and was NOT stored. Memory is long-lived and gets "
+            "recalled into later prompts; put secrets in a secret manager instead."
+        )
+
     when: datetime | None = None
+    date_ignored = False
     if occurred_at:
-        try:
-            when = datetime.fromisoformat(occurred_at)
-        except ValueError:
-            when = None
+        when = _parse_when(occurred_at)
+        date_ignored = when is None
     # split=True and auto_attribute=True by default: callers hand us whole spoken
     # sentences. Splitting a compound one keeps each part embeddable; inferring
     # the attribute (when not given) lets `current` answer it exactly. Both are
@@ -78,12 +120,21 @@ async def _remember(
     # This is the common misconfiguration: a DSN in the MCP registration is only
     # picked up by NEW client sessions, so a session started earlier keeps
     # writing to the in-memory fallback while reporting success.
+    # A date we could not parse is dropped — say so. Silently discarding it
+    # leaves the caller believing the fact is anchored in time, and valid time
+    # is what `current` and `as_of` reason over.
+    note = (
+        f" (note: occurred_at {occurred_at!r} was not understood and NO date was "
+        "recorded - use ISO, e.g. 2026-03-15 or 2026-03-15T09:30)"
+        if date_ignored
+        else ""
+    )
     if getattr(mem, "is_durable", True):
-        return "stored"
+        return "stored" + note
     return (
         "stored IN-MEMORY ONLY - this is NOT durable and will be lost when the "
         "server exits. Set CONTINUUM_DB_DSN (and restart the client session) for "
-        "a persistent store."
+        "a persistent store." + note
     )
 
 

@@ -192,7 +192,13 @@ sentences are worth keeping.
 
 Measured on an adversarial set: 18/18 durable facts kept, **0 false captures out
 of 47** — including the ones wearing a stative disguise. It will miss facts; that
-is the intended failure direction. `CONTINUUM_CAPTURE_MAX` caps how many facts
+is the intended failure direction.
+
+> **Capture is English-only**, and that is asymmetric with the rest of the
+> system: recall *is* multilingual (an English question will surface a Portuguese
+> or Hindi memory), but these rules are regexes over English word order, so
+> `"Eu moro em Lisboa."` captures nothing. It fails safe — silence, never a wrong
+> capture — but if you work in another language, keep calling `remember`. `CONTINUUM_CAPTURE_MAX` caps how many facts
 one turn may store (default 3), so a pasted wall of text cannot become forty
 memories. Audit later with `recall`, and prune with `Memory.forget()`.
 
