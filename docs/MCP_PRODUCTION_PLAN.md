@@ -125,9 +125,19 @@ Reviewability: `--dry-run` previews what a turn would store before you enable
 anything; `CONTINUUM_CAPTURE_MAX` (default 3) caps a single turn; captures are
 auditable with `recall` and prunable with `Memory.forget()` (2.2).
 
-Known misses, accepted: "I am using Python 3.12" (progressive, indistinguishable
-from "I am running the tests") and "I always squash before merging" (verb not in
-the stative set). Precision over recall — a missed fact costs one `remember`.
+**Since fixed**, after longitudinal testing showed what the misses cost: changes
+of state ("I moved from Porto to Berlin" — the corrections, without which the
+store drifts further from the truth the longer it runs), standing states worn in
+progressive form ("I am using Python 3.12", grammatically identical to the action
+"I am running the tests", so the verb decides), and habitual practices ("I always
+squash before merging"). Precision held at every step: **0 false captures** across
+the full negative set plus 47 real daily-noise turns.
+
+Remaining known misses, accepted: "I review every PR myself" (review is an action
+verb too often to allow) and anything not in English — the rules are regexes over
+English word order, while retrieval is multilingual. Both fail *safe*: silence,
+never a wrong capture. Precision over recall — a missed fact costs one
+`remember`.
 
 ---
 
