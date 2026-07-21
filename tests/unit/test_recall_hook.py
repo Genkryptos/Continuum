@@ -108,3 +108,74 @@ def test_main_emits_hook_output_on_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = json.loads(out.getvalue())
     assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
     assert "staging first" in payload["hookSpecificOutput"]["additionalContext"]
+
+
+# ── automatic capture (opt-in) ────────────────────────────────────────────────
+
+
+class _SpyMemory:
+    """Records what capture would write."""
+
+    def __init__(self) -> None:
+        self.added: list[str] = []
+
+    async def add(self, text: str, **_kw: object) -> None:
+        self.added.append(text)
+
+
+async def test_capture_is_off_unless_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A memory that starts writing on its own without being switched on is the
+    # failure this whole feature has to avoid.
+    monkeypatch.delenv("CONTINUUM_CAPTURE", raising=False)
+    assert recall_hook._capture_enabled() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on", "ON"])
+def test_capture_opt_in_values(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("CONTINUUM_CAPTURE", value)
+    assert recall_hook._capture_enabled() is True
+
+
+async def test_capture_stores_only_the_durable_sentence() -> None:
+    mem = _SpyMemory()
+    turn = "I ran the tests. I live in Boston. Can you fix the bug?"
+    stored = await recall_hook._capture(mem, turn)
+    assert stored == ["I live in Boston."]
+    assert mem.added == ["I live in Boston."]
+
+
+async def test_capture_never_stores_a_secret() -> None:
+    mem = _SpyMemory()
+    await recall_hook._capture(mem, "My API key is sk-proj-abc123def456ghi789jkl.")
+    assert mem.added == []
+
+
+async def test_capture_is_capped_per_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A pasted wall of first-person text must not become 40 memories in one turn.
+    monkeypatch.setenv("CONTINUUM_CAPTURE_MAX", "2")
+    mem = _SpyMemory()
+    turn = "I live in Boston. I use Neovim daily. I own a corgi named Pixel. I speak Hindi."
+    assert len(await recall_hook._capture(mem, turn)) == 2
+
+
+async def test_a_bad_cap_falls_back_to_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CONTINUUM_CAPTURE_MAX", "not-a-number")
+    mem = _SpyMemory()
+    turn = "I live in Boston. I use Neovim daily. I own a corgi named Pixel. I speak Hindi."
+    assert len(await recall_hook._capture(mem, turn)) == 3
+
+
+def test_dry_run_writes_nothing_and_reports(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO('{"prompt": "I live in Boston."}'))
+    out = io.StringIO()
+    monkeypatch.setattr("sys.stdout", out)
+    assert recall_hook.main(["--dry-run"]) == 0
+    assert "I live in Boston." in out.getvalue()
+
+
+def test_dry_run_on_a_turn_with_nothing_to_keep(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO("please fix the failing test"))
+    out = io.StringIO()
+    monkeypatch.setattr("sys.stdout", out)
+    assert recall_hook.main(["--dry-run"]) == 0
+    assert "nothing durable" in out.getvalue()

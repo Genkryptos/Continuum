@@ -68,13 +68,42 @@ injects the top hits as context. At ~85ms/call it is cheap enough per turn.
 used in session 2 *without any explicit recall*. **Effort:** M. Ship as a
 documented, optional hook first; do not force it on.
 
-### 1.2 Automatic capture (optional, bigger)
+### 1.2 Automatic capture — ✅ DONE (`CONTINUUM_CAPTURE=1` on the existing hook; deterministic, precision-biased, prompt-only, off by default)
 **Problem:** the user (or Claude) must explicitly `remember`. Real memory should
 also accrue from conversation.
 **Fix:** the promotion pipeline already exists (`continuum/promotion/`). Wire a
 `Stop`/`PostToolUse` hook or an ingest path that extracts durable facts from
 turns. **Risk:** noise/PII capture — must be opt-in and reviewable. **Effort:** L.
 Defer until 0.1 and 1.1 land.
+
+**Shipped:** `continuum.promotion.capture.extract_durable_facts` +
+`CONTINUUM_CAPTURE=1` on the *existing* `UserPromptSubmit` hook — one process
+per prompt, so capture costs nothing extra (0.23s with it on, vs 0.19s without).
+
+Two decisions carry the risk the plan flagged:
+
+1. **Prompt-only, never the transcript.** A `Stop`/`PostToolUse` hook would see
+   Claude's output; generated text is not evidence about the user, and a memory
+   that learns from it drifts away from the person it is supposed to remember.
+2. **Deterministic, not an LLM.** No key, no network, no per-turn cost, and the
+   refusal rules are readable and greppable rather than a model's mood. Rejects
+   actions, questions, hypotheticals, retractions, work-artifact subjects,
+   transient states, and anything credential-shaped — a secret drops its whole
+   sentence, since redacting would store "my api key is".
+
+**Measured** (adversarial set, `tests/unit/test_capture.py`): 18/18 durable
+facts kept, **0 false captures out of 47**, including the disguised ones ("I
+have a meeting", "my build is failing", "I am on the release branch"). First cut
+scored 4/18 on the hard cases — the stative *frame* is not enough, content
+decides — which is why the rejector list exists.
+
+Reviewability: `--dry-run` previews what a turn would store before you enable
+anything; `CONTINUUM_CAPTURE_MAX` (default 3) caps a single turn; captures are
+auditable with `recall` and prunable with `Memory.forget()` (2.2).
+
+Known misses, accepted: "I am using Python 3.12" (progressive, indistinguishable
+from "I am running the tests") and "I always squash before merging" (verb not in
+the stative set). Precision over recall — a missed fact costs one `remember`.
 
 ---
 

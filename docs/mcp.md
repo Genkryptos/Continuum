@@ -149,6 +149,53 @@ It reads the prompt on stdin and emits `additionalContext`. Design:
   `CONTINUUM_RECALL_HOOK_EMBEDDINGS=1` (dense; only worthwhile against a warm
   process, not the per-prompt hook).
 
+## Automatic capture (opt-in, off by default)
+
+The same hook can also **write**: set `CONTINUUM_CAPTURE=1` and any durable fact
+you state gets stored, so memory accrues from conversation instead of waiting
+for an explicit `remember`.
+
+See what it would keep, on your own words, before switching it on:
+
+```bash
+echo "I live in Boston. Please fix the failing test." \
+  | python -m continuum.mcp.recall_hook --dry-run
+# [capture] would store 1 fact(s):
+#   + I live in Boston.   (stative-i)
+```
+
+This is off by default on purpose — a memory that writes on its own can fill
+with noise or swallow a secret, and forgetting is the one operation you cannot
+take back. Two things keep it defensible:
+
+**It reads only your own prompt.** Never Claude's output, never the transcript.
+Generated text is not evidence about you, and a memory that learns from it
+drifts away from the person it is supposed to remember.
+
+**The extractor is deterministic and precision-biased** (no LLM, no network). It
+keeps standing statements — *"I live in Boston"*, *"my daughter is named Mira"*,
+*"I always squash before merging"* — and refuses:
+
+| refused | example |
+|---|---|
+| actions and events | "I ran the tests", "I just deployed" |
+| questions and requests | "how do I configure this?", "add a test" |
+| hypotheticals, plans, hedges | "if I move to Berlin", "I might switch to Postgres" |
+| things about the work, not you | "my build is failing", "I am on the release branch" |
+| transient states | "I have a meeting at 3pm", "I am done" |
+| retractions | "I don't live in Boston anymore" — that is supersession's job |
+| **anything credential-shaped** | API keys, tokens, passwords, card and ID numbers |
+
+A secret drops its **whole sentence**, not just the token: redacting would store
+"my api key is", which is useless and teaches the store that key-shaped
+sentences are worth keeping.
+
+Measured on an adversarial set: 18/18 durable facts kept, **0 false captures out
+of 47** — including the ones wearing a stative disguise. It will miss facts; that
+is the intended failure direction. `CONTINUUM_CAPTURE_MAX` caps how many facts
+one turn may store (default 3), so a pasted wall of text cannot become forty
+memories. Audit later with `recall`, and prune with `Memory.forget()`.
+
 ## Add to a client
 
 **Claude Desktop / Claude Code** — add to your MCP config (`claude_desktop_config.json`

@@ -8,6 +8,18 @@ that the public API may still shift before 1.0.
 ## [Unreleased]
 
 ### Added
+- **Automatic capture (`CONTINUUM_CAPTURE=1`, off by default).** The
+  `UserPromptSubmit` hook can now *write*: durable facts you state are stored
+  without an explicit `remember`, so memory accrues from conversation. It reads
+  **only your prompt** — never Claude's output or the transcript, because
+  generated text is not evidence about you. The extractor
+  (`continuum.promotion.capture`) is deterministic and precision-biased: no LLM,
+  no network, and it refuses actions, questions, hypotheticals, retractions,
+  work-artifact subjects ("my build is failing"), transient states, and anything
+  credential-shaped — a secret drops its whole sentence. Measured 18/18 durable
+  facts kept with **0 false captures out of 47** adversarial negatives.
+  `--dry-run` previews a turn before you enable it; `CONTINUUM_CAPTURE_MAX`
+  (default 3) caps one turn.
 - **Forgetting — `Memory.forget()` / `PostgresLTM.prune()`.** Memory only ever
   grew; there was no eviction of any kind. Pruning is expressed as the same
   bi-temporal close as supersession (`invalidated_at`), so a forgotten fact
