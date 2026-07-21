@@ -396,9 +396,16 @@ class PostgresLTM:
         is filled in; nothing already recorded is overwritten, because the first
         telling is not less true than the second.
 
-        One statement, so a concurrent writer cannot slip a duplicate in between
-        the lookup and the update. Exact text only — near-duplicates are the
-        supersession decider's job, not a string comparison's.
+        Lookup and update are one statement, so they cannot interleave once a
+        row exists. This is **not** a uniqueness guarantee: writers racing to
+        store a brand-new fact all find nothing and all insert. Sequential
+        writes — one user, one hook per prompt — collapse to a single row;
+        genuinely simultaneous ones can leave a few copies, which the read path
+        dedups anyway. Closing that properly needs a partial unique index on
+        ``(namespace, text) WHERE invalidated_at IS NULL``.
+
+        Exact text only — near-duplicates are the supersession decider's job,
+        not a string comparison's.
         """
         sql = f"""
             UPDATE {self._table} AS m

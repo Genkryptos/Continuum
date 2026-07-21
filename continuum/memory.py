@@ -126,7 +126,7 @@ class Memory:
         supersession_completion_fn: CompletionFn | None = None,
         supersession_model: str = "openai/gpt-4o-mini",
         namespace: str = "default",
-        session_id: str = "default",
+        session_id: str | None = None,
         config: ContinuumConfig | None = None,
     ) -> Memory:
         """A Postgres-backed memory with the full hybrid retriever — the
@@ -154,7 +154,13 @@ class Memory:
         *namespace* is the tenant scope. Facts are written under it and every
         read is filtered to it, so two ``Memory.from_postgres(..., namespace=…)``
         on the same database never see each other's memories. Defaults to
-        ``"default"`` — one shared store — which is what a single user wants."""
+        ``"default"`` — one shared store — which is what a single user wants.
+
+        *session_id* scopes short-term memory and **defaults to the namespace**.
+        It used to default to ``"default"`` independently, which quietly broke
+        the isolation promise above: two namespaces got separate LTM but shared
+        one STM, so Alice's recall surfaced Bob's turns. Pass it explicitly only
+        when you want several conversations inside one tenant."""
         from continuum.core.config import ContinuumConfig as _Cfg
         from continuum.retrieval import Retriever
         from continuum.retrieval.embedding_query import EmbeddingQueryRetriever
@@ -163,6 +169,9 @@ class Memory:
 
         cfg = config or _Cfg.load()
         resolved_dsn = dsn or str(cfg.database.dsn)
+        # Isolation is only real if BOTH tiers are scoped; STM defaults to the
+        # namespace so `namespace=` alone is enough to keep tenants apart.
+        session_id = session_id or namespace
 
         embedder = None
         if embeddings:

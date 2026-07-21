@@ -305,3 +305,69 @@ async def test_backfill_says_so_when_it_cannot_run(e2e_dsn: str) -> None:
             await sparse.backfill_embeddings()
     finally:
         await sparse.aclose()
+
+
+# ── namespace must isolate BOTH tiers, not just long-term memory ──────────────
+
+
+async def test_two_namespaces_share_no_short_term_memory(e2e_dsn: str) -> None:
+    """`namespace=` alone must be enough to keep tenants apart.
+
+    LTM was correctly scoped, but `session_id` defaulted to "default"
+    independently — so two namespaces got separate long-term stores and *one
+    shared* short-term buffer, and Alice's recall surfaced Bob's turns. Only the
+    MCP server escaped it, by separately binding session_id to the namespace.
+    Found by running two users concurrently rather than one after the other.
+    """
+    import psycopg
+
+    from continuum.memory import Memory
+
+    with psycopg.connect(e2e_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("TRUNCATE memory_nodes CASCADE")
+
+    alice = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="alice-iso")
+    bob = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="bob-iso")
+    await alice.start()
+    await bob.start()
+    try:
+        await alice.add("My salary is 90000 EUR.")
+        await bob.add("My salary is 70000 EUR.")
+
+        seen_by_alice = " ".join(h.content or "" for h in await alice.recall("salary", k=25))
+        seen_by_bob = " ".join(h.content or "" for h in await bob.recall("salary", k=25))
+
+        assert "90000" in seen_by_alice and "70000" not in seen_by_alice
+        assert "70000" in seen_by_bob and "90000" not in seen_by_bob
+    finally:
+        await alice.aclose()
+        await bob.aclose()
+
+
+async def test_an_explicit_session_id_still_wins(e2e_dsn: str) -> None:
+    # Several conversations inside one tenant remain possible.
+    from continuum.memory import Memory
+
+    mem = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="tenant", session_id="chat-2")
+    assert mem.session.session_id == "chat-2"
+
+
+async def test_concurrent_starts_do_not_report_a_degraded_store(e2e_dsn: str) -> None:
+    # Two processes starting together race on CREATE TABLE; Postgres IF NOT
+    # EXISTS is not race-safe, and losing that race used to log a traceback
+    # claiming the store was degraded when the schema was perfectly fine.
+    import asyncio
+
+    from continuum.memory import Memory
+
+    mems = [
+        Memory.from_postgres(e2e_dsn, embeddings=False, namespace=f"conc-{i}") for i in range(6)
+    ]
+    try:
+        await asyncio.gather(*(m.start() for m in mems))
+        await asyncio.gather(*(m.add(f"fact for tenant {i}") for i, m in enumerate(mems)))
+        for i, m in enumerate(mems):
+            got = [h.content for h in await m.recall("fact", k=10)]
+            assert any(f"tenant {i}" in (c or "") for c in got)
+    finally:
+        await asyncio.gather(*(m.aclose() for m in mems))

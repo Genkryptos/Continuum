@@ -549,10 +549,16 @@ class TestTouchDuplicate:
         assert "m.tags->>'attribute' IS NULL" in sql  # only fills when absent
         assert params["valid_from"] == when and params["attribute"] == "employer"
 
-    async def test_it_is_one_statement_so_a_racing_writer_cannot_duplicate(self) -> None:
+    async def test_lookup_and_update_are_a_single_round_trip(self) -> None:
+        # Once a row exists, find-then-update cannot interleave. This does NOT
+        # make first-insert races impossible: concurrent writers of a brand-new
+        # fact all see nothing and all insert. Sequential writes — one user, one
+        # hook per prompt, the normal case — collapse to a single row; genuinely
+        # simultaneous ones can leave a few copies that the read path dedups.
+        # Closing that needs a partial unique index on (namespace, text).
         conn = MockConnection(touch_rows=[{"id": str(N1)}])
         await _ltm(conn).touch_duplicate("x")
-        assert len(conn.executed) == 1  # lookup + update, not two round trips
+        assert len(conn.executed) == 1
 
 
 # ---------------------------------------------------------------------------

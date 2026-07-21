@@ -199,17 +199,44 @@ class PostgresSTM:
         """
         Create ``stm_messages`` and its index if they do not exist.
 
-        Thread-safe via an ``asyncio.Lock``; safe to call multiple times —
-        all DDL uses ``IF NOT EXISTS``.
+        The ``asyncio.Lock`` only serialises callers inside *this* process, and
+        ``IF NOT EXISTS`` is not race-safe against concurrent DDL in Postgres:
+        two connections can both pass the existence check and one then fails on
+        a catalog unique constraint. Two Continuum processes starting at the
+        same moment — an MCP server and the prompt hook, say — hit that
+        routinely, and it used to surface as a traceback claiming the store was
+        "degraded" when the schema was in fact perfectly fine.
+
+        So: attempt the DDL, and if it fails, ask whether the table exists. If
+        it does, someone else won the race and there is nothing wrong.
         """
         async with self._init_lock:
             if self._initialized:
                 return
-            async with self._connect() as conn:
-                await conn.execute(_DDL_CREATE_TABLE)
-                await conn.execute(_DDL_CREATE_INDEX)
+            try:
+                async with self._connect() as conn:
+                    await conn.execute(_DDL_CREATE_TABLE)
+                    await conn.execute(_DDL_CREATE_INDEX)
+            except Exception:
+                if not await self._table_exists():
+                    raise
+                log.debug("stm_messages created concurrently by another process — fine")
             self._initialized = True
             log.debug("stm_messages schema ensured")
+
+    async def _table_exists(self) -> bool:
+        """Did someone else create it? Distinguishes a lost DDL race from a
+        real failure (no permission, no database, wrong DSN)."""
+        try:
+            async with self._connect() as conn:
+                cur = await conn.execute("SELECT to_regclass('public.stm_messages') IS NOT NULL")
+                row = await cur.fetchone()
+        except Exception:
+            return False
+        if not row:
+            return False
+        value = next(iter(row.values())) if isinstance(row, dict) else row[0]
+        return bool(value)
 
     async def _ensure(self) -> None:
         """Lazily call ``ensure_schema`` before the first operation."""

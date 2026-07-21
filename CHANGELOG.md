@@ -97,6 +97,20 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`namespace=` did not isolate short-term memory.** LTM was correctly scoped,
+  but `session_id` defaulted to `"default"` independently — so two namespaces on
+  one database got separate long-term stores and *one shared* STM buffer, and
+  Alice's `recall` surfaced Bob's turns. Only the MCP server escaped it, because
+  it separately bound `session_id` to the namespace. `session_id` now defaults
+  to the namespace, so `namespace=` alone is enough; pass it explicitly for
+  several conversations inside one tenant. Found by running two users
+  concurrently rather than one after the other.
+- **Concurrent startup reported a healthy store as "degraded".** Postgres
+  `CREATE TABLE IF NOT EXISTS` is not race-safe against concurrent DDL, so two
+  Continuum processes starting together — an MCP server and the prompt hook, say
+  — had one lose the race and log a traceback claiming the STM store had failed,
+  when the schema was fine. It now confirms the table exists before treating a
+  DDL failure as real.
 - **`remember` stored credentials and lied about empty writes.** Pasting a
   config (`password: hunter2`) wrote the secret straight into Postgres — the
   secret filter existed only on the automatic-capture path, not on the explicit
