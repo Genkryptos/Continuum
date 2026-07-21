@@ -97,6 +97,24 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`recall` now lets the current version of a fact outrank its stale one.**
+  Relevance ranking cannot tell that "I moved to Berlin" replaces "I live in
+  Porto"; without an LLM decider nothing marks the old one superseded, so recall
+  put the stale fact first and the correction several places below — measured at
+  rank 4, and a changed employer at rank 8 of 8, one slot from falling out of
+  what Claude ever sees. Among hits sharing an `attribute` tag, the current one
+  now takes the group's best position (same comparable-clock rule as `current`).
+  Nothing is dropped and untagged memories are untouched; history sits just
+  below the fact that supersedes it. This closes the ranking limitation noted
+  against the fourth round of testing.
+- **Automatic capture now keeps standing states in progressive form and
+  habitual practices.** "I am using Python 3.12" (as durable as "I use Python
+  3.12"), "I always squash before merging", and "My postgres runs on port 5433"
+  were all dropped. The form of "I am using…" is identical to the action "I am
+  running the tests", so the verb decides: a small stative-progressive allowlist
+  and habitual-adverb handling recover them. Precision held — still 0 false
+  captures across the full negative set plus 47 real daily-noise turns, with "I
+  always run the tests" and "My build runs on CI" still refused.
 - **Migration 005 never recorded itself.** It applied correctly but skipped the
   `schema_migrations` bookkeeping every other migration does, so it re-ran on
   every `make db-migrate` forever and the migration log claimed it had never

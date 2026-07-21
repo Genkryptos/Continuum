@@ -112,6 +112,12 @@ _UNCERTAIN = re.compile(
 #: out: it is handled as a negation.)
 _HABITUAL = r"(?:always|usually|generally|normally|typically|mostly|often|mainly|still)\s+"
 
+#: A habitual adverb is itself evidence of a standing practice, so after it any
+#: verb qualifies ("I always squash before merging", "I usually review my own
+#: PRs"). The episodic, deictic and transient rejectors still apply, which is
+#: what keeps "I always run the tests" and "I always get this error" out.
+_HABITUAL_ANY = re.compile(r"^\s*i\s+" + _HABITUAL + r"\w+", re.I)
+
 _STATIVE_I = re.compile(
     r"^\s*i\s+" + f"(?:{_HABITUAL})?" + r"(?:"
     r"am|'m|was\s+born|live|reside|work|study|studied|speak|own|have|has|drive"
@@ -121,13 +127,13 @@ _STATIVE_I = re.compile(
     re.I,
 )
 _STATIVE_MY = re.compile(
-    r"^\s*my\s+[\w'\- ]{2,40}?\s+(?:is|are|was|were)\b",
+    r"^\s*my\s+[\w'\- ]{2,40}?\s+(?:is|are|was|were|runs|run|lives|sits|listens)\b",
     re.I,
 )
 
 #: Verbs that describe a moment, not a state — refused even in the "I …" frame.
 _EPISODIC = re.compile(
-    r"^\s*i\s+(?:just\s+|already\s+|finally\s+)?(?:"
+    r"^\s*i\s+(?:just\s+|already\s+|finally\s+|" + _HABITUAL + r")?(?:"
     r"ran|run|fixed|fix|deployed|deploy|pushed|push|committed|commit|merged|merge"
     r"|added|add|removed|remove|deleted|delete|tried|try|tested|test|checked|check"
     r"|opened|open|closed|close|started|start|stopped|stop|clicked|typed|asked"
@@ -139,6 +145,16 @@ _EPISODIC = re.compile(
 #: "I am running…", "I'm getting…" — a copula plus a participle is an action
 #: wearing a stative frame, which is how most episodic noise sneaks through.
 _PROGRESSIVE = re.compile(r"^\s*i\s*(?:am|'m)\s+(?:\w+ing)\b", re.I)
+
+#: …except that a few progressives describe a standing state rather than an
+#: activity. "I am using Python 3.12" is as durable as "I use Python 3.12"; "I
+#: am running the tests" is not. The form is identical, so the verb decides.
+_STATIVE_PROGRESSIVE = re.compile(
+    r"^\s*i\s*(?:am|'m)\s+(?:currently\s+)?"
+    r"(?:using|learning|studying|living|residing|renting|training|specialising"
+    r"|specializing|majoring)\b",
+    re.I,
+)
 
 #: Negations and retractions. "I don't live in Boston anymore" is a real update,
 #: but storing it as if it asserted something is worse than missing it —
@@ -203,7 +219,6 @@ _REJECTORS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("not-about-user", _NOT_ABOUT_USER),
     ("work-subject", _WORK_SUBJECT),
     ("episodic", _EPISODIC),
-    ("progressive", _PROGRESSIVE),
     ("transient-state", _TRANSIENT_STATE),
     ("transient-have", _TRANSIENT_HAVE),
     ("deictic-object", _DEICTIC_OBJECT),
@@ -271,10 +286,15 @@ def extract_durable_facts(text: str) -> list[CapturedFact]:
             continue
         if any(pattern.match(sentence) for _name, pattern in _REJECTORS):
             continue
+        # A progressive is an action unless its verb names a standing state.
+        if _PROGRESSIVE.match(sentence) and not _STATIVE_PROGRESSIVE.match(sentence):
+            continue
 
         rule = (
             "stative-i"
             if _STATIVE_I.match(sentence)
+            or _HABITUAL_ANY.match(sentence)
+            or _STATIVE_PROGRESSIVE.match(sentence)
             else "stative-my"
             if _STATIVE_MY.match(sentence)
             else "changed-attribute"

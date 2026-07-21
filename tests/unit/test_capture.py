@@ -69,6 +69,16 @@ EPHEMERAL = [
     "I moved on to the next ticket.",
     "I am running the tests now.",
     "I am getting an import error.",
+    "I am debugging the retry logic.",
+    "I am waiting for CI.",
+    "I am using this file for notes.",
+    # …and habitual forms of the same actions, which is why _EPISODIC has to see
+    # the adverb too.
+    "I always run the tests before pushing.",
+    "I usually push to main.",
+    "I always get this error.",
+    "My build runs on CI.",
+    "My test runs slowly.",
     "I have a meeting at 3pm tomorrow.",
     # A modifier between the determiner and the head used to walk straight past
     # the filter — found by using the thing, not by the curated set below.

@@ -556,9 +556,12 @@ class Memory:
         """Retrieve up to *k* memories relevant to *query*, best-first.
 
         *k* is clamped to ``[0, MAX_RECALL_K]`` — a caller-supplied ``k`` of a
-        million is not a reason to build a million-row result."""
+        million is not a reason to build a million-row result.
+
+        Where two hits describe the same attribute, the **current** one speaks
+        for the pair; see :func:`_prefer_current_versions`."""
         k = min(max(k, 0), MAX_RECALL_K)
-        return await self._session.search(query, k=k)
+        return _prefer_current_versions(await self._session.search(query, k=k))
 
     async def current(
         self,
@@ -708,6 +711,45 @@ def _effective_time(item: MemoryItem) -> datetime:
     if vr is not None and vr.valid_from is not None:
         return vr.valid_from
     return item.created_at
+
+
+def _prefer_current_versions(items: list[MemoryItem]) -> list[MemoryItem]:
+    """Let the current version of an attribute speak for its group.
+
+    Relevance ranking has no idea that "I moved from Porto to Berlin" replaces
+    "I live in Porto" — without an LLM decider nothing marks the old one
+    superseded, so recall cheerfully put the stale fact first and the correction
+    four places below it. Measured after a simulated month of use: the Berlin
+    move sat at rank 4 and the new employer at rank 8 of 8, one slot from
+    falling out of what the model ever sees.
+
+    So: among hits that share an ``attribute`` tag, the newest takes the
+    group's best position. Nothing is dropped and nothing else moves — history
+    is still there, just below the fact that supersedes it. Ordering uses the
+    same comparable-clock rule as ``current``, so a dated correction beats an
+    undated original.
+
+    Untagged memories are left exactly as retrieval ranked them.
+    """
+    if len(items) < 2:
+        return items
+
+    groups: dict[str, list[int]] = {}
+    for i, item in enumerate(items):
+        attribute = (item.metadata or {}).get("attribute")
+        if isinstance(attribute, str) and attribute.strip():
+            groups.setdefault(attribute.strip().lower(), []).append(i)
+
+    out = list(items)
+    for positions in groups.values():
+        if len(positions) < 2:
+            continue
+        members = [items[i] for i in positions]
+        newest = max(members, key=_order_key(members))
+        reordered = [newest] + [m for m in members if m is not newest]
+        for slot, item in zip(positions, reordered, strict=True):
+            out[slot] = item
+    return out
 
 
 def _order_key(items: list[MemoryItem]) -> Callable[[MemoryItem], datetime]:

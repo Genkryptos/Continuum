@@ -639,3 +639,80 @@ async def test_a_broken_duplicate_check_never_loses_the_write() -> None:
     await mem.add("I cycle to work.")
 
     assert len(session.ltm.upserts) == 1  # type: ignore[attr-defined]
+
+
+# ── the current version of an attribute speaks for its group ──────────────────
+
+
+def _tagged(
+    content: str,
+    attribute: str,
+    *,
+    valid_from: datetime | None = None,
+    created_at: datetime | None = None,
+) -> MemoryItem:
+    item = _item(content, valid_from=valid_from)
+    item.metadata = {"attribute": attribute}
+    if created_at is not None:
+        item.created_at = created_at
+    return item
+
+
+def test_a_correction_takes_the_group_best_position() -> None:
+    """Relevance has no idea a later fact replaces an earlier one, and without
+    an LLM decider nothing marks the old one superseded — so recall put the
+    stale fact first and the correction four places below it."""
+    from continuum.memory import _prefer_current_versions
+
+    old = _tagged("I live in Porto.", "residence", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    noise = _item("I own a dog named Bolt.")
+    new = _tagged("I moved to Berlin.", "residence", valid_from=datetime(2026, 7, 20, tzinfo=UTC))
+
+    out = _prefer_current_versions([old, noise, new])
+
+    assert out[0].content == "I moved to Berlin."  # correction leads
+    assert out[1] is noise  # untagged neighbours do not move
+    assert out[2].content == "I live in Porto."  # history kept, just below
+
+
+def test_nothing_is_dropped_or_reordered_beyond_the_group() -> None:
+    from continuum.memory import _prefer_current_versions
+
+    items = [_item("a"), _item("b"), _item("c")]
+    assert _prefer_current_versions(items) == items
+
+
+def test_two_attributes_are_resolved_independently() -> None:
+    from continuum.memory import _prefer_current_versions
+
+    r_old = _tagged("I live in Porto.", "residence", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    e_old = _tagged("I work at Nimbus.", "employer", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    r_new = _tagged("I moved to Berlin.", "residence", valid_from=datetime(2026, 7, 20, tzinfo=UTC))
+    e_new = _tagged("I joined Stripe.", "employer", valid_from=datetime(2026, 7, 12, tzinfo=UTC))
+
+    out = [i.content for i in _prefer_current_versions([r_old, e_old, r_new, e_new])]
+
+    assert out[0] == "I moved to Berlin." and out[1] == "I joined Stripe."
+    assert set(out[2:]) == {"I live in Porto.", "I work at Nimbus."}
+
+
+def test_an_undated_original_still_loses_to_a_dated_correction() -> None:
+    # Same comparable-clock rule `current` uses: valid time only counts when
+    # every candidate states one, else transaction time decides.
+    from continuum.memory import _prefer_current_versions
+
+    old = _tagged("I live in Porto.", "residence", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    new = _tagged(
+        "I moved to Berlin.",
+        "residence",
+        valid_from=datetime(2025, 7, 20, tzinfo=UTC),
+        created_at=datetime(2026, 7, 20, tzinfo=UTC),
+    )
+    assert _prefer_current_versions([old, new])[0].content == "I moved to Berlin."
+
+
+async def test_recall_applies_it_end_to_end() -> None:
+    old = _tagged("I live in Porto.", "residence", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    new = _tagged("I moved to Berlin.", "residence", valid_from=datetime(2026, 7, 20, tzinfo=UTC))
+    mem = Memory(_FakeSession(search_result=[old, new]))  # type: ignore[arg-type]
+    assert (await mem.recall("where do I live?"))[0].content == "I moved to Berlin."

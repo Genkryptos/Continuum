@@ -416,8 +416,16 @@ class PostgresLTM:
         store a brand-new fact all find nothing and all insert. Sequential
         writes — one user, one hook per prompt — collapse to a single row;
         genuinely simultaneous ones can leave a few copies, which the read path
-        dedups anyway. Closing that properly needs a partial unique index on
-        ``(namespace, text) WHERE invalidated_at IS NULL``.
+        dedups anyway.
+
+        Closing it properly needs a partial unique index on
+        ``(namespace, md5(text)) WHERE invalidated_at IS NULL`` — deliberately
+        NOT shipped: that index cannot be built on any store that already holds
+        duplicates, which is every store written before this method existed, so
+        the migration would hard-fail on upgrade. Retiring the existing copies
+        first would be a silent data change to fix a storage-only defect. If you
+        want it on a store you know is clean, the index above plus catching the
+        unique violation here is the whole implementation.
 
         Exact text only — near-duplicates are the supersession decider's job,
         not a string comparison's.
