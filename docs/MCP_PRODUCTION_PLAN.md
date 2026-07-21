@@ -141,10 +141,53 @@ Infosys→Nimbus retired, Nimbus→Stripe and Air→Pro missed at identical cosi
 (b) optionally a stronger decider model. **Effort:** M. This is your v2.1 "typed
 memory" roadmap item.
 
-### 3.2 Paraphrase precision
+### 3.2 Paraphrase precision — ✅ DONE (root cause was not paraphrase; reranking measured and **declined**)
 **Problem (measured):** recall@1 ~70% on paraphrased queries (100% @3). Livable
 because Claude reads k=8, but rank-1 is not reliable. **Fix:** the cross-encoder
 reranker exists but is off by default; enable + measure. **Effort:** S–M.
+
+**The 70% was a scoring bug, not a retrieval limit.** Phase 3.1 had changed the
+recency basis to prefer `valid_from` over `created_at`. Only *dated* facts carry
+`valid_from`, so the facts the user had taken care to date were the only ones
+treated as a year stale, while undated noise written seconds earlier scored ~1.0
+on recency — enough at `w_rec=0.20` to outrank them:
+
+```
+query "where do I live now"
+rel 1.000  rec 0.000  "I live in Boston."           -> rank 5
+rel 0.914  rec 0.005  "I moved from Boston to NYC"  -> rank 7
+rel 0.830  rec 0.999  "I play the acoustic guitar"  -> rank 1
+```
+
+Recency now measures **transaction time** (how long since we learned or last
+used a fact) — "describes an old event" is not "stale memory". Picking between
+versions of the same fact is supersession's job. This also fixed the
+`timeline` check, which had been failing 0/1 for the same reason.
+
+**Measured after the fix** (Postgres + bge-m3, fixed scenario with distractors;
+`make mcp-eval` now reports both sets):
+
+| query set | recall@1 | recall@3 |
+|---|---:|---:|
+| lexical overlap (shares words with the fact) | 100% | 100% |
+| **paraphrase** (shares *no* word with the fact) | **90%** | **100%** |
+
+**Reranking: measured, then declined** (`make rerank-ab`, `scripts/rerank_ab.py`
+— reproducible, through the project's own `Reranker`):
+
+| reranker | recall@1 | added latency (p50) | disk |
+|---|---:|---:|---:|
+| none (hybrid RRF) | **9/10** | — | — |
+| `BAAI/bge-reranker-v2-m3` (the configured default) | 7/10 | +121ms on a 93ms recall | 2.1 GB |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | 6/10 | +13ms | 80 MB |
+
+Both **hurt**, and neither fixed the single query the baseline misses. They are
+trained on web passage relevance and latch onto surface terms on first-person
+facts — "what should we order for dinner" reranks to "my coffee *order* is a
+flat white". Note the default `skip_if_fewer_than=10` means it would not even
+fire on a k=8 recall, so "enabling" it as shipped would have been a no-op that
+looked like a feature. Left off, deliberately, with the evidence recorded.
+Revisit only with a reranker tuned on personal facts.
 
 ---
 

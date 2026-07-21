@@ -185,7 +185,18 @@ class EmbeddingService:
         Identical texts within a single call are embedded only once.  Cache
         lookups (L1 then L2) precede any model work; only the misses are
         batched and sent to the model.
+
+        Passing a bare ``str`` raises. A string is iterable, so it would
+        otherwise be embedded *per character* and ``embed(text)[0]`` would
+        quietly return the vector for its first letter — a plausible-looking
+        1024-dim unit vector that ranks nothing correctly. Silent nonsense is
+        worse than a TypeError.
         """
+        if isinstance(texts, str):
+            raise TypeError(
+                "embed() takes a list of strings, not a single string — "
+                f"use embed([{texts[:32]!r}]) (a str would be embedded per character)."
+            )
         if not texts:
             return []
 

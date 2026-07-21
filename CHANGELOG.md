@@ -51,6 +51,17 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **Dating a fact buried it in recall.** Recency decay was based on `valid_from`
+  (when the fact became true) rather than `created_at` (when we learned it), so
+  the only rows carrying valid time — the ones a user had deliberately dated —
+  were scored as a year stale, while undated noise written seconds earlier
+  scored ~1.0 on recency and outranked them. Decay now measures transaction
+  time; valid time still drives `current` / `timeline` / `as_of`, where it
+  belongs. Choosing between versions of one fact is supersession's job.
+  Paraphrase recall@1 went 70% → 90% (100% @3) and the timeline check 0/1 → 1/1.
+- **`EmbeddingService.embed()` now rejects a bare `str`.** A string is iterable,
+  so `embed("hello")` embedded it *per character* and `[0]` returned the vector
+  for one letter — a well-formed unit vector that ranks nothing correctly.
 - **`rank-bm25` was missing from the package dependencies** — it is imported at
   module load by the *default* in-memory LTM, so a clean
   `pip install "continuum-memory[mcp]"` crashed with `ModuleNotFoundError` on the

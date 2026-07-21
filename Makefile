@@ -157,6 +157,9 @@ mcp-smoke: ## Prove the MCP server works end-to-end (handshake + remember→reca
 mcp-eval: ## Score MCP retrieval quality (recall@1/@3, supersession, timeline) over a fixed scenario. Set CONTINUUM_DB_DSN to eval the Postgres+embedder stack
 	@$(BENCH_PYTHON) scripts/mcp_eval.py $(ARGS)
 
+rerank-ab: ## A/B the cross-encoder reranker vs plain hybrid on paraphrase queries. Requires CONTINUUM_DB_DSN pointing at a THROWAWAY Postgres (it writes)
+	@$(BENCH_PYTHON) scripts/rerank_ab.py $(ARGS)
+
 mcp-bench: ## Measure MCP tool latency (p50/p95 + embedder-vs-DB breakdown). Set MCP_BENCH_DSN for a THROWAWAY Postgres; never touches your live store
 	@$(BENCH_PYTHON) scripts/mcp_bench.py $(if $(MCP_BENCH_DSN),--dsn $(MCP_BENCH_DSN)) $(ARGS)
 

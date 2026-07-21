@@ -309,3 +309,19 @@ class TestErrorHandling:
         async with svc:
             pass
         assert redis.closed is True
+
+
+class TestBareStringIsRejected:
+    async def test_a_single_string_raises_instead_of_embedding_per_character(self) -> None:
+        """A str is iterable, so ``embed("hello")`` would embed 'h','e','l','l','o'
+        and ``[0]`` would return the vector for one letter — a well-formed unit
+        vector that ranks nothing correctly. That silent nonsense cost real
+        debugging time; it must be a loud TypeError."""
+        svc, enc = _svc()
+        with pytest.raises(TypeError, match="list of strings"):
+            await svc.embed("hello")  # type: ignore[arg-type]
+        assert enc.calls == []  # the model is never even asked
+
+    async def test_a_one_element_list_still_works(self) -> None:
+        svc, _ = _svc()
+        assert len(await svc.embed(["hello"])) == 1
