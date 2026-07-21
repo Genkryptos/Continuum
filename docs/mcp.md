@@ -194,6 +194,22 @@ Measured on an adversarial set: 18/18 durable facts kept, **0 false captures out
 of 47** — including the ones wearing a stative disguise. It will miss facts; that
 is the intended failure direction.
 
+> **Run `make backfill` occasionally.** The hook writes *sparse* — a fresh
+> process per prompt cannot load the 2.3 GB embedder — so everything it captures
+> lands with **no vector**, and dense recall cannot find it. The memories are in
+> the store and semantically invisible, which is worse than absent: nothing looks
+> broken. `make backfill` (or `scripts/backfill_embeddings.py`) embeds them from
+> a warm process; it only fills gaps and is safe to re-run.
+>
+> ```bash
+> CONTINUUM_DB_DSN=postgresql://…/continuum make backfill
+> # [backfill] embedded 17 memory(ies) in namespace 'default' (7.4s)
+> ```
+>
+> Measured on a simulated month of daily use: before backfill, semantic recall
+> matched **nothing** and every answer came from the short-term recency fallback;
+> after, 6 of 8 questions were answered from the right memory.
+
 > **Capture is English-only**, and that is asymmetric with the rest of the
 > system: recall *is* multilingual (an English question will surface a Portuguese
 > or Hindi memory), but these rules are regexes over English word order, so

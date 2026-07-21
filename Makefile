@@ -19,7 +19,7 @@
         install install-dev clean help \
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
         mcp-install mcp-smoke mcp-eval mcp-bench scale-test mcp-serve mcp-serve-http mcp-claude \
-        repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
+        backfill rerank-ab repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
         bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
@@ -156,6 +156,9 @@ mcp-smoke: ## Prove the MCP server works end-to-end (handshake + remember→reca
 
 mcp-eval: ## Score MCP retrieval quality (recall@1/@3, supersession, timeline) over a fixed scenario. Set CONTINUUM_DB_DSN to eval the Postgres+embedder stack
 	@$(BENCH_PYTHON) scripts/mcp_eval.py $(ARGS)
+
+backfill: ## Attach embeddings to memories the sparse capture hook wrote (invisible to dense search until you do). Needs CONTINUUM_DB_DSN
+	@$(BENCH_PYTHON) scripts/backfill_embeddings.py $(ARGS)
 
 rerank-ab: ## A/B the cross-encoder reranker vs plain hybrid on paraphrase queries. Requires CONTINUUM_DB_DSN pointing at a THROWAWAY Postgres (it writes)
 	@$(BENCH_PYTHON) scripts/rerank_ab.py $(ARGS)

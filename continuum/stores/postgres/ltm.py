@@ -435,6 +435,47 @@ class PostgresLTM:
         log.debug("LTM duplicate reinforced ns=%s", self._namespace)
         return _as_uuid(row["id"])
 
+    # ── embedding backfill (rows written by a sparse-only writer) ───────────
+
+    async def rows_missing_embeddings(self, limit: int = 500) -> list[tuple[uuid.UUID, str]]:
+        """Live rows in this namespace that have no vector yet, oldest first.
+
+        The per-prompt capture hook is deliberately sparse — a fresh process
+        cannot load a 2.3GB model every turn — so everything it writes lands
+        with a NULL embedding and is invisible to dense search *forever*. The
+        memories are there; semantic recall simply cannot see them. This is the
+        read side of fixing that.
+        """
+        sql = f"""
+            SELECT id, "text" FROM {self._table}
+            WHERE  namespace = %(ns)s
+              AND  invalidated_at IS NULL
+              AND  embedding IS NULL
+              AND  "text" <> ''
+            ORDER  BY created_at ASC
+            LIMIT  %(lim)s
+        """
+        async with self._connect() as conn:
+            cur = await self._exec(conn, sql, {"ns": self._namespace, "lim": max(1, limit)})
+            rows = await cur.fetchall()
+        return [(_as_uuid(r["id"]), str(r["text"])) for r in rows]
+
+    async def set_embeddings(self, vectors: dict[uuid.UUID, list[float]]) -> int:
+        """Attach vectors to existing rows. Only fills NULLs — never overwrites."""
+        if not vectors:
+            return 0
+        sql = (
+            f"UPDATE {self._table} SET embedding = %(vec)s::{self._embedding_type} "
+            f"WHERE id = %(id)s AND embedding IS NULL"
+        )
+        n = 0
+        async with self._connect() as conn:
+            for node_id, vec in vectors.items():
+                await self._exec(conn, sql, {"id": str(node_id), "vec": to_halfvec_literal(vec)})
+                n += 1
+        log.info("LTM backfilled %d embedding(s) ns=%s", n, self._namespace)
+        return n
+
     # ── prune (bulk invalidate by policy — still no DELETE) ─────────────────
 
     async def prune(

@@ -63,6 +63,7 @@ class MockConnection:
         neighbor_rows: list[dict[str, Any]] | None = None,
         prune_rows: list[dict[str, Any]] | None = None,
         touch_rows: list[dict[str, Any]] | None = None,
+        missing_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.executed: list[tuple[str, Any]] = []
         self.prepared: list[bool] = []
@@ -70,6 +71,7 @@ class MockConnection:
         self._neighbors = neighbor_rows or []
         self._prune = prune_rows or []
         self._touch = touch_rows or []
+        self._missing = missing_rows or []
 
     async def execute(
         self, sql: str, params: Any = None, *, prepare: bool = False, **_: Any
@@ -86,6 +88,8 @@ class MockConnection:
             return MockCursor(self._prune)
         if "access_count = m.access_count + 1" in sql:
             return MockCursor(self._touch)
+        if "embedding IS NULL" in sql and sql.strip().startswith("SELECT"):
+            return MockCursor(self._missing)
         return MockCursor()  # INSERT / UPDATE
 
 
@@ -549,3 +553,39 @@ class TestTouchDuplicate:
         conn = MockConnection(touch_rows=[{"id": str(N1)}])
         await _ltm(conn).touch_duplicate("x")
         assert len(conn.executed) == 1  # lookup + update, not two round trips
+
+
+# ---------------------------------------------------------------------------
+# embedding backfill
+# ---------------------------------------------------------------------------
+
+
+class TestEmbeddingBackfill:
+    async def test_finds_only_live_unvectorised_rows_in_this_namespace(self) -> None:
+        # The capture hook writes sparse, so its rows have NULL embeddings and
+        # are invisible to dense search forever. This is how they get found.
+        conn = MockConnection(missing_rows=[{"id": str(N1), "text": "I live in Porto."}])
+        got = await _ltm(conn, namespace="dev").rows_missing_embeddings(limit=50)
+
+        assert got == [(N1, "I live in Porto.")]
+        sql, params = conn.executed[0]
+        assert "embedding IS NULL" in sql
+        assert "invalidated_at IS NULL" in sql  # don't resurrect retired rows
+        assert "namespace = %(ns)s" in sql and params["ns"] == "dev"
+        assert "ORDER  BY created_at ASC" in sql  # oldest first
+        assert params["lim"] == 50
+
+    async def test_set_embeddings_never_overwrites_an_existing_vector(self) -> None:
+        conn = MockConnection()
+        n = await _ltm(conn).set_embeddings({N1: [0.1, 0.2]})
+
+        assert n == 1
+        sql, params = conn.executed[0]
+        assert "SET embedding = %(vec)s::halfvec" in sql
+        assert "AND embedding IS NULL" in sql  # fills gaps only
+        assert params["vec"] == "[0.1,0.2]"
+
+    async def test_nothing_to_do_is_a_no_op(self) -> None:
+        conn = MockConnection()
+        assert await _ltm(conn).set_embeddings({}) == 0
+        assert conn.executed == []

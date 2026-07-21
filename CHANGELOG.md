@@ -32,6 +32,23 @@ that the public API may still shift before 1.0.
   time, an attribute — is filled in without overwriting what was already there.
   Checked *before* embedding, which is the whole saving: a restatement costs
   12ms instead of 104ms. Near-duplicates remain the supersession decider's job.
+- **`Memory.backfill_embeddings()` / `make backfill`.** Automatic capture runs
+  in the per-prompt hook, which is sparse by design — a fresh process cannot
+  load a 2.3 GB model every turn — so every captured fact landed with a NULL
+  embedding and **dense recall could never find it**. The memories were in the
+  store and semantically invisible, which is worse than absent because nothing
+  looks broken. Found by simulating a month of daily use: 452 turns produced 17
+  memories that semantic search matched *zero* times, with every answer quietly
+  served by the short-term recency fallback. Backfill embeds them from a warm
+  process; it only fills gaps and is safe to re-run.
+- **Capture now records changes of state, not just standing ones.** "I live in
+  Porto" was captured but "I moved from Porto to Berlin" was not, so a month of
+  daily use locked in day-one facts and silently dropped every correction —
+  memory drifting further from the truth the longer it ran. Changes are the most
+  valuable thing to capture, because they are what make a stored fact stale.
+  Recognised via the existing attribute extractor (0 false tags on its
+  adversarial set), so precision is unchanged: still 0 false captures across the
+  full negative set plus 47 real daily-noise turns.
 - **Targeted forgetting — `Memory.forget(contains=…)`.** The maintenance
   policy could not express "that one is wrong, delete it": `superseded_only`
   matches nothing until an LLM decider has retired something, and turning it off

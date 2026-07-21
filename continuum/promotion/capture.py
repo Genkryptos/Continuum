@@ -210,6 +210,33 @@ _REJECTORS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+#: "I switched from Neovim to Zed" — a preference replacing a preference. Both
+#: sides must be capitalised, the same precision lever the attribute extractor
+#: uses: it separates "I switched from Neovim to Zed" from "I switched branches".
+_SWITCHED = re.compile(r"^\s*[Ii]\s+(?:switched|changed)\s+from\s+[A-Z][\w.+-]*\s+to\s+[A-Z]")
+
+
+def _states_a_change(sentence: str) -> bool:
+    """True when the sentence announces a *change* to a durable attribute.
+
+    This is the case longitudinal use exposed. The stative frames above accept
+    "I live in Porto" but refuse "I moved to Berlin", so a month of daily use
+    locked in day-one facts and silently dropped every correction — memory
+    drifting further from the truth the longer it ran. The change is the most
+    valuable thing to capture, because it is what makes the stored fact stale.
+
+    Reuses :func:`extract_attribute`: if that recognises the sentence it is, by
+    construction, a statement about a durable attribute of the user, and it was
+    tuned to demand capitalised proper nouns (0 false tags on its adversarial
+    set) — so it is a safe second opinion rather than a looser one.
+    """
+    from continuum.promotion.attribute_extract import extract_attribute
+
+    if _SWITCHED.match(sentence):
+        return True
+    return extract_attribute(sentence) is not None
+
+
 @dataclass(frozen=True)
 class CapturedFact:
     """A sentence judged durable, with the rule that accepted it."""
@@ -250,6 +277,8 @@ def extract_durable_facts(text: str) -> list[CapturedFact]:
             if _STATIVE_I.match(sentence)
             else "stative-my"
             if _STATIVE_MY.match(sentence)
+            else "changed-attribute"
+            if _states_a_change(sentence)
             else ""
         )
         if not rule:

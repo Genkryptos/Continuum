@@ -244,3 +244,64 @@ async def test_a_restatement_fills_in_what_the_first_telling_lacked(e2e_dsn: str
         assert attribute == "employer"
     finally:
         await mem.aclose()
+
+
+# ── sparse-written memories must not stay invisible to dense search ───────────
+
+
+async def test_captured_memories_are_findable_after_backfill(e2e_dsn: str) -> None:
+    """The failure a month of daily use exposed.
+
+    The capture hook writes sparse — a fresh process per prompt cannot load a
+    2.3GB model — so every captured fact landed with a NULL embedding and dense
+    recall could never find it. The memories were in the store and semantically
+    invisible, which is worse than absent: nothing looks broken.
+    """
+    import psycopg
+
+    from continuum.memory import Memory
+
+    with psycopg.connect(e2e_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("TRUNCATE memory_nodes CASCADE")
+
+    # A sparse writer, exactly as the hook runs.
+    sparse = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="backfill")
+    await sparse.start()
+    try:
+        await sparse.add("I own a corgi named Pixel.")
+        await sparse.add("I studied electrical engineering.")
+    finally:
+        await sparse.aclose()
+
+    with psycopg.connect(e2e_dsn) as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*), count(embedding) FROM memory_nodes")
+        rows, vectors = cur.fetchone()
+    assert (rows, vectors) == (2, 0), "sparse writes should have no vectors yet"
+
+    warm = Memory.from_postgres(e2e_dsn, embeddings=True, namespace="backfill")
+    await warm.start()
+    try:
+        assert await warm.backfill_embeddings() == 2
+        assert await warm.backfill_embeddings() == 0  # idempotent
+
+        with psycopg.connect(e2e_dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(embedding) FROM memory_nodes")
+            assert cur.fetchone()[0] == 2
+
+        # …and the point of all that: a paraphrase now finds it.
+        found = [h.content for h in await warm.recall("do I have a pet?", k=5)]
+        assert any("Pixel" in (c or "") for c in found), found
+    finally:
+        await warm.aclose()
+
+
+async def test_backfill_says_so_when_it_cannot_run(e2e_dsn: str) -> None:
+    from continuum.memory import Memory
+
+    sparse = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="backfill")
+    await sparse.start()
+    try:
+        with pytest.raises(NotImplementedError, match="embedder"):
+            await sparse.backfill_embeddings()
+    finally:
+        await sparse.aclose()

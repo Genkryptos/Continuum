@@ -43,7 +43,9 @@ _CANONICAL: tuple[tuple[str, re.Pattern[str]], ...] = (
     # employer: "work at/for" (kept broad — low harm), and the specific
     # "left X and joined Y". Bare "joined" was dropped ("I joined the tables").
     ("employer", re.compile(r"\bI\s+work\s+(?:at|for)\s+(?=[A-Z])")),
-    ("employer", re.compile(r"\bI\s+left\s+\w+\s+and\s+joined\s+(?=[A-Z])")),
+    # Company names are usually more than one word ("I left Nimbus Data and
+    # joined Stripe"), and a single \w+ silently missed every one of them.
+    ("employer", re.compile(r"\bI\s+left\s+[\w\s]{1,40}?\s+and\s+joined\s+(?=[A-Z])")),
     ("employer", re.compile(r"\bI\s+joined\s+(?=[A-Z])")),  # "I joined Infosys"
     ("name", re.compile(r"\b(?:my\s+name\s+is|I\s+am\s+called|call\s+me)\s+(?=[A-Z])", re.I)),
     # vehicle: a brand (capital) or an explicit vehicle noun in the object.

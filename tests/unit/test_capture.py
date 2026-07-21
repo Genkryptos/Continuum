@@ -42,6 +42,15 @@ DURABLE = [
     "I am vegetarian.",
     "I keep my venvs under ~/.venvs.",
     "I usually work late at night.",
+    # Changes of state. Longitudinal use exposed these: the stative frames accept
+    # "I live in Porto" but refused "I moved to Berlin", so a month of daily use
+    # locked in day-one facts and dropped every correction — memory drifting
+    # further from the truth the longer it ran.
+    "I moved to Berlin.",
+    "I moved from Porto to Berlin.",
+    "I joined Stripe.",
+    "I left Nimbus Data and joined Stripe.",
+    "I switched from Neovim to Zed.",
 ]
 
 EPHEMERAL = [
@@ -50,6 +59,14 @@ EPHEMERAL = [
     "I just deployed to staging.",
     "I pushed the commit.",
     "I checked the logs again.",
+    # …and the work chatter that wears the same shape as those changes.
+    "I switched branches.",
+    "I moved the file to src/.",
+    "I joined the tables on user_id.",
+    "I switched to the other terminal.",
+    "I changed the config value.",
+    "I left the meeting early.",
+    "I moved on to the next ticket.",
     "I am running the tests now.",
     "I am getting an import error.",
     "I have a meeting at 3pm tomorrow.",
@@ -168,3 +185,15 @@ def test_the_rule_that_fired_is_reported() -> None:
     # Provenance: when a capture looks wrong, you need to know which rule to fix.
     assert extract_durable_facts("I live in Boston.")[0].rule == "stative-i"
     assert extract_durable_facts("My laptop is a MacBook.")[0].rule == "stative-my"
+    assert extract_durable_facts("I moved to Berlin.")[0].rule == "changed-attribute"
+
+
+def test_a_correction_is_captured_alongside_the_fact_it_replaces() -> None:
+    """The longitudinal failure, in one assertion.
+
+    Without this the store keeps "I live in Porto" forever and silently ignores
+    "I moved to Berlin" — it drifts further from the truth the longer it runs,
+    which is the worst thing a memory system can do.
+    """
+    assert extract_durable_facts("I live in Porto.")
+    assert extract_durable_facts("I moved from Porto to Berlin.")

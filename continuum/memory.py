@@ -443,6 +443,41 @@ class Memory:
 
     # ── forget ───────────────────────────────────────────────────────────────
 
+    async def backfill_embeddings(self, *, limit: int = 500, batch: int = 32) -> int:
+        """Attach vectors to memories stored without one. Returns how many.
+
+        The capture hook writes sparse — a fresh process per prompt cannot load
+        a 2.3GB model — so everything it captures lands with a NULL embedding
+        and **dense recall can never find it**. The facts are in the store and
+        semantically invisible, which is worse than not having them, because
+        nothing looks broken. Run this from a warm process (``make backfill``)
+        to make a month of captured memories searchable.
+
+        Only fills gaps; an existing vector is never overwritten. Needs an
+        embedder attached (``Memory.from_postgres(..., embeddings=True)``).
+        """
+        ltm = self._session.ltm
+        rows_missing = getattr(ltm, "rows_missing_embeddings", None)
+        set_embeddings = getattr(ltm, "set_embeddings", None)
+        if rows_missing is None or set_embeddings is None:
+            raise NotImplementedError(
+                "This store cannot backfill embeddings — needs a Postgres-backed store."
+            )
+        if self._embedder is None:
+            raise NotImplementedError(
+                "No embedder attached. Use Memory.from_postgres(..., embeddings=True)."
+            )
+
+        pending: list[tuple[Any, str]] = await rows_missing(limit)
+        done = 0
+        for start in range(0, len(pending), max(1, batch)):
+            chunk = pending[start : start + max(1, batch)]
+            vectors = await self._embedder.embed([text for _id, text in chunk])
+            done += await set_embeddings(
+                {node_id: vec for (node_id, _t), vec in zip(chunk, vectors, strict=True)}
+            )
+        return done
+
     async def forget(
         self,
         *,
