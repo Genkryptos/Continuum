@@ -1,9 +1,22 @@
 # Continuum MCP — Production-Readiness Plan
 
-**Status:** draft · **Owner:** Mayank · **Context:** the MCP server works well in
-tests but is not yet something a stranger can rely on across sessions and
-contexts. This plan is what stands between the two, ordered by what actually
-gates production — not by what is easy.
+**Status:** ✅ complete — every item below is done · **Owner:** Mayank ·
+**Context:** the MCP server worked well in tests but was not yet something a
+stranger could rely on across sessions and contexts. This plan was what stood
+between the two, ordered by what actually gates production — not by what is easy.
+
+Two of the twelve items did not survive contact with measurement, which is the
+point of writing them down:
+
+- **3.2** blamed paraphrase weakness for recall@1 ~70%. The cause was a scoring
+  bug — dating a fact made it *harder* to recall — and the prescribed fix
+  (enable the cross-encoder) makes recall **worse**. Fixed the real cause;
+  declined the reranker with the numbers recorded.
+- **4.3** was written up as a docs task. Doing it for real found that the
+  documented install (`pip install "continuum-memory[mcp]"`) **crashed on the
+  first tool call**, and that `make build-verify` passed on that broken wheel.
+
+The rest landed as planned.
 
 Everything here is grounded in bugs/limits found this cycle by *using* the
 server, not by benchmarks. The engine is now good; the gaps are in **product
@@ -18,6 +31,17 @@ A stranger can: `pip install continuum-memory[mcp]` → point it at their Postgr
 (b) never surfaces another context's memories, (c) fires without being asked, and
 (d) never silently loses a write or returns a stale fact as current. Reproducible
 by someone who is not us.
+
+**Met**, and each clause is pinned by something that fails when broken:
+
+| clause | evidence |
+|---|---:|
+| installs and runs | clean-venv install of the built wheel, three extras combos, in `make build-verify` |
+| remembers across sessions | e2e suite drives the real binary against Postgres |
+| never leaks across contexts | namespace isolation e2e (LTM *and* STM) |
+| fires without being asked | `UserPromptSubmit` hook, 0.19s/prompt |
+| never silently loses a write | durability in the `remember` ack; decider-flake tests |
+| never returns a stale fact as current | attribute-keyed `current` + bi-temporal `as_of` |
 
 ---
 
