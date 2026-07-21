@@ -160,6 +160,26 @@ graph walk terminates more predictably than one stuck in a cluster. End-to-end
 after the fix: **75% → 95% recall@1**, +13ms on a ~130ms call. The last miss
 ("can I eat prawns" → "deathly allergic to shellfish") is a genuine embedder
 limit: bge-m3 ranks a distractor above it by cosine, at rank 16.
+
+**Follow-up: is the index still losing memories at 50k?** No — that scare was an
+artifact of the test corpus. The 50k run above used 50,000 strings from 14
+templates: near-duplicates in a few very tight clusters, close to a worst case
+for graph traversal and nothing like a real store. Rebuilt with a *realistic*
+corpus (many topical families, varied phrasing, few repeats) at the same order
+of magnitude:
+
+| 47,020 realistic memories | needles in top-24 | p50 |
+|---|---:|---:|
+| `ef_search=40` (pgvector default) | 9/20 | 9.5ms |
+| `ef_search=400` (ours) | **13/20** | 7.1ms |
+| exact scan, no index | **13/20** | 2.1ms |
+
+**HNSW at our setting matches exact scan exactly.** The index loses nothing on
+realistic data; `ef_search=400` recovers precisely the loss the default caused.
+The remaining 7 are genuine retrieval difficulty — at 47k the needle is simply
+not in the true top-24 by cosine — and recall falling from 18/20 at 18k to 13/20
+at 47k is competition, not a defect. Both are the embedder's limit, not the
+store's, and are the honest number to quote for a large store.
 **Problem:** tested at 62 memories; real use is thousands. Index behaviour,
 `recall` precision, and latency at 10k+ rows are unmeasured.
 **Fix:** a harness that loads 10k–100k memories and measures recall@k, p95, and
