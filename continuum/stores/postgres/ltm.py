@@ -373,6 +373,68 @@ class PostgresLTM:
             await self._exec(conn, sql, {"id": str(_as_uuid(id)), "at": when})
         log.debug("LTM invalidate id=%s at=%s", id, when)
 
+    # ── duplicate suppression (reinforce, don't re-insert) ──────────────────
+
+    async def touch_duplicate(
+        self,
+        text: str,
+        *,
+        valid_from: datetime | None = None,
+        attribute: str | None = None,
+    ) -> uuid.UUID | None:
+        """Reinforce an existing identical memory; return its id, else ``None``.
+
+        People restate things — across sessions, and automatic capture will see
+        the same sentence again. Inserting a fresh row each time costs a row and
+        an embedding (~77ms) forever, for a fact already known. Retrieval dedups
+        at read, so the copies were invisible but never free.
+
+        Restating is *evidence*, not noise, so the existing row is bumped
+        (``access_count``, ``last_access``) rather than left alone — the scorer
+        already reads reinforcement as mild recency strength. Anything the
+        original lacked and this telling supplies (a valid time, an attribute)
+        is filled in; nothing already recorded is overwritten, because the first
+        telling is not less true than the second.
+
+        One statement, so a concurrent writer cannot slip a duplicate in between
+        the lookup and the update. Exact text only — near-duplicates are the
+        supersession decider's job, not a string comparison's.
+        """
+        sql = f"""
+            UPDATE {self._table} AS m
+            SET    access_count = m.access_count + 1,
+                   last_access  = now(),
+                   valid_from   = COALESCE(m.valid_from, %(valid_from)s::timestamptz),
+                   tags         = CASE
+                       WHEN %(attribute)s::text IS NOT NULL AND m.tags->>'attribute' IS NULL
+                       THEN jsonb_set(COALESCE(m.tags, '{{}}'::jsonb), '{{attribute}}',
+                                      to_jsonb(%(attribute)s::text))
+                       ELSE m.tags END,
+                   updated_at   = now()
+            WHERE  m.id = (
+                       SELECT id FROM {self._table}
+                       WHERE  namespace = %(ns)s
+                         AND  "text" = %(text)s
+                         AND  invalidated_at IS NULL
+                       ORDER  BY created_at DESC
+                       LIMIT  1
+                   )
+            RETURNING m.id
+        """
+        params = {
+            "ns": self._namespace,
+            "text": text,
+            "valid_from": valid_from,
+            "attribute": attribute,
+        }
+        async with self._connect() as conn:
+            cur = await self._exec(conn, sql, params)
+            row = await cur.fetchone()
+        if not row:
+            return None
+        log.debug("LTM duplicate reinforced ns=%s", self._namespace)
+        return _as_uuid(row["id"])
+
     # ── prune (bulk invalidate by policy — still no DELETE) ─────────────────
 
     async def prune(

@@ -174,3 +174,73 @@ async def test_limit_caps_the_blast_radius(e2e_dsn: str, aged_store) -> None:
         assert report.matched == 1 and report.pruned == 1
     finally:
         await mem.aclose()
+
+
+# ── restating a fact reinforces it instead of piling up copies ────────────────
+
+
+async def test_restating_a_fact_does_not_create_copies(e2e_dsn: str) -> None:
+    """People restate things, and automatic capture sees the same sentence again.
+
+    Each restatement used to cost a row and an embedding forever. Retrieval
+    dedups at read, so the copies were invisible — never free.
+    """
+    import psycopg
+
+    from continuum.memory import Memory
+
+    with psycopg.connect(e2e_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("TRUNCATE memory_nodes CASCADE")
+
+    mem = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="repeat")
+    await mem.start()
+    try:
+        for _ in range(10):
+            await mem.add("I cycle to work every day.")
+        await mem.add("My bike is a blue Brompton.")
+
+        with psycopg.connect(e2e_dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*), count(DISTINCT text) FROM memory_nodes")
+            rows, distinct = cur.fetchone()
+            assert (rows, distinct) == (2, 2), f"{rows} rows for 2 distinct facts"
+
+            # Restating is evidence, not noise — the repeats are recorded.
+            cur.execute("SELECT access_count FROM memory_nodes WHERE text LIKE 'I cycle%'")
+            assert cur.fetchone()[0] == 9
+
+        # …and both facts are still retrievable.
+        found = {h.content for h in await mem.recall("how do I get to work?", k=8)}
+        assert any("cycle" in c for c in found) and any("Brompton" in c for c in found)
+    finally:
+        await mem.aclose()
+
+
+async def test_a_restatement_fills_in_what_the_first_telling_lacked(e2e_dsn: str) -> None:
+    import psycopg
+
+    from continuum.memory import Memory
+
+    with psycopg.connect(e2e_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("TRUNCATE memory_nodes CASCADE")
+
+    mem = Memory.from_postgres(e2e_dsn, embeddings=False, namespace="fillin")
+    await mem.start()
+    try:
+        await mem.add("I work at Nimbus.")  # undated, untagged
+        await mem.add(
+            "I work at Nimbus.",
+            occurred_at=datetime(2025, 4, 1, tzinfo=UTC),
+            attribute="employer",
+        )
+        with psycopg.connect(e2e_dsn) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*), valid_from, tags->>'attribute' FROM memory_nodes GROUP BY 2,3"
+            )
+            rows = cur.fetchall()
+        assert len(rows) == 1
+        count, valid_from, attribute = rows[0]
+        assert count == 1  # one row, not two
+        assert valid_from is not None and valid_from.year == 2025  # the date landed
+        assert attribute == "employer"
+    finally:
+        await mem.aclose()

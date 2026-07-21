@@ -22,6 +22,16 @@ that the public API may still shift before 1.0.
   (default 3) caps one turn. (A modifier between the determiner and the head —
   "I have a *dentist* appointment" — walked past the transient-noun filter until
   a real session caught it.)
+- **Restating a fact reinforces it instead of storing a copy.** People repeat
+  themselves across sessions, and automatic capture sees the same sentence
+  again; each restatement used to cost a row *and* an embedding forever.
+  Retrieval dedups at read, so the copies were invisible but never free — 25
+  statements of one sentence left 25 rows. An exact, namespace-scoped,
+  live-only match now bumps the existing row (`access_count`, `last_access`) in
+  a single atomic statement, and anything the first telling lacked — a valid
+  time, an attribute — is filled in without overwriting what was already there.
+  Checked *before* embedding, which is the whole saving: a restatement costs
+  12ms instead of 104ms. Near-duplicates remain the supersession decider's job.
 - **Targeted forgetting — `Memory.forget(contains=…)`.** The maintenance
   policy could not express "that one is wrong, delete it": `superseded_only`
   matches nothing until an LLM decider has retired something, and turning it off

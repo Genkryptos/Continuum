@@ -310,6 +310,16 @@ class Memory:
         ltm = self._session.ltm
         if ltm is None:
             return
+        # Already know this, word for word? Reinforce it instead of storing a
+        # second copy. Checked BEFORE embedding, because the embedding is the
+        # expensive part (~77ms) and re-embedding known text is the whole waste.
+        touch = getattr(ltm, "touch_duplicate", None)
+        if touch is not None:
+            try:
+                if await touch(text, valid_from=occurred_at, attribute=attribute) is not None:
+                    return
+            except Exception:
+                log.debug("duplicate check failed — writing normally", exc_info=True)
         vec = await self._embed(text)
         node = MemoryItem(
             content=text,

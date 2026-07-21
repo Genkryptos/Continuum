@@ -558,3 +558,84 @@ async def test_forget_says_so_when_the_store_cannot() -> None:
     mem = Memory(_FakeSession())  # type: ignore[arg-type]
     with pytest.raises(NotImplementedError, match="Postgres"):
         await mem.forget(unused_for=timedelta(days=1))
+
+
+# ── duplicate writes reinforce instead of re-inserting ────────────────────────
+
+
+class _DedupingLTM(_FakeLTM):
+    def __init__(self, known: bool) -> None:
+        super().__init__()
+        self._known = known
+        self.touched: list[tuple[str, Any, Any]] = []
+
+    async def touch_duplicate(
+        self, text: str, *, valid_from: Any = None, attribute: Any = None
+    ) -> Any:
+        self.touched.append((text, valid_from, attribute))
+        return "existing-id" if self._known else None
+
+
+class _CountingEmbedder:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        return [[0.1, 0.2] for _ in texts]
+
+
+async def test_a_restated_fact_is_not_embedded_or_stored_again() -> None:
+    # The embedding is the expensive part (~77ms); re-embedding text we already
+    # know is the entire waste this avoids.
+    session = _FakeSession()
+    session.ltm = _DedupingLTM(known=True)  # type: ignore[assignment]
+    emb = _CountingEmbedder()
+    mem = Memory(session, embedder=emb)  # type: ignore[arg-type]
+
+    await mem.add("I cycle to work every day.")
+
+    assert session.ltm.upserts == []  # type: ignore[attr-defined]
+    assert emb.calls == 0  # never embedded
+
+
+async def test_a_new_fact_still_takes_the_normal_path() -> None:
+    session = _FakeSession()
+    session.ltm = _DedupingLTM(known=False)  # type: ignore[assignment]
+    emb = _CountingEmbedder()
+    mem = Memory(session, embedder=emb)  # type: ignore[arg-type]
+
+    await mem.add("I ride a blue Brompton.")
+
+    assert len(session.ltm.upserts) == 1  # type: ignore[attr-defined]
+    assert emb.calls == 1
+
+
+async def test_the_restatement_passes_along_what_it_adds() -> None:
+    from datetime import datetime
+
+    session = _FakeSession()
+    session.ltm = _DedupingLTM(known=True)  # type: ignore[assignment]
+    mem = Memory(session)  # type: ignore[arg-type]
+
+    when = datetime(2025, 4, 1, tzinfo=UTC)
+    await mem.add("I work at Nimbus.", occurred_at=when, attribute="employer")
+
+    text, valid_from, attribute = session.ltm.touched[0]  # type: ignore[attr-defined]
+    assert text == "I work at Nimbus."
+    assert valid_from == when and attribute == "employer"
+
+
+async def test_a_broken_duplicate_check_never_loses_the_write() -> None:
+    # Degrading to a duplicate row is survivable; dropping the fact is not.
+    class _Exploding(_FakeLTM):
+        async def touch_duplicate(self, text: str, **_kw: Any) -> Any:
+            raise RuntimeError("db hiccup")
+
+    session = _FakeSession()
+    session.ltm = _Exploding()  # type: ignore[assignment]
+    mem = Memory(session)  # type: ignore[arg-type]
+
+    await mem.add("I cycle to work.")
+
+    assert len(session.ltm.upserts) == 1  # type: ignore[attr-defined]

@@ -62,12 +62,14 @@ class MockConnection:
         search_rows: list[dict[str, Any]] | None = None,
         neighbor_rows: list[dict[str, Any]] | None = None,
         prune_rows: list[dict[str, Any]] | None = None,
+        touch_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.executed: list[tuple[str, Any]] = []
         self.prepared: list[bool] = []
         self._search = search_rows or []
         self._neighbors = neighbor_rows or []
         self._prune = prune_rows or []
+        self._touch = touch_rows or []
 
     async def execute(
         self, sql: str, params: Any = None, *, prepare: bool = False, **_: Any
@@ -82,6 +84,8 @@ class MockConnection:
             return MockCursor(self._search)
         if "ORDER BY COALESCE(last_access" in sql:
             return MockCursor(self._prune)
+        if "access_count = m.access_count + 1" in sql:
+            return MockCursor(self._touch)
         return MockCursor()  # INSERT / UPDATE
 
 
@@ -498,3 +502,50 @@ class TestPrune:
             PrunePolicy(unused_for=timedelta(days=1), limit=0)
         with pytest.raises(ValueError, match="contains"):
             PrunePolicy(unused_for=timedelta(days=1), contains="   ")
+
+
+# ---------------------------------------------------------------------------
+# touch_duplicate (reinforce instead of re-inserting)
+# ---------------------------------------------------------------------------
+
+
+class TestTouchDuplicate:
+    async def test_returns_the_id_and_reinforces_when_the_text_is_known(self) -> None:
+        conn = MockConnection(touch_rows=[{"id": str(N1)}])
+        got = await _ltm(conn).touch_duplicate("I cycle to work every day.")
+
+        assert got == N1
+        sql, params = conn.executed[0]
+        assert "access_count = m.access_count + 1" in sql  # restating is evidence
+        assert "last_access  = now()" in sql
+        assert params["text"] == "I cycle to work every day."
+
+    async def test_returns_none_when_it_is_a_new_fact(self) -> None:
+        conn = MockConnection(touch_rows=[])
+        assert await _ltm(conn).touch_duplicate("something new") is None
+
+    async def test_scoped_to_namespace_and_live_rows(self) -> None:
+        # Reinforcing across tenants would leak the existence of another
+        # namespace's memory; reinforcing a retired row would resurrect it.
+        conn = MockConnection(touch_rows=[])
+        await _ltm(conn, namespace="alice").touch_duplicate("x")
+        sql, params = conn.executed[0]
+        assert "namespace = %(ns)s" in sql and params["ns"] == "alice"
+        assert "invalidated_at IS NULL" in sql
+
+    async def test_new_information_fills_gaps_without_overwriting(self) -> None:
+        # Restating WITH a date the first telling lacked should record it — but
+        # the first telling is not less true than the second, so anything
+        # already there stands.
+        conn = MockConnection(touch_rows=[{"id": str(N1)}])
+        when = datetime(2025, 4, 1, tzinfo=UTC)
+        await _ltm(conn).touch_duplicate("I work at Nimbus.", valid_from=when, attribute="employer")
+        sql, params = conn.executed[0]
+        assert "COALESCE(m.valid_from, %(valid_from)s::timestamptz)" in sql
+        assert "m.tags->>'attribute' IS NULL" in sql  # only fills when absent
+        assert params["valid_from"] == when and params["attribute"] == "employer"
+
+    async def test_it_is_one_statement_so_a_racing_writer_cannot_duplicate(self) -> None:
+        conn = MockConnection(touch_rows=[{"id": str(N1)}])
+        await _ltm(conn).touch_duplicate("x")
+        assert len(conn.executed) == 1  # lookup + update, not two round trips
