@@ -58,6 +58,10 @@ dependencies = [
     "pydantic-settings>=2.4",
     "PyYAML>=6.0",
     "tenacity>=8.2",      # retry policy used in ContinuumSession + extractors
+    # Imported at module load by the DEFAULT in-memory LTM (via
+    # continuum.retrieval.bm25) — not optional. Missing it made a clean
+    # `pip install continuum-memory[mcp]` crash on the first tool call.
+    "rank-bm25>=0.2.2",
 ]
 
 # Project URLs — show up on PyPI sidebar. Must come AFTER any bare

@@ -268,13 +268,22 @@ build: ## Build wheel + sdist into dist/ — hatchling
 	@ls -lh dist/
 
 build-verify: build ## Build, then verify a clean install in a fresh venv
-	@TMP_VENV="$$(mktemp -d)/continuum_pip_verify"; \
-	echo "=== clean-venv install into $$TMP_VENV ==="; \
+	@set -e; \
+	WHEEL="$$(ls dist/continuum_memory-*.whl | tail -1)"; \
+	TMP_VENV="$$(mktemp -d)/continuum_pip_verify"; \
+	echo "=== clean-venv install of $$WHEEL into $$TMP_VENV ==="; \
 	$(BENCH_PYTHON) -m venv "$$TMP_VENV"; \
-	"$$TMP_VENV/bin/pip" install --quiet dist/continuum_memory-*.whl; \
+	"$$TMP_VENV/bin/pip" install --quiet "$$WHEEL[mcp]"; \
 	echo "=== smoke import + minimal session ==="; \
 	"$$TMP_VENV/bin/python" scripts/verify_clean_install.py; \
+	echo "=== MCP round-trip against the freshly installed binary ==="; \
+	env -u CONTINUUM_DB_DSN $(PYTHON) scripts/mcp_smoke.py "$$TMP_VENV/bin/continuum-mcp"; \
 	rm -rf "$$TMP_VENV"
+
+# ^ the [mcp] extra + a real remember→recall is the part that bites: a session
+# that assembles 0 items never imports the in-memory LTM's retrieval stack, so
+# this gate passed for a wheel that was missing rank-bm25 entirely and crashed
+# on any user's first tool call. Exercise the store, not just the import.
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 

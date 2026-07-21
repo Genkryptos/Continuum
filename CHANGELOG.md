@@ -8,6 +8,11 @@ that the public API may still shift before 1.0.
 ## [Unreleased]
 
 ### Added
+- **MCP observability** — `CONTINUUM_MCP_LOG_LEVEL` (default `WARNING`, quiet).
+  At `INFO` every tool call logs one line with its inputs, outcome and latency
+  (`tool=recall query=… k=3 hits=1 [18ms]`); a failing tool logs `FAILED` with a
+  traceback instead of vanishing. **stderr only** — on the stdio transport stdout
+  is the JSON-RPC channel.
 - **`Memory.from_postgres(dsn, *, embeddings=True)`** — a production-stack factory
   mirroring `Memory.in_memory()`: Postgres STM/LTM + the full hybrid retriever, so
   `recall` is **relevance-ranked** (dense + sparse), not recency-ranked. The local
@@ -36,6 +41,18 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`rank-bm25` was missing from the package dependencies** — it is imported at
+  module load by the *default* in-memory LTM, so a clean
+  `pip install "continuum-memory[mcp]"` crashed with `ModuleNotFoundError` on the
+  first tool call. It was only ever present in `requirements.txt`, which nobody
+  installing from PyPI reads. `make build-verify` passed anyway, because a
+  session that assembles 0 items never reaches the retrieval stack; that gate now
+  installs the `[mcp]` extra and drives a real `remember` → `recall` through the
+  freshly installed binary.
+- **`scripts/mcp_smoke.py` lost the last reply of a run.** It wrote every request
+  and waited for EOF; `mcp` ≥ 1.28 drops in-flight replies when stdin closes, so
+  `recall` — the final call — silently came back missing and looked like a
+  retrieval failure. It now reads replies as they arrive, like a real client.
 - **Retrieval was query-independent on the Postgres path** (core bug, affected
   `session.search()` for every Postgres user — not just MCP). The stores return
   hits *without* their embedding vector, so `Scorer` computed

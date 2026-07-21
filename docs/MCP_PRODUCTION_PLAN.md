@@ -143,11 +143,28 @@ zero log bytes on stdout). Exceptions log `FAILED` + traceback and re-raise.
 Backend-unreachable and autostart paths already logged. Not done: counters/metrics
 export and decider-decision logging — add when something consumes them.
 
-### 4.3 Install & secrets story
+### 4.3 Install & secrets story — ✅ DONE (and it was not a docs task: the documented install was broken)
 `pip install continuum-memory[mcp]` clean-venv path; the MCP registration
 one-liner; document that `continuum.yaml` is git-tracked and must not hold a
 machine DSN (nearly leaked a username into the public repo this cycle).
 **Effort:** S.
+
+**Found by actually doing it** — built the wheel, installed it in three fresh
+venvs, ran the smoke against each:
+- `[mcp]` alone **crashed on the first tool call**: `rank-bm25` is imported at
+  module load by the *default* in-memory LTM but lived only in
+  `requirements.txt`, which nobody installing from PyPI reads. Now a core dep.
+- `make build-verify` **passed on that broken wheel** — a session assembling 0
+  items never reaches the retrieval stack. The gate now installs `[mcp]` and
+  drives a real `remember` → `recall` through the freshly installed binary.
+- `scripts/mcp_smoke.py` was losing the last reply of every run (mcp ≥ 1.28
+  drops in-flight replies at stdin EOF); it now reads like a real client.
+
+Verified end state: `[mcp]` (in-memory), `[mcp,postgres]` + `EMBEDDINGS=0`
+(durable, sparse — row asserted in Postgres), `[mcp,postgres,embed]` (durable
+with a vector) all round-trip from a clean venv. Secrets: `docs/mcp.md` now says
+`continuum.yaml` is tracked, keep DSNs in the environment, and which client
+config files are safe to hold one.
 
 ---
 

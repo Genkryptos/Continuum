@@ -22,6 +22,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 
 _MARKER = "continuum-mcp-smoke: The launch date is 2026-07-19"
 
@@ -45,48 +46,74 @@ def _rpc(mid: int, method: str, params: dict | None = None) -> str:
     return json.dumps(msg)
 
 
-def main(argv: list[str]) -> int:
-    cmd = _server_cmd(argv)
-    requests = "\n".join(
-        [
-            _rpc(
-                1,
-                "initialize",
-                {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "mcp-smoke", "version": "0"},
-                },
-            ),
-            _rpc(0, "notifications/initialized"),
-            _rpc(2, "tools/list", {}),
-            _rpc(3, "tools/call", {"name": "remember", "arguments": {"text": _MARKER}}),
-            _rpc(
-                4, "tools/call", {"name": "recall", "arguments": {"query": "launch date", "k": 3}}
-            ),
-        ]
-    )
+def _exchange(cmd: list[str], requests: list[str], want: set[int], timeout: float = 60.0):
+    """Speak stdio JSON-RPC to `cmd` and return ({id: reply}, stderr).
 
-    print(f"[mcp-smoke] spawning: {' '.join(cmd)}", file=sys.stderr)
-    proc = subprocess.run(
-        cmd,
-        input=requests + "\n",
-        capture_output=True,
-        text=True,
-        timeout=60,
+    Reads replies as they arrive and only then closes the session, the way a real
+    client does. Do NOT write everything and wait for EOF: mcp>=1.28's stdio
+    server drops in-flight replies when stdin closes, so the last call of the
+    run silently comes back missing — which looked exactly like a broken recall.
+    """
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
+    assert proc.stdin and proc.stdout and proc.stderr
+    err: list[str] = []
+    threading.Thread(target=lambda: err.append(proc.stderr.read()), daemon=True).start()
 
     replies: dict[int, dict] = {}
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    reading_done = threading.Event()
+
+    def _read() -> None:
+        for line in proc.stdout:  # type: ignore[union-attr]
+            try:
+                m = json.loads(line.strip())
+            except json.JSONDecodeError:
+                continue
+            if isinstance(m, dict) and isinstance(m.get("id"), int):
+                replies[m["id"]] = m
+                if want <= replies.keys():
+                    reading_done.set()
+                    return
+        reading_done.set()
+
+    reader = threading.Thread(target=_read, daemon=True)
+    reader.start()
+    try:
+        proc.stdin.write("\n".join(requests) + "\n")
+        proc.stdin.flush()
+        reading_done.wait(timeout)
+    finally:
+        proc.stdin.close()
+        proc.terminate()
         try:
-            m = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(m, dict) and isinstance(m.get("id"), int):
-            replies[m["id"]] = m
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    reader.join(timeout=5)
+    return replies, "".join(err)
+
+
+def main(argv: list[str]) -> int:
+    cmd = _server_cmd(argv)
+    requests = [
+        _rpc(
+            1,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "mcp-smoke", "version": "0"},
+            },
+        ),
+        _rpc(0, "notifications/initialized"),
+        _rpc(2, "tools/list", {}),
+        _rpc(3, "tools/call", {"name": "remember", "arguments": {"text": _MARKER}}),
+        _rpc(4, "tools/call", {"name": "recall", "arguments": {"query": "launch date", "k": 3}}),
+    ]
+
+    print(f"[mcp-smoke] spawning: {' '.join(cmd)}", file=sys.stderr)
+    replies, stderr = _exchange(cmd, requests, want={1, 2, 3, 4})
 
     # ── assertions ────────────────────────────────────────────────────────────
     ok = True
@@ -120,9 +147,9 @@ def main(argv: list[str]) -> int:
         print(f"[mcp-smoke] ✗ recall did not return the stored fact; got: {recalled}")
         ok = False
 
-    if not ok and proc.stderr:
+    if not ok and stderr:
         print("\n[mcp-smoke] server stderr (tail):", file=sys.stderr)
-        print("\n".join(proc.stderr.splitlines()[-10:]), file=sys.stderr)
+        print("\n".join(stderr.splitlines()[-10:]), file=sys.stderr)
 
     print(f"\n[mcp-smoke] {'PASS ✓' if ok else 'FAIL ✗'}")
     return 0 if ok else 1

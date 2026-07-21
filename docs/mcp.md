@@ -6,10 +6,20 @@ supersession-aware memory with zero glue code.
 ## Install & run
 
 ```bash
-pip install "continuum-memory[mcp]"
+pip install "continuum-memory[mcp,postgres,embed]"   # the real thing (see below)
 continuum-mcp                       # stdio — an MCP client spawns this itself
 continuum-mcp --http --port 8000    # standalone always-on HTTP server (connect by URL)
 ```
+
+`[mcp]` alone installs a working server, but only the **in-memory** backend:
+recall is recency-ranked and everything is lost when the process exits. Add
+`postgres` for durability and `embed` for semantic recall — or skip `embed` and
+set `CONTINUUM_MCP_EMBEDDINGS=0` for a sparse-only server that still persists
+(lexical recall, no ~2.3 GB model download).
+
+Both paths are verified from a fresh venv against the built wheel, not just in
+the dev tree: handshake → `remember` → `recall`, with the Postgres run asserted
+down to the row (`scripts/mcp_smoke.py`, `make mcp-smoke`).
 
 ## Backends
 
@@ -30,6 +40,21 @@ The Postgres backend needs a migrated database (`make db-up && make db-migrate`;
 see `docs/config.md`). The in-memory default is fine for demos, but its recall is
 recency-ranked — at scale the relevant memory gets buried, which also weakens
 `current` (it depends on recall surfacing the fact). Use Postgres for real recall.
+
+### Keep your DSN out of the repo
+
+**`continuum.yaml` is tracked in git.** Its DSN points at the docker-compose
+database (`postgres:postgres@…`) on purpose, and it must stay that way. Put your
+real connection string in the **environment** — `CONTINUUM_DB_DSN`, your shell
+profile, or the MCP client's `env` block — never in the tracked config. Editing
+that file to reach your own database is how a machine username or password ends
+up in a public commit; it happened to us during this cycle and was caught by
+luck, not by review.
+
+Same rule for the client side. `.claude/settings.local.json` is gitignored and is
+a fine place for a DSN; `.mcp.json` is *meant* to be committed, so keep the
+connection string in the environment and let the server read `CONTINUUM_DB_DSN`
+from there. Check which kind of file you are editing before you paste a DSN in.
 
 ## When the database is down
 
