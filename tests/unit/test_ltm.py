@@ -460,6 +460,31 @@ class TestPrune:
         assert "COALESCE(access_count, 0) <= %(max_acc)s" in sql
         assert params["max_imp"] == 0.2 and params["max_acc"] == 0
 
+    async def test_contains_narrows_to_one_memory(self) -> None:
+        # The "that one is wrong, delete it" path. Without it targeted removal
+        # is impossible: superseded_only matches nothing until an LLM has
+        # retired something, and turning it off makes age the only lever.
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy(contains="dentist appointment"))
+        sql, params = conn.executed[0]
+        assert '"text" ILIKE %(contains)s' in sql
+        assert params["contains"] == "%dentist appointment%"
+
+    async def test_contains_is_bound_not_interpolated(self) -> None:
+        # The substring is often pasted back from a memory's own text.
+        conn = MockConnection(prune_rows=[])
+        nasty = "'; DROP TABLE memory_nodes; --"
+        await _ltm(conn).prune(self._policy(contains=nasty))
+        sql, params = conn.executed[0]
+        assert "DROP TABLE" not in sql
+        assert params["contains"] == f"%{nasty}%"
+
+    async def test_contains_is_omitted_when_unset(self) -> None:
+        conn = MockConnection(prune_rows=[])
+        await _ltm(conn).prune(self._policy())
+        sql, params = conn.executed[0]
+        assert "ILIKE" not in sql and "contains" not in params
+
     async def test_nothing_matched_writes_nothing(self) -> None:
         conn = MockConnection(prune_rows=[])
         report = await _ltm(conn).prune(self._policy(), dry_run=False)
@@ -471,3 +496,5 @@ class TestPrune:
             PrunePolicy(unused_for=timedelta(days=-1))
         with pytest.raises(ValueError, match="limit"):
             PrunePolicy(unused_for=timedelta(days=1), limit=0)
+        with pytest.raises(ValueError, match="contains"):
+            PrunePolicy(unused_for=timedelta(days=1), contains="   ")

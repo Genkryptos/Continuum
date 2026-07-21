@@ -37,6 +37,8 @@ DURABLE = [
     "I grew up in Bhilai.",
     "I graduated in 2019.",
     "I have two younger brothers.",
+    "I have a cat named Sopa.",
+    "I have a peanut allergy.",
     "I am vegetarian.",
     "I keep my venvs under ~/.venvs.",
     "I usually work late at night.",
@@ -51,6 +53,12 @@ EPHEMERAL = [
     "I am running the tests now.",
     "I am getting an import error.",
     "I have a meeting at 3pm tomorrow.",
+    # A modifier between the determiner and the head used to walk straight past
+    # the filter — found by using the thing, not by the curated set below.
+    "I have a dentist appointment on Thursday.",
+    "I have a team meeting at 3pm.",
+    "I have a really bad headache today.",
+    "I have an interview on Monday.",
     "I have a headache today.",
     "I have a question about the API.",
     "I am done with this task.",

@@ -118,6 +118,62 @@ def test_current_works_without_manual_tags(e2e_dsn: str) -> None:
         c.close()
 
 
+def test_an_undated_fact_is_superseded_by_a_dated_correction(e2e_dsn: str) -> None:
+    """The shape real conversations actually take, and it used to answer stale.
+
+    You state a standing fact with no date ("I live in Lisbon"), and later
+    correct it *with* one ("I moved to Porto on July 1st"). Storing the undated
+    fact with ``valid_from = now`` made the correction look a year OLDER than
+    the thing it corrected, so ``current`` kept answering Lisbon — forever.
+
+    Both other current() tests date *both* facts, which is why they stayed green
+    through it. Valid time is only comparable when every candidate states one.
+    """
+    from tests.e2e.conftest import MCPClient
+
+    c = MCPClient(e2e_dsn, CONTINUUM_MCP_NAMESPACE="undated")
+    try:
+        c.tool("remember", text="I live in Lisbon.", attribute="residence")  # no occurred_at
+        c.tool(
+            "remember",
+            text="I moved from Lisbon to Porto.",
+            occurred_at="2026-07-01",
+            attribute="residence",
+        )
+
+        _, now = c.tool("current", subject="user", attribute="residence")
+        assert "Porto" in now, f"answered with the stale value: {now!r}"
+
+        # …and the undated fact is still what was true before the dated move.
+        _, past = c.tool("current", subject="user", attribute="residence", as_of="2026-03-01")
+        assert "Lisbon" in past and "Porto" not in past
+    finally:
+        c.close()
+
+
+def test_timeline_orders_an_undated_fact_before_a_dated_correction(e2e_dsn: str) -> None:
+    # Same root cause, visible as history in the wrong order: the July move was
+    # listed *before* the fact it replaced.
+    from tests.e2e.conftest import MCPClient
+
+    c = MCPClient(e2e_dsn, CONTINUUM_MCP_NAMESPACE="undated-timeline")
+    try:
+        c.tool("remember", text="I live in Lisbon.", attribute="residence")
+        c.tool(
+            "remember",
+            text="I moved from Lisbon to Porto.",
+            occurred_at="2026-07-01",
+            attribute="residence",
+        )
+        _, hist = c.tool("timeline", entity="Lisbon")
+        texts = [h["content"] for h in hist]
+        assert len(texts) >= 2
+        assert "I live in Lisbon." in texts[0]
+        assert "Porto" in texts[-1]
+    finally:
+        c.close()
+
+
 # ── the durability lie: a write that never persists must not report success ───
 
 

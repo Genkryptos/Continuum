@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
@@ -318,11 +319,15 @@ class Memory:
             importance=importance,
             embedding=vec,
             metadata=({"attribute": attribute} if attribute else {}),
-            # Valid time: when the fact became true in the world (as opposed to
-            # when we recorded it). Without this the store has no temporal
-            # ordering to reason over and every fact ties, so `current` cannot
-            # tell stale from fresh.
-            valid_range=BiTemporalRange(valid_from=when),
+            # Valid time is recorded ONLY when the caller stated it. Defaulting
+            # it to the write time invents a claim we cannot support, and the
+            # invention inverts supersession: state "I live in Lisbon" today
+            # (valid_from := now), then later "I moved to Porto on July 1st"
+            # (valid_from := July 1st), and the correction now looks *older*
+            # than the fact it replaces — so `current` keeps answering Lisbon.
+            # A NULL here means "no stated valid time"; ordering then falls back
+            # to transaction time, which is the honest signal we do have.
+            valid_range=(BiTemporalRange(valid_from=occurred_at) if occurred_at else None),
         )
         if self._decider is not None and await self._decided_write(ltm, node, vec):
             return
@@ -431,8 +436,9 @@ class Memory:
     async def forget(
         self,
         *,
-        unused_for: timedelta,
+        unused_for: timedelta = timedelta(0),
         superseded_only: bool = True,
+        contains: str | None = None,
         max_importance: float | None = None,
         max_access_count: int | None = None,
         limit: int = 1000,
@@ -448,6 +454,16 @@ class Memory:
         By default only *superseded* facts are eligible: those whose valid-time
         window has closed because a newer fact replaced them. Pass
         ``superseded_only=False`` to also forget facts that are still true.
+
+        For the other kind of forgetting — "that one is wrong, delete it" —
+        pass *contains*, a case-insensitive substring of the memory you mean::
+
+            await mem.forget(contains="dentist appointment",
+                             superseded_only=False, dry_run=False)
+
+        Without it, targeted removal is impossible: `superseded_only=True`
+        matches nothing until an LLM decider has retired something, and turning
+        it off makes age the only lever, which reaches the whole store.
 
         Scope: this prunes **long-term** memory. A turn still sitting in the
         current session's short-term buffer keeps surfacing in that session's
@@ -472,6 +488,7 @@ class Memory:
         policy = PrunePolicy(
             unused_for=unused_for,
             superseded_only=superseded_only,
+            contains=contains,
             max_importance=max_importance,
             max_access_count=max_access_count,
             limit=limit,
@@ -532,7 +549,8 @@ class Memory:
         # whole result set by time lets an unrelated fact recorded today outrank
         # the real answer. `recall` is relevance-ranked, so the head of `live` is
         # the topical set and valid time only breaks ties inside it.
-        chosen = max(live[:_CURRENT_TOPICAL_WINDOW], key=_effective_time)
+        head = live[:_CURRENT_TOPICAL_WINDOW]
+        chosen = max(head, key=_order_key(head))
         return chosen.content or None
 
     async def _current_by_tag(self, attribute: str, when: datetime) -> tuple[bool, str | None]:
@@ -553,7 +571,7 @@ class Memory:
             return False, None
         live = [r for r in rows if not _is_superseded(r)] or list(rows)
         if live:
-            return True, (max(live, key=_effective_time).content or None)
+            return True, (max(live, key=_order_key(live)).content or None)
         # Nothing carries this attribute. Whether that is an honest "no such
         # fact" or simply a corpus that never tags attributes decides between
         # answering None and falling back to retrieval — so ask.
@@ -575,7 +593,7 @@ class Memory:
         hits = await self.recall(entity, k=50)
         ent = entity.lower()
         items = [h for h in hits if ent in (h.content or "").lower()]
-        items.sort(key=_effective_time)
+        items.sort(key=_order_key(items))
         if since is not None:
             items = [h for h in items if _effective_time(h) >= since]
         if until is not None:
@@ -636,3 +654,18 @@ def _effective_time(item: MemoryItem) -> datetime:
     if vr is not None and vr.valid_from is not None:
         return vr.valid_from
     return item.created_at
+
+
+def _order_key(items: list[MemoryItem]) -> Callable[[MemoryItem], datetime]:
+    """Pick a comparable clock for *items*.
+
+    Valid time and transaction time answer different questions, and mixing them
+    silently is how a correction ends up ranked before the thing it corrects.
+    So compare valid time only when **every** candidate actually states one;
+    otherwise compare when we were told, which all of them have.
+    """
+    if items and all(
+        i.valid_range is not None and i.valid_range.valid_from is not None for i in items
+    ):
+        return _effective_time
+    return lambda i: _as_utc(i.created_at)

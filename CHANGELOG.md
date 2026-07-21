@@ -19,7 +19,14 @@ that the public API may still shift before 1.0.
   credential-shaped — a secret drops its whole sentence. Measured 18/18 durable
   facts kept with **0 false captures out of 47** adversarial negatives.
   `--dry-run` previews a turn before you enable it; `CONTINUUM_CAPTURE_MAX`
-  (default 3) caps one turn.
+  (default 3) caps one turn. (A modifier between the determiner and the head —
+  "I have a *dentist* appointment" — walked past the transient-noun filter until
+  a real session caught it.)
+- **Targeted forgetting — `Memory.forget(contains=…)`.** The maintenance
+  policy could not express "that one is wrong, delete it": `superseded_only`
+  matches nothing until an LLM decider has retired something, and turning it off
+  left age as the only lever, which reaches the whole store. `contains` is a
+  case-insensitive substring match, bound not interpolated.
 - **Forgetting — `Memory.forget()` / `PostgresLTM.prune()`.** Memory only ever
   grew; there was no eviction of any kind. Pruning is expressed as the same
   bi-temporal close as supersession (`invalidated_at`), so a forgotten fact
@@ -63,6 +70,17 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`current` answered with the stale fact after a dated correction.** Found by
+  using the thing, not by the suite — which stayed green because both existing
+  tests dated *both* facts. Real conversations don't: you state a standing fact
+  with no date ("I live in Lisbon"), then correct it with one ("I moved to Porto
+  on July 1st"). Writes defaulted `valid_from` to *now*, so the correction
+  looked a year **older** than what it replaced and `current` kept answering
+  Lisbon — forever. Valid time is now recorded only when the caller states it
+  (a NULL means "unstated"), and ordering compares valid time only when every
+  candidate has one, else transaction time. This also fixed `timeline` listing
+  a correction before the fact it corrects, and `as_of` returning "not found"
+  for a period an undated fact covered.
 - **Dating a fact buried it in recall.** Recency decay was based on `valid_from`
   (when the fact became true) rather than `created_at` (when we learned it), so
   the only rows carrying valid time — the ones a user had deliberately dated —

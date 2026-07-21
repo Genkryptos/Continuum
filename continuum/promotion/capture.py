@@ -167,10 +167,14 @@ _TRANSIENT_STATE = re.compile(
     r"|on\s+\w+|in\s+the\s+(?:middle|process)|at\s+(?:the\s+)?(?:office|desk))\b",
     re.I,
 )
+#: ``(?:\w+\s+){0,2}`` matters: without it a single modifier walks straight
+#: past the filter — "I have a *dentist* appointment on Thursday" was captured
+#: as a durable fact, which is the exact noise this list exists to stop.
 _TRANSIENT_HAVE = re.compile(
-    r"^\s*i\s+have\s+(?:a|an|some|another|one)?\s*(?:meeting|call|appointment|deadline"
-    r"|headache|cold|fever|question|idea|problem|issue|error|bug|thought|minute"
-    r"|moment|second|feeling|hunch|plan|task|ticket|errand)\b",
+    r"^\s*i\s+have\s+(?:a|an|some|another|one|two|three)?\s*(?:\w+\s+){0,2}"
+    r"(?:meeting|call|appointment|deadline|interview|flight|reservation|booking"
+    r"|headache|cold|fever|cough|question|idea|problem|issue|error|bug|thought"
+    r"|minute|moment|second|feeling|hunch|plan|task|ticket|errand|chore|demo|review)\b",
     re.I,
 )
 

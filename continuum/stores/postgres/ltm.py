@@ -409,6 +409,11 @@ class PostgresLTM:
             # A closed valid-time window in the past = the fact is no longer true.
             where.append("valid_to IS NOT NULL AND valid_to <= %(at)s")
             params["at"] = at
+        if policy.contains is not None:
+            # ILIKE with the pattern BOUND, never interpolated — this string
+            # comes from a caller who may be pasting back a memory's own text.
+            where.append('"text" ILIKE %(contains)s')
+            params["contains"] = f"%{policy.contains}%"
         if policy.max_importance is not None:
             where.append("COALESCE(importance, 0) <= %(max_imp)s")
             params["max_imp"] = policy.max_importance

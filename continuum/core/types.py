@@ -616,14 +616,20 @@ class PrunePolicy:
         Require a closed valid-time window (``valid_to`` in the past) — i.e.
         the fact has been replaced by a newer one. Set False to also forget
         facts that are still true; do that knowingly.
+    contains:
+        Only rows whose text contains this substring (case-insensitive). This
+        is the "that one is wrong, delete it" lever — targeted, not
+        age-based. Pair it with ``superseded_only=False`` and
+        ``unused_for=timedelta(0)`` to reach a fact stated moments ago.
     max_importance / max_access_count:
         Optional ceilings. ``None`` disables the check.
     limit:
         Blast radius. One call never retires more than this many rows.
     """
 
-    unused_for: timedelta
+    unused_for: timedelta = timedelta(0)
     superseded_only: bool = True
+    contains: str | None = None
     max_importance: float | None = None
     max_access_count: int | None = None
     limit: int = 1000
@@ -633,6 +639,8 @@ class PrunePolicy:
             raise ValueError("unused_for must not be negative")
         if self.limit <= 0:
             raise ValueError("limit must be positive")
+        if self.contains is not None and not self.contains.strip():
+            raise ValueError("contains must be a non-empty substring")
 
 
 @dataclass(frozen=True)
