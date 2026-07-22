@@ -94,21 +94,39 @@ this project.
 round is itself the result that has never yet occurred.
 **Effort:** M.
 
-**Upgrade path — ✅ verified.** A store on the previous schema (migrations
-001–005, HNSW at `m=16`), populated with 12,020 real embedded memories, 79 MB:
+**Upgrade path — ✅ verified**, on a store built from migrations 001–005 with
+12,020 real embedded memories (79 MB). `make db-migrate` applied `006` in
+**6.0s**, lost nothing, needed no manual step.
 
-| | recall@8 | index |
-|---|---:|---|
-| before `006` | 14/20 = 70% | m=16, ef_construction=64 |
-| after `006` | **16/20 = 80%** | m=32, ef_construction=200 |
+**And it corrected a claim of mine.** The first measurement said 70% → 80%, one
+index build each. Repeating it five times per configuration says something
+different and more useful:
 
-`make db-migrate` applied it in **6.0s** with no data loss and no manual step —
-so the index rebuild is a real, measurable improvement for existing users, not
-just new installs. On a much larger store the `ACCESS EXCLUSIVE` lock matters
-and the migration documents the `CONCURRENTLY` recipe for that case.
+| index | runs | median | range |
+|---|---|---:|---|
+| old `m=16, ef_construction=64` | 16, 12, 14, 19, 15 | 15/20 | **12–19** |
+| new `m=32, ef_construction=200` | 16, 17, 16, 16, 16 | 16/20 | **16–17** |
 
-Remaining in this item: backup/restore, clock skew and DST, disk-full, and a
-from-scratch install on a clean machine.
+The median barely moves. What the denser graph actually buys is **consistency**:
+with `m=16` a user could rebuild their index and silently lose seven needles'
+worth of recall, or gain four, purely on the luck of the build. That is the real
+argument for `006`, and it is a better one.
+
+**Methodological consequence, which applies to every recall figure in this
+repo:** HNSW assigns node levels randomly, so an index build is a *sample*, not
+a measurement. Single-build comparisons can report a difference that is entirely
+build noise — as mine did. `recall_at_scale.py --rebuilds N` now reports a
+median and range, and a single-build run prints a warning saying so.
+
+**Backup/restore — ✅ verified.** `pg_dump -Fc` of the 12k store (51 MB) and
+`pg_restore` into a fresh database: 0 errors, all 12,020 rows and vectors
+intact, migration history preserved, HNSW parameters and all four extensions
+recreated, and retrieval works on the restored copy. One operational gotcha
+worth documenting: the `pg_dump` on `PATH` was 14.18 against a 16.10 server and
+**refused to run at all** — back up with client tools matching your server.
+
+Remaining in this item: clock skew and DST, disk-full, and a from-scratch
+install on a clean machine.
 
 ---
 

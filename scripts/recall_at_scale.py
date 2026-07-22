@@ -259,6 +259,22 @@ def _row_count(dsn: str, namespace: str) -> int:
         return -1
 
 
+def _reindex(dsn: str) -> None:
+    """Rebuild the vector index.
+
+    HNSW assigns node levels randomly, so two builds over identical rows give
+    different graphs with measurably different recall — 16, 17, 17, 16 out of 20
+    across four rebuilds of one 12k store. A single build is therefore a sample,
+    not a measurement, and comparing two stores on one build each can report a
+    difference that is entirely build noise.
+    """
+    import psycopg
+
+    with psycopg.connect(dsn, autocommit=True) as c, c.cursor() as cur:
+        cur.execute("SET maintenance_work_mem = '512MB'")
+        cur.execute("REINDEX INDEX memory_nodes_embedding_hnsw_idx")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--rows", type=int, default=3000)
@@ -266,6 +282,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--k", type=int, default=8)
     p.add_argument("--namespace", default="scale")
     p.add_argument("--skip-load", action="store_true", help="corpus already loaded")
+    p.add_argument(
+        "--rebuilds",
+        type=int,
+        default=1,
+        help="rebuild the HNSW index and re-score this many times, reporting the spread",
+    )
     args = p.parse_args(argv)
 
     dsn = os.environ.get("CONTINUUM_DB_DSN")
@@ -281,13 +303,35 @@ def main(argv: list[str] | None = None) -> int:
     # they differ, and a label that guesses is how a measurement quietly starts
     # describing something other than what it measured.
     rows = _row_count(dsn, args.namespace)
-    hits, p50 = asyncio.run(score(dsn, args.namespace, args.k))
     total = len(NEEDLES)
     shape = args.shape if not args.skip_load else "existing store"
-    print(
-        f"\n  recall@{args.k} = {hits}/{total} = {hits / total:.0%}"
-        f"   p50 {p50:.0f}ms   ({rows} memories, {shape})"
-    )
+
+    results: list[int] = []
+    p50 = 0.0
+    for run in range(max(1, args.rebuilds)):
+        if run > 0:
+            _reindex(dsn)
+        hits, p50 = asyncio.run(score(dsn, args.namespace, args.k))
+        results.append(hits)
+
+    if len(results) == 1:
+        print(
+            f"\n  recall@{args.k} = {results[0]}/{total} = {results[0] / total:.0%}"
+            f"   p50 {p50:.0f}ms   ({rows} memories, {shape})"
+        )
+        print(
+            "  note: one index build. HNSW build randomness moves this by +/-1-2 "
+            "needles on identical data — use --rebuilds for a range."
+        )
+    else:
+        lo, hi = min(results), max(results)
+        med = sorted(results)[len(results) // 2]
+        print(
+            f"\n  recall@{args.k} over {len(results)} index builds: "
+            f"median {med}/{total} = {med / total:.0%}, range {lo}-{hi}"
+            f"   p50 {p50:.0f}ms   ({rows} memories, {shape})"
+        )
+        print(f"  runs: {results}")
     return 0
 
 
