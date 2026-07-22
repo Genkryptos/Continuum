@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
@@ -713,6 +714,21 @@ def _effective_time(item: MemoryItem) -> datetime:
     return item.created_at
 
 
+#: "I switched from Neovim to Zed" — a statement that explicitly replaces one
+#: named thing with another. Both sides must be capitalised, the same precision
+#: lever the attribute extractor uses: it separates this from "I switched from
+#: the kitchen to the office" and "I moved from one file to another".
+_REPLACES = re.compile(
+    r"\b(?:switched|moved|migrated|changed|upgraded)\s+from\s+([A-Z][\w.+-]*)\s+to\s+[A-Z]"
+)
+
+
+def _superseded_entity(item: MemoryItem) -> str | None:
+    """The thing a memory declares it has moved *away from*, if any."""
+    match = _REPLACES.search(item.content or "")
+    return match.group(1).lower() if match else None
+
+
 def _prefer_current_versions(items: list[MemoryItem]) -> list[MemoryItem]:
     """Let the current version of an attribute speak for its group.
 
@@ -729,7 +745,15 @@ def _prefer_current_versions(items: list[MemoryItem]) -> list[MemoryItem]:
     same comparable-clock rule as ``current``, so a dated correction beats an
     undated original.
 
-    Untagged memories are left exactly as retrieval ranked them.
+    A second, narrower rule covers the untagged case. "I switched from Neovim to
+    Zed" carries no attribute, so it used to rank *below* "I use Neovim with a
+    tmux setup" — the stale fact winning again, just without a tag to catch it.
+    A sentence that names what it replaced supersedes the memories still
+    asserting that thing. Both sides must be capitalised, which keeps "I moved
+    from the kitchen to the office" out of it.
+
+    Untagged memories with no such relationship are left exactly as retrieval
+    ranked them.
     """
     if len(items) < 2:
         return items
@@ -740,12 +764,31 @@ def _prefer_current_versions(items: list[MemoryItem]) -> list[MemoryItem]:
         if isinstance(attribute, str) and attribute.strip():
             groups.setdefault(attribute.strip().lower(), []).append(i)
 
+    # Untagged replacements: group the announcement with what it displaced.
+    for i, item in enumerate(items):
+        entity = _superseded_entity(item)
+        if entity is None:
+            continue
+        mentions = re.compile(rf"\b{re.escape(entity)}\b", re.I)
+        displaced = [
+            j
+            for j, other in enumerate(items)
+            if j != i and _superseded_entity(other) is None and mentions.search(other.content or "")
+        ]
+        if displaced:
+            groups.setdefault(f"replaces:{entity}", sorted([i, *displaced]))
+
     out = list(items)
-    for positions in groups.values():
+    for key, positions in groups.items():
         if len(positions) < 2:
             continue
         members = [items[i] for i in positions]
-        newest = max(members, key=_order_key(members))
+        if key.startswith("replaces:"):
+            # The announcement leads by construction, not by clock: it may well
+            # have been written before the fact it displaces was last touched.
+            newest = next(m for m in members if _superseded_entity(m) is not None)
+        else:
+            newest = max(members, key=_order_key(members))
         reordered = [newest] + [m for m in members if m is not newest]
         for slot, item in zip(positions, reordered, strict=True):
             out[slot] = item

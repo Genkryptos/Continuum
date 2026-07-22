@@ -170,7 +170,7 @@ distinct across two namespaces), the migration left 3 live rows, kept the
 deleting. **8 concurrent writers of a brand-new sentence now leave exactly 1 row
 with `access_count=7`** — previously 5 rows. Sequential writes unchanged.
 
-### 1.2 Supersession reordering only works for tagged facts
+### 1.2 Supersession reordering only works for tagged facts — ✅ DONE
 **Problem (measured):** `_prefer_current_versions` fixed residence and employer,
 but "I switched from Neovim to Zed" still ranks below "I use Neovim with a tmux
 setup" — that pair carries no `attribute` tag, so there is no group to reorder.
@@ -181,6 +181,23 @@ measurement before it can be trusted.
 **Acceptance:** the Neovim/Zed case orders correctly with no regression in the
 0-false-tag attribute set.
 **Effort:** M.
+
+**Shipped:** the second option, kept narrow. A memory that names what it
+replaced — `switched|moved|migrated|changed|upgraded from X to Y` — supersedes
+the memories still asserting X. Both sides must be **capitalised**, the same
+precision lever the attribute extractor uses, which is what keeps "I switched
+from the kitchen to the office" and "I moved the file from src to lib" out of
+it entirely.
+
+The announcement leads by construction rather than by clock: it may well have
+been written before the fact it displaces was last touched, so a timestamp
+comparison would get this backwards.
+
+Verified on a real store: `"what editor do I use?"` now returns *"I switched
+from Neovim to Zed"* first and *"I use Neovim with a tmux setup"* second —
+previously the reverse. Unrelated neighbours do not move, a replacement with
+nothing to displace changes nothing, and two replacements do not reorder each
+other.
 
 ---
 

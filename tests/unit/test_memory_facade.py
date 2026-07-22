@@ -716,3 +716,62 @@ async def test_recall_applies_it_end_to_end() -> None:
     new = _tagged("I moved to Berlin.", "residence", valid_from=datetime(2026, 7, 20, tzinfo=UTC))
     mem = Memory(_FakeSession(search_result=[old, new]))  # type: ignore[arg-type]
     assert (await mem.recall("where do I live?"))[0].content == "I moved to Berlin."
+
+
+# ── untagged replacements: "I switched from X to Y" ───────────────────────────
+
+
+def test_a_replacement_outranks_what_it_replaced_without_any_tag() -> None:
+    """The case tagged reordering could not reach.
+
+    "I switched from Neovim to Zed" carries no attribute, so it used to rank
+    below "I use Neovim with a tmux setup" — the stale fact winning again, just
+    without a tag to catch it.
+    """
+    from continuum.memory import _prefer_current_versions
+
+    old = _item("I use Neovim with a tmux setup.")
+    noise = _item("I prefer pytest over unittest.")
+    new = _item("I switched from Neovim to Zed.")
+
+    out = [i.content for i in _prefer_current_versions([old, noise, new])]
+
+    assert out[0] == "I switched from Neovim to Zed."
+    assert out[1] == "I prefer pytest over unittest."  # unrelated, unmoved
+    assert out[2] == "I use Neovim with a tmux setup."
+
+
+@pytest.mark.parametrize(
+    ("text", "entity"),
+    [
+        ("I switched from Neovim to Zed.", "neovim"),
+        ("I moved from Porto to Berlin.", "porto"),
+        ("I migrated from MySQL to PostgreSQL.", "mysql"),
+        # Capitalisation on BOTH sides is the precision lever — without it these
+        # everyday sentences would start reordering memories.
+        ("I switched from the kitchen to the office.", None),
+        ("I moved the file from src to lib.", None),
+        ("I switched branches.", None),
+        ("I use Neovim with a tmux setup.", None),
+    ],
+)
+def test_only_a_named_replacement_counts(text: str, entity: str | None) -> None:
+    from continuum.memory import _superseded_entity
+
+    assert _superseded_entity(_item(text)) == entity
+
+
+def test_a_replacement_with_nothing_to_displace_changes_nothing() -> None:
+    from continuum.memory import _prefer_current_versions
+
+    items = [_item("I like Berlin techno."), _item("I switched from Neovim to Zed.")]
+    assert _prefer_current_versions(items) == items
+
+
+def test_two_replacements_do_not_reorder_each_other() -> None:
+    # A later switch does not "displace" an earlier one just by naming a tool.
+    from continuum.memory import _prefer_current_versions
+
+    a = _item("I switched from Neovim to Zed.")
+    b = _item("I switched from Zed to Helix.")
+    assert _prefer_current_versions([a, b]) == [a, b]
