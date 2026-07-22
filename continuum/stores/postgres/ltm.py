@@ -134,6 +134,16 @@ def _as_uuid(value: Any) -> uuid.UUID:
     return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
 
 
+def _is_live_text_conflict(exc: BaseException) -> bool:
+    """True when a write lost the race to migration 007's uniqueness constraint.
+
+    Matched on the index name rather than the SQLSTATE alone, so an unrelated
+    unique violation (a genuine bug) still surfaces instead of being quietly
+    swallowed as a duplicate.
+    """
+    return "memory_nodes_live_text_uniq" in str(exc)
+
+
 class PostgresLTM:
     """
     Bi-temporal LTM store over ``memory_nodes`` / ``memory_edges``.
@@ -322,8 +332,21 @@ class PostgresLTM:
                 tags        = EXCLUDED.tags,
                 updated_at  = now()
         """
-        async with self._connect() as conn:
-            await self._exec(conn, sql, params)
+        try:
+            async with self._connect() as conn:
+                await self._exec(conn, sql, params)
+        except Exception as exc:
+            # Migration 007 allows one live row per (namespace, text). Losing
+            # that race means a concurrent writer stored this exact fact a
+            # moment ago — which is the outcome we wanted, so reinforce theirs
+            # instead of failing the caller's write. Any other error re-raises.
+            if not _is_live_text_conflict(exc):
+                raise
+            existing = await self.touch_duplicate(
+                item.content or "", valid_from=vf, attribute=(item.metadata or {}).get("attribute")
+            )
+            log.debug("LTM upsert lost the duplicate race — reinforced %s", existing)
+            return existing or node_id
         log.debug("LTM upsert id=%s kind=%s", node_id, kind)
         return node_id
 

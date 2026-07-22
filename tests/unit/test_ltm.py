@@ -597,6 +597,52 @@ class TestTouchDuplicate:
 # ---------------------------------------------------------------------------
 
 
+class TestDuplicateRaceHandling:
+    async def test_losing_the_uniqueness_race_reinforces_instead_of_failing(self) -> None:
+        """Migration 007 allows one live row per (namespace, text).
+
+        Losing that race means a concurrent writer stored this exact fact a
+        moment ago — the outcome we wanted — so the write must reinforce theirs,
+        not surface an error the caller cannot act on.
+        """
+
+        class _Conflicting(MockConnection):
+            async def execute(self, sql: str, params: Any = None, **kw: Any) -> MockCursor:
+                if sql.lstrip().startswith("INSERT"):
+                    self.executed.append((sql, params))
+                    raise RuntimeError(
+                        "duplicate key value violates unique constraint "
+                        '"memory_nodes_live_text_uniq"'
+                    )
+                return await super().execute(sql, params, **kw)
+
+        conn = _Conflicting(touch_rows=[{"id": str(N1)}])
+        got = await _ltm(conn).upsert(MemoryItem(content="I take the ferry on Fridays."))
+
+        assert got == N1  # the winner's id, not a new one
+        assert any("access_count = m.access_count + 1" in sql for sql, _ in conn.executed)
+
+    async def test_an_unrelated_failure_still_raises(self) -> None:
+        # Swallowing every error as "probably a duplicate" would hide real bugs.
+        class _Broken(MockConnection):
+            async def execute(self, sql: str, params: Any = None, **kw: Any) -> MockCursor:
+                if sql.lstrip().startswith("INSERT"):
+                    raise RuntimeError("connection reset by peer")
+                return await super().execute(sql, params, **kw)
+
+        with pytest.raises(RuntimeError, match="connection reset"):
+            await _ltm(_Broken()).upsert(MemoryItem(content="x"))
+
+    def test_the_conflict_matcher_is_specific_to_that_index(self) -> None:
+        from continuum.stores.postgres.ltm import _is_live_text_conflict
+
+        assert _is_live_text_conflict(
+            RuntimeError('unique constraint "memory_nodes_live_text_uniq"')
+        )
+        assert not _is_live_text_conflict(RuntimeError('unique constraint "memory_nodes_pkey"'))
+        assert not _is_live_text_conflict(RuntimeError("some other failure"))
+
+
 class TestEmbeddingBackfill:
     async def test_finds_only_live_unvectorised_rows_in_this_namespace(self) -> None:
         # The capture hook writes sparse, so its rows have NULL embeddings and

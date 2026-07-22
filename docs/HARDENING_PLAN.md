@@ -132,7 +132,7 @@ install on a clean machine.
 
 ## Phase 1 — Known defects with real user impact
 
-### 1.1 Concurrent first-insert duplicates
+### 1.1 Concurrent first-insert duplicates — ✅ DONE (migration 007)
 **Problem (measured):** 8 simultaneous identical writes leave 5 rows.
 `touch_duplicate` cannot see a row that is not yet committed, so racing writers
 all insert. Sequential writes — one user, one hook per prompt — already collapse
@@ -148,6 +148,27 @@ Must be safe to run on a live store, and must report what it retired.
 **Acceptance:** the concurrency test yields exactly 1 row; migration verified on
 a populated store that already contains duplicates.
 **Effort:** M. **Risk:** touches user data — dry-run first, and print the plan.
+
+**Shipped as migration 007.** Two steps, in one transaction:
+
+1. Retire pre-existing duplicates — `invalidated_at`, the same bi-temporal
+   close supersession and `forget()` use, so **nothing is deleted** and every
+   copy stays recoverable. The survivor is the most-reinforced row (highest
+   `access_count`, tie-broken by newest), because that is the copy carrying the
+   restatement history.
+2. `CREATE UNIQUE INDEX … (namespace, md5(text)) WHERE invalidated_at IS NULL`.
+   Partial, so a superseded fact and its replacement may still share text.
+
+`upsert` now catches that specific violation — matched on the index *name*, so
+an unrelated unique violation still surfaces as a bug — and reinforces the
+winner instead of failing the caller. Losing the race means someone stored this
+exact fact a moment ago, which is the outcome we wanted.
+
+Verified: on a store deliberately seeded with duplicates (5 live rows, 3
+distinct across two namespaces), the migration left 3 live rows, kept the
+`access_count=7` copy, preserved the other namespace's, and retired 2 without
+deleting. **8 concurrent writers of a brand-new sentence now leave exactly 1 row
+with `access_count=7`** — previously 5 rows. Sequential writes unchanged.
 
 ### 1.2 Supersession reordering only works for tagged facts
 **Problem (measured):** `_prefer_current_versions` fixed residence and employer,
