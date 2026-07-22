@@ -203,20 +203,54 @@ other.
 
 ## Phase 2 — Quality ceilings (characteristics, not bugs)
 
-### 2.1 Recall falls with store size
+### 2.1 Recall falls with store size — ⚠️ CAUSE FOUND, and it was not the embedder
 **Measured:** ~100% at tens of memories, 95% at 3k, **75% at 47k** (k=8, real
 hybrid path). Every tuning lever is exhausted: `ef_search` fixed a real loss,
 candidate pool 24→250 changed nothing, k 8→20 changed nothing, the cross-encoder
 reranker made it worse. The residual is the embedder's semantic limit — "who
 does my taxes" → *"My accountant is called Filipa Rego"* needs world knowledge
 bge-m3 does not supply against 47k competitors.
-**Fix (ranked):** (a) evaluate a stronger embedding model on the same needle
-set — this is the single biggest lever left; (b) query expansion — `hyde_fn`
+**This entry was wrong, and the correction matters more than the entry.**
+
+Two measurements settle it, both on the same 45,020-memory realistic store:
+
+| | recall@8 | p50 |
+|---|---:|---:|
+| with the HNSW index (what ships) | 13/20 = 65% | 132 ms |
+| index dropped — exact scan | **18/20 = 90%** | 157 ms |
+
+**The index is discarding a quarter of retrievable memories to save 25 ms.**
+The embedder was never the bottleneck: exact cosine over the same stored
+vectors finds 19/20, and `bge-m3` beat both alternatives in a bake-off
+(mxbai-embed-large 19/20, multilingual-e5-large 16/20 at 20k). Nothing is wrong
+with the model or the data — the approximate index is dropping them.
+
+`hnsw.ef_search` cannot fix it: pgvector **caps it at 1000**, 400 and 1000 give
+the same 13/20 through the product path, and `iterative_scan` does not help.
+
+**Recommendation:** an exact scan is the better default for a store of this
+size. 157 ms against a ~130 ms baseline is a rounding error next to losing 25
+points of recall, and the earlier "latency at scale" work measured the index's
+*speed*, never what it cost in answers. The open question is where the crossover
+actually is — the index must win eventually, and finding that row count is the
+next piece of work.
+
+**Fix (ranked):** (a) ~~evaluate a stronger embedding model~~ — done, no
+candidate beats the current one; (b) query expansion — `hyde_fn`
 already exists in the Retriever and is unused, at the cost of an LLM call per
 query, so it must be opt-in and measured against the reranker's cautionary tale.
 **Acceptance:** a published curve of recall vs store size, and a decision on
 each lever with numbers.
-**Effort:** M. **Until then:** publish the 75%-at-47k figure in the README.
+**Effort:** M.
+
+**Measurement caveat, stated plainly:** getting to that answer took several
+wrong turns of my own — an ad-hoc SQL sweep that mis-scored the exact baseline,
+a monkey-patch that silently measured the same setting four times (a signature
+default binds at definition, not at call), and an earlier corpus whose
+composition, not its size, produced the original "75% at 47k". The numbers
+above come from the audited harness and from plain numpy over the stored
+vectors, which agree. `CONTINUUM_HNSW_EF_SEARCH` now exists precisely so this
+can be swept without patching anything.
 
 ### 2.2 Capture is English-only — 🟡 measurement set built; rules not written
 **Problem:** retrieval is multilingual (an English question retrieves a

@@ -97,6 +97,11 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
+- **`CONTINUUM_HNSW_EF_SEARCH`** makes the dense-search beam width configurable
+  without editing code (capped at 1000, pgvector's own limit). Added while
+  chasing a recall gap at scale — the first attempt to sweep it monkey-patched
+  the module and silently measured the same value four times, because a
+  signature default binds when the function is defined, not when it is called.
 - **`recall` now lets the current version of a fact outrank its stale one.**
   Relevance ranking cannot tell that "I moved to Berlin" replaces "I live in
   Porto"; without an LLM decider nothing marks the old one superseded, so recall

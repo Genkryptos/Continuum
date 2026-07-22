@@ -77,6 +77,8 @@ DEFAULT_TABLE = "memory_nodes"
 DEFAULT_EDGES = "memory_edges"
 DEFAULT_RRF_K = 60
 DEFAULT_TRGM_THRESHOLD = 0.25
+
+
 #: Session ``hnsw.ef_search`` for the dense channel. pgvector's default of 40 is
 #: tuned for speed and loses real memories: measured on 3,020 clustered personal
 #: facts, only 13/20 needles reached the candidate pool at 40, versus 20/20 at
@@ -84,6 +86,25 @@ DEFAULT_TRGM_THRESHOLD = 0.25
 #: fuller graph walk terminates more predictably than a stuck one). Against a
 #: ~100ms recall dominated by the embedder this is free. Lower it only if a very
 #: large store makes the index scan itself expensive.
+def _default_ef_search() -> int:
+    """``CONTINUUM_HNSW_EF_SEARCH``, else 400.
+
+    Environment-readable so the value can be swept without editing code — the
+    first attempt to compare settings monkey-patched this module and silently
+    measured the same number four times, because a signature default binds when
+    the function is defined, not when it is called.
+    """
+    import os
+
+    raw = os.environ.get("CONTINUUM_HNSW_EF_SEARCH", "")
+    try:
+        return max(1, min(1000, int(raw))) if raw.strip() else 400
+    except ValueError:
+        return 400
+
+
+#: pgvector caps ``hnsw.ef_search`` at 1000; anything higher is rejected outright.
+MAX_HNSW_EF_SEARCH = 1000
 DEFAULT_HNSW_EF_SEARCH = 400
 _NEIGHBOR_CAP = 500
 
@@ -186,7 +207,7 @@ class PostgresLTM:
         embedding_type: str = "halfvec",
         rrf_k: int = DEFAULT_RRF_K,
         trgm_threshold: float = DEFAULT_TRGM_THRESHOLD,
-        hnsw_ef_search: int = DEFAULT_HNSW_EF_SEARCH,
+        hnsw_ef_search: int | None = None,
         namespace: str = "default",
         pool_min_size: int = 2,
         pool_max_size: int = 10,
@@ -208,7 +229,10 @@ class PostgresLTM:
         self._embedding_type = embedding_type
         self._rrf_k = rrf_k
         self._trgm_threshold = trgm_threshold
-        self._hnsw_ef_search = max(1, int(hnsw_ef_search))
+        self._hnsw_ef_search = min(
+            MAX_HNSW_EF_SEARCH,
+            max(1, int(hnsw_ef_search) if hnsw_ef_search is not None else _default_ef_search()),
+        )
         self._pool_min = pool_min_size
         self._pool_max = pool_max_size
 
