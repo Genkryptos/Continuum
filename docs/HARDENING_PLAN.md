@@ -49,7 +49,7 @@ p95 latency at hour 8 within 20% of hour 1, and full recovery from the restart
 without operator action.
 **Effort:** S to write, hours to run. **Do this first.**
 
-### 0.2 Promote the throwaway harnesses to real tooling
+### 0.2 Promote the throwaway harnesses to real tooling — ✅ DONE
 **Problem:** the corpus generators, the recall scorers and the month-long daily
 simulation live in a scratch directory as one-off scripts. They produced every
 headline number in the docs, and they are exactly where the five instrument bugs
@@ -62,6 +62,25 @@ exactly rather than by substring?). Add `make soak` and `make recall-at-scale`.
 **Acceptance:** every number quoted in `docs/` is reproducible by one make
 target on a clean machine.
 **Effort:** M.
+
+**Shipped:** `scripts/recall_at_scale.py` (`make recall-at-scale`) and
+`scripts/soak_test.py` (`make soak`), both typed and linted, plus
+`tests/unit/test_harnesses.py` — ten tests over the *instruments*: the generator
+delivers exactly N distinct sentences, **raises instead of hanging** on an
+impossible target, is deterministic, and never emits a sentence that could be
+mistaken for a needle; the soak verdict fails on climbing RSS, on leaked
+descriptors, and on too few samples to judge.
+
+Reproducibility checked against the published figures: 3k formulaic gives
+**19/20 = 95%**, missing exactly `"can I eat prawns"` — the documented number and
+the documented miss. 3k realistic gives 20/20, which is why the shape is now an
+explicit flag rather than an accident of which script you ran.
+
+Writing those tests immediately caught a flaw in the needle set itself: half the
+queries share content words with their answers, so the set was never a pure
+semantic probe. That is *fine* — real questions are a mix — but it now has a
+test asserting at least 8 of 20 carry no shared content word, so the headline
+number cannot quietly drift to measuring something easier.
 
 ### 0.3 One more testing round, on the dimensions never touched
 **Problem:** the flat defect curve. Rounds so far covered: personal facts,
