@@ -218,7 +218,7 @@ query, so it must be opt-in and measured against the reranker's cautionary tale.
 each lever with numbers.
 **Effort:** M. **Until then:** publish the 75%-at-47k figure in the README.
 
-### 2.2 Capture is English-only
+### 2.2 Capture is English-only — 🟡 measurement set built; rules not written
 **Problem:** retrieval is multilingual (an English question retrieves a
 Portuguese or Hindi memory — verified), but the capture rules are regexes over
 English word order, so a non-English user's turns are silently skipped. It fails
@@ -230,6 +230,22 @@ without it there is no way to know whether new rules preserve the 0-false-captur
 property that makes this feature defensible.
 **Acceptance:** measured precision per supported language, at the same bar.
 **Effort:** L. **Until then:** documented in `docs/mcp.md`.
+
+**Prerequisite built:** `tests/unit/test_capture_multilingual.py` — 15 durable
+statements and 15 pieces of noise across pt/es/de/fr/it/hi/ja/zh, weighted
+toward what must be refused, plus credential cases.
+
+Deliberately built *before* any rules. Capture's entire defence is a measured
+0-false-capture rate; writing patterns for a language with no way to measure
+that would trade the one property making the feature safe for a hit rate nobody
+checked.
+
+Today the result is uniform: **silent on all 30**, durable and noise alike. The
+tests pin that honestly rather than aspirationally — one asserts capture is
+currently English-only and tells whoever changes it what to do next (move that
+language's durable cases into an asserted set; keep its noise cases refused).
+Credential detection is the exception and already works everywhere, because it
+is pattern-based rather than grammar-based; that is asserted too.
 
 ### 2.3 One ambiguous capture verb
 "I review every PR myself" is refused because *review* is as often an action
