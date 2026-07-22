@@ -244,6 +244,21 @@ async def score(dsn: str, namespace: str, k: int) -> tuple[int, float]:
         await mem.aclose()
 
 
+def _row_count(dsn: str, namespace: str) -> int:
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn) as c, c.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM memory_nodes WHERE namespace = %s AND invalidated_at IS NULL",
+                (namespace,),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else -1
+    except Exception:
+        return -1
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--rows", type=int, default=3000)
@@ -262,11 +277,16 @@ def main(argv: list[str] | None = None) -> int:
         took = asyncio.run(load(dsn, args.rows, args.shape, args.namespace))
         print(f"  loaded {args.rows + len(NEEDLES)} {args.shape} memories in {took:.0f}s")
 
+    # Report the store's ACTUAL size, never the requested one: with --skip-load
+    # they differ, and a label that guesses is how a measurement quietly starts
+    # describing something other than what it measured.
+    rows = _row_count(dsn, args.namespace)
     hits, p50 = asyncio.run(score(dsn, args.namespace, args.k))
     total = len(NEEDLES)
+    shape = args.shape if not args.skip_load else "existing store"
     print(
         f"\n  recall@{args.k} = {hits}/{total} = {hits / total:.0%}"
-        f"   p50 {p50:.0f}ms   ({args.rows + total} memories, {args.shape})"
+        f"   p50 {p50:.0f}ms   ({rows} memories, {shape})"
     )
     return 0
 

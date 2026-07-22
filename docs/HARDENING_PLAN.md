@@ -94,6 +94,22 @@ this project.
 round is itself the result that has never yet occurred.
 **Effort:** M.
 
+**Upgrade path — ✅ verified.** A store on the previous schema (migrations
+001–005, HNSW at `m=16`), populated with 12,020 real embedded memories, 79 MB:
+
+| | recall@8 | index |
+|---|---:|---|
+| before `006` | 14/20 = 70% | m=16, ef_construction=64 |
+| after `006` | **16/20 = 80%** | m=32, ef_construction=200 |
+
+`make db-migrate` applied it in **6.0s** with no data loss and no manual step —
+so the index rebuild is a real, measurable improvement for existing users, not
+just new installs. On a much larger store the `ACCESS EXCLUSIVE` lock matters
+and the migration documents the `CONCURRENTLY` recipe for that case.
+
+Remaining in this item: backup/restore, clock skew and DST, disk-full, and a
+from-scratch install on a clean machine.
+
 ---
 
 ## Phase 1 — Known defects with real user impact
