@@ -51,6 +51,12 @@ DURABLE = [
     "I joined Stripe.",
     "I left Nimbus Data and joined Stripe.",
     "I switched from Neovim to Zed.",
+    # Standing responsibilities: a role verb over a universal quantifier. The
+    # closed allowlist is what keeps "I broke every build today" out (below).
+    "I review every PR myself since I work solo.",
+    "I handle all our deployments.",
+    "I manage every database migration.",
+    "I maintain all our internal tools.",
 ]
 
 EPHEMERAL = [
@@ -93,6 +99,15 @@ EPHEMERAL = [
     "My build is failing on CI.",
     "My test is red again.",
     "My branch is out of date.",
+    # The quantifier trap: past actions and desires that share "every/all X".
+    # 2.3 nearly shipped an open rule that captured these.
+    "I reviewed every PR yesterday.",
+    "I broke every build today.",
+    "I built every feature this week.",
+    "I want every feature done today.",
+    "I ran all the migrations.",
+    "I fix every bug I find.",
+    "I deploy every Friday.",
 ]
 
 NOT_A_STATEMENT = [

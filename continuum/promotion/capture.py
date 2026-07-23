@@ -101,11 +101,14 @@ _NOT_A_STATEMENT = re.compile(
     re.I,
 )
 
-#: Markers of something not (yet) true: hypothetical, planned, uncertain.
+#: Markers of something not (yet) true: hypothetical, planned, uncertain, or
+#: merely wanted. A desire ("I want every feature") is not a durable fact, and
+#: bare ``want``/``wanted`` is what separates the habitual-practice frame below
+#: ("I review every PR") from a wish that happens to use a universal quantifier.
 _UNCERTAIN = re.compile(
     r"\b(?:if|maybe|perhaps|probably|might|may|could|would|should|thinking\s+about"
-    r"|considering|planning\s+to|going\s+to|want\s+to|wish|hope|suppose|guess"
-    r"|not\s+sure|unsure|i'?m\s+trying\s+to)\b",
+    r"|considering|planning\s+to|going\s+to|wants?|wanted|want\s+to|wish|hope"
+    r"|suppose|guess|not\s+sure|unsure|i'?m\s+trying\s+to)\b",
     re.I,
 )
 
@@ -123,6 +126,21 @@ _HABITUAL = r"(?:always|usually|generally|normally|typically|mostly|often|mainly
 #: PRs"). The episodic, deictic and transient rejectors still apply, which is
 #: what keeps "I always run the tests" and "I always get this error" out.
 _HABITUAL_ANY = re.compile(r"^\s*i\s+" + _HABITUAL + r"\w+", re.I)
+
+#: A universal quantifier over the object is the other habitual signal: "I
+#: review every PR myself", "I handle all our deployments" state a standing
+#: responsibility. The verb is a **closed allowlist** of role verbs, not "any
+#: non-episodic verb": an open rule leaked irregular pasts ("I broke every build
+#: today") that -ed guards and the episodic list do not catch, and one false
+#: capture is worse than the missed facts an allowlist costs. These verbs name
+#: an ongoing role; a universal quantifier over their object confirms it is a
+#: practice, not a one-off. Present tense only — the -ed lookahead rejects
+#: "I reviewed every PR yesterday".
+_ROLE_VERB = r"review|handle|manage|maintain|oversee|own|lead|coordinate|administer|curate|moderate"
+_HABITUAL_QUANTIFIER = re.compile(
+    rf"^\s*i\s+(?!\w+ed\b)(?:{_ROLE_VERB})\b(?:\s+\w+)?\s+(?:every|each|all\s+(?:my|our|the))\s+\w",
+    re.I,
+)
 
 _STATIVE_I = re.compile(
     r"^\s*i\s+" + f"(?:{_HABITUAL})?" + r"(?:"
@@ -351,6 +369,7 @@ def extract_durable_facts(text: str) -> list[CapturedFact]:
             "stative-i"
             if _STATIVE_I.match(sentence)
             or _HABITUAL_ANY.match(sentence)
+            or _HABITUAL_QUANTIFIER.match(sentence)
             or _STATIVE_PROGRESSIVE.match(sentence)
             else "stative-my"
             if _STATIVE_MY.match(sentence)

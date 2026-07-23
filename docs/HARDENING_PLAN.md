@@ -326,10 +326,23 @@ them and a test asserts they stay silent; loosening the rules to capture them is
 explicitly the wrong move. Credential detection works in every language already,
 because it is pattern-based; that is asserted too.
 
-### 2.3 One ambiguous capture verb
+### 2.3 One ambiguous capture verb — ✅ DONE (narrowly, after the open version proved unsafe)
 "I review every PR myself" is refused because *review* is as often an action
 ("I review the diff") as a habit. Low value, listed for completeness.
 **Effort:** S, and possibly correct to leave alone.
+
+**Resolved by a closed allowlist, not the obvious open rule.** The first cut —
+"any non-episodic verb governing every/each/all <noun>" — leaked: "I broke every
+build today" and "I built every feature" are irregular pasts that neither the
+-ed guard nor the episodic list catches, and one false capture is worse than the
+missed facts an allowlist costs. So the accept is a closed set of role verbs
+(review/handle/manage/maintain/oversee/own/lead/coordinate/administer/curate/
+moderate) in present tense over a universal quantifier — a standing
+responsibility. Bare "want"/"wanted" also became a desire marker, so "I want
+every feature" is refused. Measured 5/5 durable, **0/13 noise** including the
+irregular-past traps. This is a case where "possibly leave alone" was nearly
+right: the value is small and the open version would have broken the feature's
+one guarantee.
 
 ---
 
