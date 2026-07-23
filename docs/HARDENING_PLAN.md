@@ -34,7 +34,7 @@ Phase 0 addresses both. Nothing later matters as much.
 
 ## Phase 0 — Make the evidence trustworthy
 
-### 0.1 Soak test — the only entirely unmeasured dimension
+### 0.1 Soak test — ✅ DONE (6h clean, restart recovered)
 **Problem:** nothing in this project has run for more than ~8 minutes. Every
 test is a burst. Connection-pool churn, RSS growth, file-descriptor leaks and
 prepared-statement accumulation over hours are completely unknown — and
@@ -48,6 +48,14 @@ Postgres restart mid-run to prove the pool recovers.
 p95 latency at hour 8 within 20% of hour 1, and full recovery from the restart
 without operator action.
 **Effort:** S to write, hours to run. **Do this first.**
+
+**Result:** 5.96h, 1,435 calls, 358 minute-samples, every check PASS.
+RSS 68.9 → 53.5 MB (it *fell* — no leak, GC settling after warm-up), fds 75 →
+74, pool 4 → 3, p95 21 → 24 ms (+14%, inside the 50% bar). Postgres was
+restarted at the 3-hour mark; the single error of the whole run was that one
+call, and the pool re-established itself with no operator action. The daemon
+dimension — the one place a slow failure could hide — is now measured, not
+assumed.
 
 ### 0.2 Promote the throwaway harnesses to real tooling — ✅ DONE
 **Problem:** the corpus generators, the recall scorers and the month-long daily
