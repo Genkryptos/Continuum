@@ -35,15 +35,21 @@ What it refuses
   sentence is dropped rather than redacted: a sentence built around a secret is
   rarely a fact worth keeping.
 
-Everything here is a heuristic over English surface form. It will miss facts.
-That is the intended failure direction.
+Everything here is a heuristic over surface form. It will miss facts. That is
+the intended failure direction.
 
-**English only, and this is asymmetric with the rest of the system.** Retrieval
-is multilingual — bge-m3 answers an English question with a Portuguese or Hindi
-memory — but these rules are regexes over English word order, so
-``"Eu moro em Lisboa."`` captures nothing. It fails *safe* (silence, never a
-wrong capture), but a non-English user should know their turns are being
-skipped and keep using ``remember`` explicitly.
+**Languages.** English plus the Latin-script languages pt, es, fr, de, it, held
+to the same 0-false-capture bar (``tests/unit/test_capture_multilingual.py``).
+The non-English rules accept only first-person present-tense stative verbs and
+lean on the auxiliaries being different words — French ``j'ai``, German
+``habe``, Italian ``ho``, Spanish ``he`` front both "I have a meeting" and the
+perfect tense, so none are on the accept list and both stay refused for free.
+
+Hindi/Japanese/Chinese are **not** supported: word-order regexes do not survive
+scripts without spaces to anchor on. They fail *safe* — silence, never a wrong
+capture — and a speaker of them should keep using ``remember`` explicitly.
+Retrieval, unlike capture, is fully multilingual (bge-m3 answers an English
+question with a Portuguese or Hindi memory).
 """
 
 from __future__ import annotations
@@ -131,6 +137,50 @@ _STATIVE_MY = re.compile(
     re.I,
 )
 
+# ── other languages (pt, es, fr, de, it) — Latin script only ──────────────────
+#
+# Same principle as English: accept only first-person PRESENT-TENSE stative
+# verbs, and lean on the fact that the action/auxiliary verbs are different
+# words. The auxiliaries are the trap — French "j'ai", German "habe", Italian
+# "ho", Spanish "he" front both "I have <noun>" (often transient: a meeting) and
+# the perfect tense (an action) — so none of them are on the accept list, and
+# the corresponding "I have a meeting" cases stay refused for free. Portuguese/
+# Spanish/Italian drop the subject pronoun, so the verb, not a pronoun, anchors.
+#
+# Questions are already handled upstream by the "?" check (incl. "¿…?"). This is
+# precision-biased and partial by design: it misses valid facts it is unsure of,
+# which is the safe direction. See tests/unit/test_capture_multilingual.py.
+_STATIVE_ML = re.compile(
+    r"^\s*(?:eu|yo|io|je|j'|ich)?\s*(?:"
+    # live / reside
+    r"moro|vivo|vis|resido|habite|habito|wohne|lebe|risiedo"
+    # work
+    r"|trabalho|trabajo|travaille|arbeite|lavoro"
+    # be (copula) — "sou/soy/suis/bin/sono <durable adjective or noun>"
+    r"|sou|soy|suis|bin|sono"
+    # speak
+    r"|falo|hablo|parle|spreche|parlo"
+    # prefer / like
+    r"|prefiro|prefiero|préfère|preferisco|bevorzuge"
+    r")\b",
+    re.I,
+)
+
+# The copula (sou/soy/suis/bin/sono) also fronts transient states — "I am done /
+# tired / busy" — exactly as English "I am done" does. Refuse those; a durable
+# copula statement names a lasting property (allergic, vegetarian, from Goa),
+# not a mood.
+_TRANSIENT_ML = re.compile(
+    r"^\s*(?:eu|yo|io|je|j'|ich)?\s*(?:sou|soy|suis|bin|sono)\s+(?:"
+    r"pronto|cansado|ocupado|feito|aqui"  # pt
+    r"|listo|cansado|ocupado|aquí"  # es
+    r"|prêt|prête|fatigué|occupé|ici|désolé"  # fr
+    r"|fertig|müde|beschäftigt|hier|bereit|da"  # de
+    r"|pronto|stanco|occupato|qui"  # it
+    r")\b",
+    re.I,
+)
+
 #: Verbs that describe a moment, not a state — refused even in the "I …" frame.
 _EPISODIC = re.compile(
     r"^\s*i\s+(?:just\s+|already\s+|finally\s+|" + _HABITUAL + r")?(?:"
@@ -207,9 +257,12 @@ _NOT_ABOUT_USER = re.compile(
     re.I,
 )
 
-#: A fact needs some substance; a bare "I am." is not one. Three admits
-#: "I am vegetarian." — the transient-state list is what rejects "I am done."
-_MIN_WORDS = 3
+#: A fact needs some substance, but Portuguese/Spanish/Italian drop the
+#: subject pronoun, so a whole durable fact can be two words ("Sou
+#: vegetariano"). The stative accept patterns are the real filter — 2-word
+#: junk ("ok sure") matches no frame and is dropped anyway — so the floor is
+#: 2, not 3. Transient states are refused by their own list, not by length.
+_MIN_WORDS = 2
 _MAX_CHARS = 300
 
 #: Everything that disqualifies a sentence, in one place so the rejection
@@ -289,6 +342,10 @@ def extract_durable_facts(text: str) -> list[CapturedFact]:
         # A progressive is an action unless its verb names a standing state.
         if _PROGRESSIVE.match(sentence) and not _STATIVE_PROGRESSIVE.match(sentence):
             continue
+        # A non-English copula fronting a transient state is refused, same as
+        # English "I am done".
+        if _TRANSIENT_ML.match(sentence):
+            continue
 
         rule = (
             "stative-i"
@@ -297,6 +354,8 @@ def extract_durable_facts(text: str) -> list[CapturedFact]:
             or _STATIVE_PROGRESSIVE.match(sentence)
             else "stative-my"
             if _STATIVE_MY.match(sentence)
+            else "stative-ml"
+            if _STATIVE_ML.match(sentence)
             else "changed-attribute"
             if _states_a_change(sentence)
             else ""

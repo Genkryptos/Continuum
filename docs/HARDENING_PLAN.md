@@ -281,7 +281,7 @@ not stay affordable as the store grows. No "no index below N rows" switch is
 needed: the planner already seq-scans tiny tables, and above that the tuned
 index is the right tool.
 
-### 2.2 Capture is English-only — 🟡 measurement set built; rules not written
+### 2.2 Capture is English-only — ✅ DONE for Latin-script (pt/es/fr/de/it); CJK/Devanagari out of scope
 **Problem:** retrieval is multilingual (an English question retrieves a
 Portuguese or Hindi memory — verified), but the capture rules are regexes over
 English word order, so a non-English user's turns are silently skipped. It fails
@@ -303,12 +303,28 @@ Deliberately built *before* any rules. Capture's entire defence is a measured
 that would trade the one property making the feature safe for a hit rate nobody
 checked.
 
-Today the result is uniform: **silent on all 30**, durable and noise alike. The
-tests pin that honestly rather than aspirationally — one asserts capture is
-currently English-only and tells whoever changes it what to do next (move that
-language's durable cases into an asserted set; keep its noise cases refused).
-Credential detection is the exception and already works everywhere, because it
-is pattern-based rather than grammar-based; that is asserted too.
+**Then the rules, held to the same bar.** pt/es/fr/de/it now capture
+first-person stative statements (22 durable cases) with **0 false captures
+across 33 noise cases** — the categories English is held to: past-tense actions,
+"just did", questions, imperatives, transient states. The design is the same as
+English (accept only present-tense stative verbs) and leans on the auxiliaries
+being different words: French `j'ai`, German `habe`, Italian `ho`, Spanish `he`
+front both "I have a meeting" and the perfect tense, so none are on the accept
+list and both stay refused for free. Portuguese/Spanish/Italian drop the subject
+pronoun, so the verb anchors, and the word-count floor dropped to 2 to reach
+"Sou vegetariano".
+
+Guarded against overfitting with 8 unseen adversarial noise cases (futures,
+modals, `estar`/`stare` progressives, "I'm done"/"I'm tired" transients) and
+unseen durable cases — 0 false captures, 0 misses. Verified end to end: a mixed
+Portuguese turn stores the fact and drops the imperative.
+
+**hi/ja/zh stay unsupported, by decision not omission.** Word-order regexes do
+not survive scripts without spaces to anchor on, and adversarial cases in them
+cannot be author-validated to the 0-false-capture bar. `KNOWN_UNSUPPORTED` names
+them and a test asserts they stay silent; loosening the rules to capture them is
+explicitly the wrong move. Credential detection works in every language already,
+because it is pattern-based; that is asserted too.
 
 ### 2.3 One ambiguous capture verb
 "I review every PR myself" is refused because *review* is as often an action

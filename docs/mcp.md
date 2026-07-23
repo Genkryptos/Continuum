@@ -210,11 +210,12 @@ is the intended failure direction.
 > matched **nothing** and every answer came from the short-term recency fallback;
 > after, 6 of 8 questions were answered from the right memory.
 
-> **Capture is English-only**, and that is asymmetric with the rest of the
-> system: recall *is* multilingual (an English question will surface a Portuguese
-> or Hindi memory), but these rules are regexes over English word order, so
-> `"Eu moro em Lisboa."` captures nothing. It fails safe — silence, never a wrong
-> capture — but if you work in another language, keep calling `remember`. `CONTINUUM_CAPTURE_MAX` caps how many facts
+> **Capture supports English plus pt, es, fr, de, it** — the Latin-script
+> languages, held to the same 0-false-capture bar. Hindi, Japanese and Chinese
+> are **not** supported: word-order regexes need spaces to anchor on. They fail
+> safe (silence, never a wrong capture), so in an unsupported language keep
+> calling `remember`. Recall itself is fully multilingual regardless — an
+> English question surfaces a Portuguese or Hindi memory. `CONTINUUM_CAPTURE_MAX` caps how many facts
 one turn may store (default 3), so a pasted wall of text cannot become forty
 memories. Audit later with `recall`, and prune with `Memory.forget()`.
 
