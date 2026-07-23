@@ -211,7 +211,7 @@ other.
 
 ## Phase 2 — Quality ceilings (characteristics, not bugs)
 
-### 2.1 Recall falls with store size — ⚠️ CAUSE FOUND, and it was not the embedder
+### 2.1 Recall falls with store size — ✅ DONE (ef_search raised to 1000; curve measured)
 **Measured:** ~100% at tens of memories, 95% at 3k, **75% at 47k** (k=8, real
 hybrid path). Every tuning lever is exhausted: `ef_search` fixed a real loss,
 candidate pool 24→250 changed nothing, k 8→20 changed nothing, the cross-encoder
@@ -259,6 +259,27 @@ composition, not its size, produced the original "75% at 47k". The numbers
 above come from the audited harness and from plain numpy over the stored
 vectors, which agree. `CONTINUUM_HNSW_EF_SEARCH` now exists precisely so this
 can be swept without patching anything.
+
+**Crossover measured, and it revised the conclusion above.** A clean per-size
+sweep (`scripts/index_crossover.py`, one process, fresh store per size) through
+the real product path:
+
+| rows | exact recall | exact p50 | index @ef=1000 | ef=400 (old default) |
+|---|---:|---:|---:|---:|
+| 3,000 | 100% | 3ms | 100% | 100% |
+| 25,000 | 100% | 29ms | 100% | 100% |
+| 45,000 | 90% | 59ms | 85% | 75% |
+
+The earlier "65% vs 90%" was a confound — a poor HNSW build on a store rebuilt
+many times, not the index's true behaviour. Reconciled, the index at
+`ef_search=1000` nearly matches an exact scan (85 vs 90 at 45k, identical below
+25k) while staying ~2ms at any size; an exact scan grows O(rows). **Decision:
+raise the default `ef_search` 400 → 1000** — two-thirds of the gap recovered for
+~0ms. The remaining ~5 points at 45k are available by dropping the HNSW index
+for an exact scan, documented as an ops choice because a sequential scan does
+not stay affordable as the store grows. No "no index below N rows" switch is
+needed: the planner already seq-scans tiny tables, and above that the tuned
+index is the right tool.
 
 ### 2.2 Capture is English-only — 🟡 measurement set built; rules not written
 **Problem:** retrieval is multilingual (an English question retrieves a

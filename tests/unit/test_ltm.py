@@ -515,20 +515,20 @@ class TestPrune:
 
 class TestDenseSearchTuning:
     async def test_ef_search_is_set_whenever_the_dense_channel_runs(self) -> None:
-        """pgvector's default ef_search=40 silently drops good matches.
+        """pgvector's default ef_search=40 silently drops good matches, and the
+        first fix (400) was not enough at scale.
 
-        Measured on 3,020 clustered personal facts: 13/20 needles reached the
-        candidate pool at 40 versus 20/20 at 400, for no latency benefit. Four
-        of the misses were the true nearest neighbour by exact cosine — the
-        index simply never returned them, so RRF never saw them and end-to-end
-        recall sat at 75% with no sign anything was wrong.
+        Reconciled on clean realistic stores through the product path: at 45k,
+        recall@8 was 75% at ef=400, 85% at ef=1000, 90% exact. Raising the
+        default to 1000 (pgvector's cap) recovers two-thirds of the gap for ~0ms
+        — the index stays ~2ms at every size while an exact scan is O(rows).
         """
         conn = MockConnection(search_rows=[])
         vec = [0.1] * 4
         await _ltm(conn).search_hybrid(Query(text="q", embedding=vec), k=8)
         sets = [sql for sql, _ in conn.executed if sql.startswith("SET hnsw.ef_search")]
         assert sets, "dense search ran without setting ef_search"
-        assert "400" in sets[0]
+        assert "1000" in sets[0]
 
     async def test_ef_search_is_configurable(self) -> None:
         conn = MockConnection(search_rows=[])

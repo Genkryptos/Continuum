@@ -97,11 +97,16 @@ that the public API may still shift before 1.0.
   for. Untagged facts keep the relevance-ranked fallback.
 
 ### Fixed
-- **`CONTINUUM_HNSW_EF_SEARCH`** makes the dense-search beam width configurable
-  without editing code (capped at 1000, pgvector's own limit). Added while
-  chasing a recall gap at scale — the first attempt to sweep it monkey-patched
-  the module and silently measured the same value four times, because a
-  signature default binds when the function is defined, not when it is called.
+- **Dense-search beam width raised to `ef_search=1000` (pgvector's max), from
+  400.** A clean size sweep (`scripts/index_crossover.py`) reconciled an earlier
+  overstatement: the HNSW index does not "discard a quarter of memories" — that
+  65% figure came from a bad graph build on a much-rebuilt store. Through the
+  product path on clean realistic stores, recall@8 at 45k is 75% at ef=400, 85%
+  at ef=1000, 90% exact; below 25k every setting is ~100%. Raising the default
+  recovers two-thirds of the gap for ~0 ms (the index stays ~2 ms at every size;
+  an exact scan is O(rows) — 3 ms at 3k, 59 ms at 45k). Tunable via
+  `CONTINUUM_HNSW_EF_SEARCH`; the last ~5 points at 45k need an exact scan
+  (drop the HNSW index), which is an operational choice, not a default.
 - **`recall` now lets the current version of a fact outrank its stale one.**
   Relevance ranking cannot tell that "I moved to Berlin" replaces "I live in
   Porto"; without an LLM decider nothing marks the old one superseded, so recall

@@ -79,15 +79,26 @@ DEFAULT_RRF_K = 60
 DEFAULT_TRGM_THRESHOLD = 0.25
 
 
-#: Session ``hnsw.ef_search`` for the dense channel. pgvector's default of 40 is
-#: tuned for speed and loses real memories: measured on 3,020 clustered personal
-#: facts, only 13/20 needles reached the candidate pool at 40, versus 20/20 at
-#: 400 — for **no** latency benefit (p50 0.9ms -> 0.5ms, p95 12.2ms -> 0.7ms; a
-#: fuller graph walk terminates more predictably than a stuck one). Against a
-#: ~100ms recall dominated by the embedder this is free. Lower it only if a very
-#: large store makes the index scan itself expensive.
+#: Session ``hnsw.ef_search`` for the dense channel — the beam width pgvector
+#: searches before giving up. Its own default (40) is tuned for speed and loses
+#: real memories; **1000** (pgvector's maximum) is the measured sweet spot.
+#:
+#: Recall@8 through the product path against clean realistic stores, by size and
+#: setting (``scripts/index_crossover.py``):
+#:
+#:     rows    ef=40   ef=400   ef=1000   exact scan
+#:     3,000     —      100%      100%       100%
+#:     25,000    —      100%      100%       100%
+#:     45,000   ~65%     75%       85%        90%
+#:
+#: At 1000 the index nearly matches an exact scan everywhere while staying ~2ms
+#: regardless of store size (an exact scan is O(rows): 3ms at 3k, 59ms at 45k).
+#: The last ~5 points at 45k need an exact scan — drop the HNSW index if you want
+#: them and can afford the latency; that is an operational choice, not a default,
+#: because it degrades as the store grows. Raising ef_search costs nothing at
+#: small scale (index latency 2-11ms across every size measured).
 def _default_ef_search() -> int:
-    """``CONTINUUM_HNSW_EF_SEARCH``, else 400.
+    """``CONTINUUM_HNSW_EF_SEARCH``, else 1000 (pgvector's cap and the measured best).
 
     Environment-readable so the value can be swept without editing code — the
     first attempt to compare settings monkey-patched this module and silently
@@ -98,14 +109,14 @@ def _default_ef_search() -> int:
 
     raw = os.environ.get("CONTINUUM_HNSW_EF_SEARCH", "")
     try:
-        return max(1, min(1000, int(raw))) if raw.strip() else 400
+        return max(1, min(1000, int(raw))) if raw.strip() else 1000
     except ValueError:
-        return 400
+        return 1000
 
 
 #: pgvector caps ``hnsw.ef_search`` at 1000; anything higher is rejected outright.
 MAX_HNSW_EF_SEARCH = 1000
-DEFAULT_HNSW_EF_SEARCH = 400
+DEFAULT_HNSW_EF_SEARCH = 1000
 _NEIGHBOR_CAP = 500
 
 # Columns a partial ``update(patch)`` is allowed to touch. The keys are the
