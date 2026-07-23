@@ -286,6 +286,8 @@ build-verify: build ## Build, then verify a clean install in a fresh venv
 	echo "=== clean-venv install of $$WHEEL into $$TMP_VENV ==="; \
 	$(BENCH_PYTHON) -m venv "$$TMP_VENV"; \
 	"$$TMP_VENV/bin/pip" install --quiet "$$WHEEL[mcp]"; \
+	echo "=== migrations packaged in the wheel (else a clean install has no schema) ==="; \
+	PYTHONSAFEPATH=1 "$$TMP_VENV/bin/python" -c "import continuum.db.migrate as m,sys; d=m._default_migrations_dir(); n=len(list(d.glob('*.sql'))); print(f'  {n} migrations at {d}'); sys.exit('FAIL: wheel ships no migrations' if n==0 or 'site-packages' not in str(d) else 0)"; \
 	echo "=== smoke import + minimal session ==="; \
 	"$$TMP_VENV/bin/python" scripts/verify_clean_install.py; \
 	echo "=== MCP round-trip against the freshly installed binary ==="; \

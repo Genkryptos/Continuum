@@ -90,7 +90,7 @@ semantic probe. That is *fine* — real questions are a mix — but it now has a
 test asserting at least 8 of 20 carry no shared content word, so the headline
 number cannot quietly drift to measuring something easier.
 
-### 0.3 One more testing round, on the dimensions never touched
+### 0.3 One more testing round, on the dimensions never touched — 🟢 upgrade, backup/restore, clean-machine install done (clock/DST, disk-full remain)
 **Problem:** the flat defect curve. Rounds so far covered: personal facts,
 messy/multilingual input, a simulated month, concurrency and failure recovery,
 scale, and the fixes themselves. **Never covered:** the upgrade path on a large
@@ -133,8 +133,24 @@ recreated, and retrieval works on the restored copy. One operational gotcha
 worth documenting: the `pg_dump` on `PATH` was 14.18 against a 16.10 server and
 **refused to run at all** — back up with client tools matching your server.
 
-Remaining in this item: clock skew and DST, disk-full, and a from-scratch
-install on a clean machine.
+**Clean-machine install — ✅ done, and it found a real bug.** A fresh Linux
+container (python:3.12-slim, no repo, no cached model), only the built wheel
+copied in, following `docs/mcp.md` literally: `pip install
+continuum-memory[mcp,postgres]` → `python -m continuum.db.migrate`. The migrate
+step printed **"no migrations found"** — the wheel packaged **no** `migrations/`
+directory, so a stranger installing from PyPI would get a client that creates no
+schema and fails on the first Postgres write. `make build-verify` (run from the
+repo, where `migrations/` exists on disk) and CI (editable install) both missed
+it because the directory was always present locally.
+
+Fixed by force-including `migrations/` into the wheel as `continuum/migrations/`
+and making `continuum.db.migrate` prefer the packaged copy (falling back to the
+repo root for editable installs). Re-verified on the clean container: 7
+migrations applied, durable round trip works. `build-verify` now asserts the
+built wheel actually contains the migrations, in site-packages, so this cannot
+regress.
+
+Remaining in this item: clock skew and DST, and disk-full.
 
 ---
 

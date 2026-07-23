@@ -28,8 +28,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# migrations/ lives at the repo root, two levels up from this file.
-_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "migrations"
+
+def _default_migrations_dir() -> Path:
+    """Where the ``*.sql`` migrations live, for both install shapes.
+
+    A pip-installed **wheel** ships them inside the package at
+    ``continuum/migrations/`` (force-included in pyproject) — this is what a
+    stranger's ``pip install continuum-memory[postgres]`` gets, and its absence
+    made ``python -m continuum.db.migrate`` a silent no-op that created no
+    schema. An **editable/source** checkout has no such copy, so fall back to
+    the repo-root ``migrations/`` two levels up. Prefer the packaged copy so a
+    real install never depends on the working directory.
+    """
+    packaged = Path(__file__).resolve().parent.parent / "migrations"
+    if packaged.is_dir() and any(packaged.glob("*.sql")):
+        return packaged
+    return Path(__file__).resolve().parents[2] / "migrations"
+
+
+_DEFAULT_DIR = _default_migrations_dir()
 _VERSION_RE = re.compile(r"^(\d+)")
 
 

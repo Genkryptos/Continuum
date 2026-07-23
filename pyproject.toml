@@ -154,6 +154,11 @@ packages = ["continuum", "memory"]
 # PEP 561: ship the inline-types marker so downstream `mypy`/`pyright`
 # type-check against continuum's own annotations.
 "continuum/py.typed" = "continuum/py.typed"
+# The SQL migrations must travel INSIDE the package. Without this the wheel
+# shipped no schema at all: a clean `pip install continuum-memory[postgres]`
+# then `python -m continuum.db.migrate` found nothing and created no tables,
+# and the first Postgres write failed. continuum.db.migrate looks here first.
+"migrations" = "continuum/migrations"
 
 # Wheel-wide excludes: keep the legacy memory/mtm/ tree out (it
 # transitively imports `helper/`, which is not part of the package),
