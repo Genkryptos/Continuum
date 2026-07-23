@@ -82,16 +82,20 @@ def postgres_db() -> Generator[str, None, None]:
 
     test_dsn = f"postgresql://myuser:mypassword@localhost:5432/{test_db}"
 
-    # ── Apply the v1 migration ────────────────────────────────────────────────
+    # ── Apply the FULL migration set, in order ───────────────────────────────
+    # Not just 001: the schema the code writes to must be the current one. This
+    # fixture used to apply only 001_ltm_schema.sql, so the test database had no
+    # `namespace` column (migration 005) while PostgresLTM.upsert writes it —
+    # the acceptance suite failed the moment CI ran against Postgres. Driving
+    # the real runner means the test schema can never again drift from the code.
+    import io
+
+    from continuum.db.migrate import apply_migrations
+
     if not MIGRATION_FILE.exists():
         pytest.fail(f"Migration file not found: {MIGRATION_FILE}")
-
-    migration_sql = MIGRATION_FILE.read_text()
-    with psycopg2.connect(test_dsn) as mig_conn:
-        with mig_conn.cursor() as cur:
-            cur.execute(migration_sql)
-        mig_conn.commit()
-    log.info("Migration applied to %s", test_db)
+    apply_migrations(test_dsn, out=io.StringIO())
+    log.info("Migrations applied to %s", test_db)
 
     yield test_dsn
 
