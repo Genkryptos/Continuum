@@ -10,7 +10,7 @@ build-backend = "hatchling.build"
 # ── Project metadata ──────────────────────────────────────────────────────────
 
 [project]
-name        = "continuum-memory"
+name = "continuum-mcp"
 dynamic     = ["version"]
 description = "Production-grade memory infrastructure for AI agents — tiered STM / MTM / LTM with first-class supersession and bi-temporal queries."
 readme      = "README.md"
@@ -60,7 +60,7 @@ dependencies = [
     "tenacity>=8.2",      # retry policy used in ContinuumSession + extractors
     # Imported at module load by the DEFAULT in-memory LTM (via
     # continuum.retrieval.bm25) — not optional. Missing it made a clean
-    # `pip install continuum-memory[mcp]` crash on the first tool call.
+    # `pip install continuum-mcp[mcp]` crash on the first tool call.
     "rank-bm25>=0.2.2",
 ]
 
@@ -111,7 +111,7 @@ mcp = [
 ]
 # Everything at once (for full local dev)
 all = [
-    "continuum-memory[postgres,llm,embed,optimizer,code,mcp]",
+    "continuum-mcp[postgres,llm,embed,optimizer,code,mcp]",
 ]
 # Developer toolchain — installed via `pip install -e .[dev]`
 dev = [
@@ -129,7 +129,7 @@ dev = [
 ]
 
 [project.scripts]
-# MCP server — `pip install continuum-memory[mcp]` then `continuum-mcp`.
+# MCP server — `pip install continuum-mcp[mcp]` then `continuum-mcp`.
 continuum-mcp = "continuum.mcp.server:main"
 
 
@@ -155,7 +155,7 @@ packages = ["continuum", "memory"]
 # type-check against continuum's own annotations.
 "continuum/py.typed" = "continuum/py.typed"
 # The SQL migrations must travel INSIDE the package. Without this the wheel
-# shipped no schema at all: a clean `pip install continuum-memory[postgres]`
+# shipped no schema at all: a clean `pip install continuum-mcp[postgres]`
 # then `python -m continuum.db.migrate` found nothing and created no tables,
 # and the first Postgres write failed. continuum.db.migrate looks here first.
 "migrations" = "continuum/migrations"
