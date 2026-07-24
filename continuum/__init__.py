@@ -11,7 +11,7 @@ introspection (``continuum.__version__``).
 
 from __future__ import annotations
 
-__version__ = "2.0.0"
+__version__ = "2.0.2"
 
 # Public API. Heavy submodules stay lazy — importing `continuum` must be cheap
 # and must not pull in optional backends (Postgres, embedders) until used.
