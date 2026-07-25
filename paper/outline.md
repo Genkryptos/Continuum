@@ -87,8 +87,8 @@ static store; Continuum's contribution is *correctness under contradiction and t
 | LongMemEval-S (500 Q, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | Retrieval recall vs store size | ~100% @ tens · 95% @ 3k · 75% @ 47k | — | embedder_bakeoff |
 | **Retrieval-only decay** (real hybrid pipeline, 20 needles, depth 20) | R@10 / MRR: **3k 1.00/.916 · 25k .90/.90 · 47k .85/.80** (NDCG@20 .935→.900→.813) | pgvector-cosine baseline (below) | `scripts/retrieval_metrics.py` |
-| **Hybrid vs pgvector-cosine @ 3k** | hybrid **.916** MRR | cosine **.916** MRR — *identical* | `scripts/retrieval_metrics.py` |
-| Hybrid vs cosine @ 25k / 47k | **[running]** | **[running]** | `--sizes 25000 47000` |
+| **Hybrid vs pgvector-cosine** (MRR) | 3k **.916** · 25k **.900** · 47k **.800** | 3k .916 · 25k .903 · 47k .750 | `scripts/retrieval_metrics.py` |
+| ↳ verdict | within HNSW build noise (±1–2 needles); **hybrid ≥ cosine, no clean win** on this 20-needle set | — | — |
 | Mem0 head-to-head (LOCOMO) | **[NEEDS clean run]** | — | README (preliminary) |
 
 - **Ablations** (from existing harnesses): dense-only vs sparse-only vs RRF; `ef_search`
@@ -110,13 +110,15 @@ is a mechanism result, not just a headline number.
 > reproducible; (iii) note the 6 attribute types (location, employer, pet, marital,
 > vehicle, hobby).
 
-**Hybrid vs pure cosine — an honest ablation.** At 3k the shipped hybrid and a plain
-pgvector cosine scan score *identically* (MRR .916): on semantic needles at small scale
-the dense channel already saturates recall, so BM25+RRF contributes nothing there. This
-is stated, not hidden — the lexical channel earns its keep on exact-token/lexical queries
-and where dense recall degrades at scale (25k/47k comparison **[running]**). If hybrid
-does *not* beat cosine even at 47k on this set, the honest paper claim narrows to
-"hybrid ≥ cosine, no worse" plus a lexical-query case study, rather than a scale win.
+**Hybrid vs pure cosine — an honest, null-ish ablation.** Across 3k/25k/47k the shipped
+hybrid and a plain pgvector cosine scan are **statistically indistinguishable**: MRR ties
+at 3k (.916), cosine edges it at 25k (.903 vs .900), hybrid edges it at 47k (.800 vs
+.750). Every gap is a single needle out of 20 — within the ±1–2-needle HNSW build noise
+the repo's own harnesses document. **We do not claim hybrid beats cosine** on this set;
+the honest claim is *hybrid ≥ cosine, no worse*, and the lexical channel's value must be
+shown on a purpose-built lexical/exact-match query set (future work), not this semantic
+one. Reporting a null result here is deliberate — it's what keeps the supersession and
+bi-temporal claims (which are large, deterministic, and not noise) credible.
 
 **Retrieval degrades gracefully, and it bounds the ceiling claim.** Through the real
 hybrid pipeline, R@10 falls 1.00 → .90 → .85 as the store grows 3k → 25k → 47k (16×);
@@ -139,6 +141,10 @@ rather than claiming retrieval is solved unconditionally.
 - Recall decays with store size (75% at ~47k) — an open problem; document honestly.
 - Single-writer supersession; no multi-writer conflict resolution yet.
 - Scripted benchmarks are small (50/20) — release them so others can extend.
+- **The 20-needle retrieval set can't resolve sub-5pp differences** (1 needle = 5pp,
+  within HNSW build noise), which is why the hybrid-vs-cosine comparison is inconclusive.
+  Fix before submission: a larger needle set + bootstrap CIs, and a separate
+  lexical/exact-match query set to isolate the BM25 channel's contribution.
 
 ### 8. Conclusion & released artifacts
 Open-source repo, `pip install continuum-mcp`, 1800+ tests, the harnesses, and the
