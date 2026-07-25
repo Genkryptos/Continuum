@@ -2,23 +2,20 @@
 """
 scripts/retrieval_metrics.py
 ============================
-Retrieval-only quality metrics — Recall@k, MRR, NDCG@k — through Continuum's
-**real** hybrid pipeline (``Memory.recall``), decoupled from any answerer.
+Retrieval-only quality metrics — Recall@k, MRR, NDCG@k — decoupled from any
+answerer, reported for two systems side by side:
 
-Every headline number Continuum has reported so far is *end-to-end* (retrieval
-+ an LLM answerer + a judge), which confounds "did we retrieve the right
-memory" with "did the model reason correctly over it". A research claim about
-the retriever needs the retrieval axis on its own. This harness provides it:
-for each needle it records the **rank** of the gold fact in the returned list,
-then derives the standard IR metrics.
+  * **hybrid**  — Continuum's shipped pipeline (dense bge-m3 + BM25, fused with
+    RRF), via ``Memory.recall``.
+  * **cosine**  — a plain pgvector top-k cosine scan (dense only, no lexical
+    channel, no fusion): the "just a vector DB" baseline the paper compares to.
 
-It reuses the needle set and bulk loader from ``recall_at_scale.py`` (single
-relevant document per query), and scores through ``Memory.recall`` exactly as
-``recall_at_scale.score`` does — so the metrics describe the shipped hybrid
-(dense bge-m3 + BM25, fused with RRF), not a re-implementation.
+Both are scored over the same needle set (single relevant document per query)
+by recording the **rank** of the gold fact, so the metrics describe retrieval
+quality alone — not whether an LLM then reasoned correctly over it.
 
     CONTINUUM_DB_DSN=postgresql://…/throwaway python3 scripts/retrieval_metrics.py \\
-        --sizes 3000 --k 20
+        --sizes 3000 25000 --k 20
 
 Needs a throwaway migrated database — it writes each size into its own namespace.
 """
@@ -57,9 +54,8 @@ async def _build(dsn: str, rows: int, namespace: str) -> None:
     await ras.load(dsn, rows, "realistic", namespace)
 
 
-async def _ranks(dsn: str, namespace: str, depth: int) -> list[int | None]:
-    """For each needle, the 1-indexed rank of the gold fact in recall(depth),
-    or None if it never appears in the top-`depth`. Uses the real product path."""
+async def _hybrid_ranks(dsn: str, namespace: str, depth: int) -> list[int | None]:
+    """Gold-fact rank per needle through the real product path (Memory.recall)."""
     from continuum.memory import Memory
 
     mem = Memory.from_postgres(dsn, embeddings=True, namespace=namespace)
@@ -69,16 +65,46 @@ async def _ranks(dsn: str, namespace: str, depth: int) -> list[int | None]:
         ranks: list[int | None] = []
         for fact, query in ras.NEEDLES:
             found = await mem.recall(query, k=depth)
-            gold = fact.strip()
-            rank: int | None = None
-            for i, h in enumerate(found, start=1):
-                if (h.content or "").strip() == gold:
-                    rank = i
-                    break
-            ranks.append(rank)
+            ranks.append(_rank_of(fact, [(h.content or "") for h in found]))
         return ranks
     finally:
         await mem.aclose()
+
+
+def _cosine_ranks(dsn: str, namespace: str, depth: int) -> list[int | None]:
+    """Gold-fact rank per needle through a plain pgvector cosine top-k scan
+    (dense only — no BM25, no RRF): the vector-DB baseline."""
+    import psycopg
+
+    from continuum.core.config import ContinuumConfig
+    from continuum.db.pgvector_upgrade import to_halfvec_literal
+    from continuum.embeddings import EmbeddingService
+
+    async def _embed() -> list[str]:
+        e = EmbeddingService(ContinuumConfig.load().embedding)
+        return [to_halfvec_literal(v) for v in await e.embed([q for _f, q in ras.NEEDLES])]
+
+    qvecs = asyncio.run(_embed())
+    sql = (
+        'SELECT "text" FROM memory_nodes '
+        "WHERE invalidated_at IS NULL AND namespace = %s AND embedding IS NOT NULL "
+        "ORDER BY embedding <=> %s::halfvec LIMIT %s"
+    )
+    ranks: list[int | None] = []
+    with psycopg.connect(dsn) as c, c.cursor() as cur:
+        cur.execute("SET hnsw.ef_search = 1000")  # give the index its best shot
+        for (fact, _q), qv in zip(ras.NEEDLES, qvecs, strict=True):
+            cur.execute(sql, (namespace, qv, depth))
+            ranks.append(_rank_of(fact, [r[0] for r in cur.fetchall()]))
+    return ranks
+
+
+def _rank_of(fact: str, texts: list[str]) -> int | None:
+    gold = fact.strip()
+    for i, t in enumerate(texts, start=1):
+        if (t or "").strip() == gold:
+            return i
+    return None
 
 
 def _metrics(ranks: list[int | None], cutoffs: list[int]) -> dict[str, float]:
@@ -87,10 +113,8 @@ def _metrics(ranks: list[int | None], cutoffs: list[int]) -> dict[str, float]:
     out: dict[str, float] = {}
     for k in cutoffs:
         out[f"recall@{k}"] = sum(1 for r in ranks if r is not None and r <= k) / n
-    # MRR over the full retrieved depth (0 contribution for misses)
     out["mrr"] = sum((1.0 / r) if r else 0.0 for r in ranks) / n
-    # NDCG@k: one relevant doc → IDCG = 1, so NDCG = 1/log2(rank+1) if rank<=k
-    kmax = max(cutoffs)
+    kmax = max(cutoffs)  # NDCG@kmax; one relevant doc → IDCG = 1
     out[f"ndcg@{kmax}"] = (
         sum((1.0 / math.log2(r + 1)) if (r and r <= kmax) else 0.0 for r in ranks) / n
     )
@@ -100,9 +124,7 @@ def _metrics(ranks: list[int | None], cutoffs: list[int]) -> dict[str, float]:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--sizes", type=int, nargs="+", default=[3000])
-    p.add_argument(
-        "--k", type=int, default=20, help="retrieval depth (largest cutoff scored)"
-    )
+    p.add_argument("--k", type=int, default=20, help="retrieval depth (largest cutoff)")
     args = p.parse_args(argv)
 
     dsn = os.environ.get("CONTINUUM_DB_DSN")
@@ -113,23 +135,26 @@ def main(argv: list[str] | None = None) -> int:
     cutoffs = sorted({c for c in (1, 5, 10, 20, args.k) if c <= args.k})
     total = len(ras.NEEDLES)
     print(
-        f"  retrieval-only metrics · real hybrid pipeline (Memory.recall) · "
+        f"  retrieval-only metrics · hybrid (Memory.recall) vs pgvector-cosine · "
         f"{total} needles · depth={args.k}\n"
     )
-    header = f"  {'rows':>8}" + "".join(f"{f'R@{c}':>9}" for c in cutoffs)
-    header += f"{'MRR':>9}{f'NDCG@{args.k}':>10}"
+    header = f"  {'rows':>7} {'system':>8}" + "".join(f"{f'R@{c}':>8}" for c in cutoffs)
+    header += f"{'MRR':>8}{f'NDCG@{args.k}':>9}"
     print(header)
     for size in args.sizes:
         ns = f"m{size}"
         asyncio.run(_build(dsn, size, ns))
-        ranks = asyncio.run(_ranks(dsn, ns, args.k))
-        m = _metrics(ranks, cutoffs)
-        row = f"  {size:>8}" + "".join(f"{m[f'recall@{c}']:>9.3f}" for c in cutoffs)
-        row += f"{m['mrr']:>9.3f}{m[f'ndcg@{args.k}']:>10.3f}"
-        print(row)
-        misses = sum(1 for r in ranks if r is None)
-        if misses:
-            print(f"           ({misses}/{total} needles not in top-{args.k})")
+        for label, ranks in (
+            ("hybrid", asyncio.run(_hybrid_ranks(dsn, ns, args.k))),
+            ("cosine", _cosine_ranks(dsn, ns, args.k)),
+        ):
+            m = _metrics(ranks, cutoffs)
+            row = f"  {size:>7} {label:>8}" + "".join(
+                f"{m[f'recall@{c}']:>8.3f}" for c in cutoffs
+            )
+            row += f"{m['mrr']:>8.3f}{m[f'ndcg@{args.k}']:>9.3f}"
+            print(row)
+        print()
     return 0
 
 

@@ -86,7 +86,9 @@ static store; Continuum's contribution is *correctness under contradiction and t
 | **Bi-temporal "as of"** (20 = 15 point-in-time + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (pit 0/15) · `naive_chronological` **75%** (pit 100%, **retroactive 0/5**) | `bench/bi_temporal.py` |
 | LongMemEval-S (500 Q, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | Retrieval recall vs store size | ~100% @ tens · 95% @ 3k · 75% @ 47k | — | embedder_bakeoff |
-| **Retrieval-only decay** (real hybrid pipeline, 20 needles, depth 20) | R@10 / MRR: **3k 1.00/.916 · 25k .90/.90 · 47k .85/.80** (NDCG@20 .935→.900→.813) | **[NEEDS pgvector/Mem0 baselines]** | `scripts/retrieval_metrics.py` |
+| **Retrieval-only decay** (real hybrid pipeline, 20 needles, depth 20) | R@10 / MRR: **3k 1.00/.916 · 25k .90/.90 · 47k .85/.80** (NDCG@20 .935→.900→.813) | pgvector-cosine baseline (below) | `scripts/retrieval_metrics.py` |
+| **Hybrid vs pgvector-cosine @ 3k** | hybrid **.916** MRR | cosine **.916** MRR — *identical* | `scripts/retrieval_metrics.py` |
+| Hybrid vs cosine @ 25k / 47k | **[running]** | **[running]** | `--sizes 25000 47000` |
 | Mem0 head-to-head (LOCOMO) | **[NEEDS clean run]** | — | README (preliminary) |
 
 - **Ablations** (from existing harnesses): dense-only vs sparse-only vs RRF; `ef_search`
@@ -107,6 +109,14 @@ is a mechanism result, not just a headline number.
 > release the scenario generator (`bench/synth.py`) + scoring script so the sets are
 > reproducible; (iii) note the 6 attribute types (location, employer, pet, marital,
 > vehicle, hobby).
+
+**Hybrid vs pure cosine — an honest ablation.** At 3k the shipped hybrid and a plain
+pgvector cosine scan score *identically* (MRR .916): on semantic needles at small scale
+the dense channel already saturates recall, so BM25+RRF contributes nothing there. This
+is stated, not hidden — the lexical channel earns its keep on exact-token/lexical queries
+and where dense recall degrades at scale (25k/47k comparison **[running]**). If hybrid
+does *not* beat cosine even at 47k on this set, the honest paper claim narrows to
+"hybrid ≥ cosine, no worse" plus a lexical-query case study, rather than a scale win.
 
 **Retrieval degrades gracefully, and it bounds the ceiling claim.** Through the real
 hybrid pipeline, R@10 falls 1.00 → .90 → .85 as the store grows 3k → 25k → 47k (16×);
