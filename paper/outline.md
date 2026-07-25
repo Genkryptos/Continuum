@@ -82,7 +82,8 @@ static store; Continuum's contribution is *correctness under contradiction and t
 ### 5. Results
 | Result | Continuum | Baseline(s) | Source |
 |---|---|---|---|
-| **Supersession** (50 update-then-query, 6 attribute types) | **100%** (50/50, 0 stale) | `naive_append` **38%** (19/50; 31 stale) → **+62pp** | `bench/supersession_correctness.py` |
+| **Supersession — in-memory schema sim** (50 scenarios) | **100%** (50/50, 0 stale) | `naive_append` **38%** (19/50; 31 stale) → **+62pp** | `bench/supersession_correctness.py` |
+| **Supersession — END-TO-END through Postgres** (50 scenarios, no LLM) | `current()` **100%** (50/50, 0 stale) · `recall` top-1 **20%** | — | `bench/supersession_e2e.py` |
 | **Bi-temporal "as of"** (20 = 15 point-in-time + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (pit 0/15) · `naive_chronological` **75%** (pit 100%, **retroactive 0/5**) | `bench/bi_temporal.py` |
 | LongMemEval-S (500 Q, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | Retrieval recall vs store size | ~100% @ tens · 95% @ 3k · 75% @ 47k | — | embedder_bakeoff |
@@ -102,13 +103,19 @@ learned *late* about the *past* is invisible to a one-axis store. Splitting vali
 from transaction-time is exactly what recovers those 5, taking Continuum to 20/20. This
 is a mechanism result, not just a headline number.
 
-> **[NEEDS — formalization TODO]** The supersession benchmark currently runs as an
-> *in-memory simulation* of Continuum's LTM schema (`superseded_by` links), not the full
-> Postgres+MCP path. Before submission: (i) re-run it end-to-end through the real
-> `invalidated_at` store so the claim is the shipped system, not a schema model; (ii)
-> release the scenario generator (`bench/synth.py`) + scoring script so the sets are
-> reproducible; (iii) note the 6 attribute types (location, employer, pet, marital,
-> vehicle, hobby).
+**End-to-end validation + a sharper architecture claim (`bench/supersession_e2e.py`).**
+Replaying the same 50 scenarios through the *shipped* `Memory.from_postgres` path
+(`add(attribute=…)` → `current("user", attribute)`) gives `current()` **100%** (50/50,
+0 stale) with **no LLM and no API key** — the deterministic bi-temporal exact-tag lookup.
+This closes the "is it just a schema sim?" objection: the headline correctness is the
+deployed system. It also *locates the LLM precisely*: through the same path, `recall`
+top-1 is only **20%** — the supersession **decider (gpt-4o-mini) is needed only to
+invalidate rows so the relevance-ranked `recall` path stops surfacing stale facts, not
+for `current`/`timeline` correctness**. So the paper's robust, no-dependency claim is the
+deterministic `current`/`timeline` axis; recall-level staleness filtering is an
+explicitly optional, LLM-gated enhancement. Remaining formalization: release the scenario
+generator (`bench/synth.py`) + scoring script; note the 6 attribute types (location,
+employer, pet, marital, vehicle, hobby).
 
 **Hybrid vs pure cosine — an honest, null-ish ablation.** Across 3k/25k/47k the shipped
 hybrid and a plain pgvector cosine scan are **statistically indistinguishable**: MRR ties
