@@ -80,10 +80,10 @@ static store; Continuum's contribution is *correctness under contradiction and t
 - Baselines: **[NEEDS]** plain pgvector cosine; flat/recency store; **Mem0** (clean run).
 
 ### 5. Results
-| Result | Continuum | Baseline | Source |
+| Result | Continuum | Baseline(s) | Source |
 |---|---|---|---|
-| Supersession correctness (50 scripted updates) | **100%** | 38% | README |
-| Bi-temporal "as of date Y" (20 scripted timelines) | **100%** | 75% | README |
+| **Supersession** (50 update-then-query, 6 attribute types) | **100%** (50/50, 0 stale) | `naive_append` **38%** (19/50; 31 stale) → **+62pp** | `bench/supersession_correctness.py` |
+| **Bi-temporal "as of"** (20 = 15 point-in-time + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (pit 0/15) · `naive_chronological` **75%** (pit 100%, **retroactive 0/5**) | `bench/bi_temporal.py` |
 | LongMemEval-S (500 Q, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | Retrieval recall vs store size | ~100% @ tens · 95% @ 3k · 75% @ 47k | — | embedder_bakeoff |
 | **Retrieval-only @ 3k** (real hybrid pipeline) | **R@1 .900 · R@5 .950 · R@10 1.00 · R@20 1.00 · MRR .916 · NDCG@20 .935** | **[NEEDS pgvector/Mem0 baselines]** | `scripts/retrieval_metrics.py` |
@@ -93,6 +93,21 @@ static store; Continuum's contribution is *correctness under contradiction and t
 - **Ablations** (from existing harnesses): dense-only vs sparse-only vs RRF; `ef_search`
   sweep; embedder bake-off; HNSW vs exact-scan crossover; reranker (built, measured
   net-negative — report it).
+
+**The two-axis argument (why bi-temporal, not just chronological).** The bi-temporal
+result is the paper's cleanest figure: `naive_chronological` (single time axis) gets
+point-in-time queries **100%** right yet **0/5** on retroactive corrections — a fact
+learned *late* about the *past* is invisible to a one-axis store. Splitting valid-time
+from transaction-time is exactly what recovers those 5, taking Continuum to 20/20. This
+is a mechanism result, not just a headline number.
+
+> **[NEEDS — formalization TODO]** The supersession benchmark currently runs as an
+> *in-memory simulation* of Continuum's LTM schema (`superseded_by` links), not the full
+> Postgres+MCP path. Before submission: (i) re-run it end-to-end through the real
+> `invalidated_at` store so the claim is the shipped system, not a schema model; (ii)
+> release the scenario generator (`bench/synth.py`) + scoring script so the sets are
+> reproducible; (iii) note the 6 attribute types (location, employer, pet, marital,
+> vehicle, hobby).
 
 ### 6. The retrieval-vs-reasoning decomposition (the honest finding)
 - Seven sweeps × four model families × six retrievers found a hard **32–34% substring
@@ -116,7 +131,10 @@ supersession/bi-temporal benchmark sets.
 
 ## Gaps to close before submission (the real work; ordered)
 1. **[b] Retrieval-only metrics** — Recall@k / NDCG / MRR harness (decouple from answerer). *Highest leverage.*
-2. **[c] Formalize + release the supersession & as-of benchmarks** — described sets + baselines. *Most novel/citable.*
+2. **[c] Formalize the supersession & as-of benchmarks** — they *exist and pass*
+   (`bench/`, 100% vs 38%/75% with 3 defined baselines). Remaining: run supersession
+   **end-to-end through Postgres** (currently in-memory sim), release the scenario
+   generator + scoring script. *Most novel/citable — nearly done.*
 3. **Baselines** — pgvector-cosine, flat/recency, and a **clean Mem0** run on the same eval.
 4. **[d] Frontier-answerer pass** — isolates retrieval-vs-reasoning for §6.
 5. Ablation tables from existing harnesses (`embedder_bakeoff`, `index_crossover`, ef_search, reranker).
