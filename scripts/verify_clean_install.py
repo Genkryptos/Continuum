@@ -1,7 +1,7 @@
 """
 scripts/verify_clean_install.py
 ===============================
-Verify that a freshly-installed continuum-memory wheel can import +
+Verify that a freshly-installed continuum-mcp wheel can import +
 run a minimal :class:`ContinuumSession`. Called from
 ``make build-verify``; can also be run by hand inside a fresh venv:
 

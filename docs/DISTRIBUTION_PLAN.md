@@ -73,7 +73,7 @@ run Docker.
 ```
 uvx continuum-mcp            # ephemeral env, no manual venv
 # or
-pipx install continuum-memory[mcp]
+pipx install continuum-mcp[mcp]
 ```
 
 **Why now:** the wheel is built and fixed (rank-bm25 + migrations both packaged,

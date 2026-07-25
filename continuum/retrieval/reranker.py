@@ -132,7 +132,7 @@ class Reranker:
         except ImportError as exc:  # pragma: no cover - via factory in tests
             raise ImportError(
                 "sentence-transformers is required for Reranker.\n"
-                "Install it with:  pip install 'continuum-memory[embed]'"
+                "Install it with:  pip install 'continuum-mcp[embed]'"
             ) from exc
         log.info("loading cross-encoder %s on %s", self.config.model_name, device)
         # sentence-transformers ships no stubs → CrossEncoder is Any.

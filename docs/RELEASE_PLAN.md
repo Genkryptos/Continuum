@@ -41,8 +41,8 @@ agent harness are **post-launch roadmap** (§7), advertised but not shipped.
 - [ ] **CI (GitHub Actions)**: pytest + ruff + mypy on py3.11/3.12; `make
       bench-all` as a smoke job (no API keys, ~60 s); docker-compose up +
       migration smoke test.
-- [ ] **PyPI packaging**: `continuum-memory` name check/reserve, wheel build,
-      `pip install continuum-memory` → `make demo-chat` path works from a
+- [ ] **PyPI packaging**: `continuum-mcp` name check/reserve, wheel build,
+      `pip install continuum-mcp` → `make demo-chat` path works from a
       clean venv. TestPyPI dry run first.
 - [ ] **Repo hygiene**: gitignore `website/node_modules` + `website/dist`;
       resolve untracked `samples/control_failed_ids.json` (commit or ignore);
@@ -132,7 +132,7 @@ WS-E ≈ 1–2 weeks overlapping. **Target: ~5–6 weeks to public.**
 
 ## 8. Definition of done (v2.0.0)
 
-A stranger can: `pip install continuum-memory` → run the 60-second demo →
+A stranger can: `pip install continuum-mcp` → run the 60-second demo →
 follow the quickstart into a real agent → rerun `make bench-all` and see the
 synthetic numbers (supersession / bi-temporal 100 %) → (with API credits) rerun
 LongMemEval and land at **~74 %** within `gpt-oss-120b` judge/run noise → read

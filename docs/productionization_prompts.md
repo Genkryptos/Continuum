@@ -12,7 +12,7 @@ secret scan can run in parallel and is a hard release gate.
 ```
 You are working on Continuum, an open-source AI-agent memory library.
 Repo: /Users/mayanksahu/Continuum  ·  branch: release-3.0 (pushed)  ·  Python 3.12
-Package name (PyPI): continuum-memory.
+Package name (PyPI): continuum-mcp.
 
 WHAT IT IS
 Persistent memory for AI agents: ingest conversation turns → extract facts →
@@ -103,7 +103,7 @@ Cursor, etc.) plugs Continuum in with zero glue. Depends on M1.
 
 TASK
 1. Add the MCP Python SDK dependency (`mcp`) to pyproject under an optional
-   extra: `continuum-memory[mcp]`.
+   extra: `continuum-mcp[mcp]`.
 2. Create continuum/mcp/server.py — a stdio MCP server exposing tools backed by
    `continuum.Memory`:
      - recall(query, k=8) -> list of memories
@@ -203,7 +203,7 @@ TASK
 3. CI: .github/workflows/ci.yml — pytest (unit) + ruff + mypy on py3.11 and
    3.12, plus `make check`. Cache deps. Must pass on a clean clone.
 4. PyPI packaging: verify `python -m build` produces a valid wheel + sdist for
-   continuum-memory; check the name is available/reserved; `twine check dist/*`.
+   continuum-mcp; check the name is available/reserved; `twine check dist/*`.
 5. Merge prep: open a PR release-3.0 → main summarizing v2.0 (do NOT auto-merge;
    leave for the owner). Prune dead branches list for the owner to confirm.
 6. License/NOTICE consistency; add LICENSE headers if the repo convention has them.

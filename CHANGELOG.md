@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **continuum-memory** are listed here. The
+All notable changes to **continuum-mcp** are listed here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/) with the understanding
 that the public API may still shift before 1.0.
@@ -213,7 +213,7 @@ that the public API may still shift before 1.0.
   for one letter — a well-formed unit vector that ranks nothing correctly.
 - **`rank-bm25` was missing from the package dependencies** — it is imported at
   module load by the *default* in-memory LTM, so a clean
-  `pip install "continuum-memory[mcp]"` crashed with `ModuleNotFoundError` on the
+  `pip install "continuum-mcp[mcp]"` crashed with `ModuleNotFoundError` on the
   first tool call. It was only ever present in `requirements.txt`, which nobody
   installing from PyPI reads. `make build-verify` passed anyway, because a
   session that assembles 0 items never reaches the retrieval stack; that gate now
@@ -253,7 +253,7 @@ importable library with a clean API and an MCP server.
   `remember` / `recall` / `current` (supersession-resolved) / `timeline`
   (bi-temporal history) + sync wrappers. `Memory.in_memory()` for zero-config
   demos/tests; wrap a Postgres-backed `ContinuumSession` for production.
-- **MCP server** (`continuum-mcp`, `continuum-memory[mcp]`) — exposes memory as
+- **MCP server** (`continuum-mcp[mcp]`) — exposes memory as
   `recall`/`remember`/`current`/`timeline` tools to any MCP client (Claude Code,
   Cursor, …). See `docs/mcp.md`.
 - **`docs/limitations.md`** — honest known-limitations: accuracy is reader-bound

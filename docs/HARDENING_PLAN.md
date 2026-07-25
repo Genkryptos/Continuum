@@ -136,7 +136,7 @@ worth documenting: the `pg_dump` on `PATH` was 14.18 against a 16.10 server and
 **Clean-machine install — ✅ done, and it found a real bug.** A fresh Linux
 container (python:3.12-slim, no repo, no cached model), only the built wheel
 copied in, following `docs/mcp.md` literally: `pip install
-continuum-memory[mcp,postgres]` → `python -m continuum.db.migrate`. The migrate
+continuum-mcp[mcp,postgres]` → `python -m continuum.db.migrate`. The migrate
 step printed **"no migrations found"** — the wheel packaged **no** `migrations/`
 directory, so a stranger installing from PyPI would get a client that creates no
 schema and fails on the first Postgres write. `make build-verify` (run from the

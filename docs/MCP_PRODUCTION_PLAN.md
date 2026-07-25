@@ -13,7 +13,7 @@ point of writing them down:
   (enable the cross-encoder) makes recall **worse**. Fixed the real cause;
   declined the reranker with the numbers recorded.
 - **4.3** was written up as a docs task. Doing it for real found that the
-  documented install (`pip install "continuum-memory[mcp]"`) **crashed on the
+  documented install (`pip install "continuum-mcp[mcp]"`) **crashed on the
   first tool call**, and that `make build-verify` passed on that broken wheel.
 
 The rest landed as planned.
@@ -26,7 +26,7 @@ shape** (single-tenant, passive) and **operability**.
 
 ## Definition of done
 
-A stranger can: `pip install continuum-memory[mcp]` → point it at their Postgres
+A stranger can: `pip install continuum-mcp[mcp]` → point it at their Postgres
 → and across separate Claude sessions it (a) remembers what they told it,
 (b) never surfaces another context's memories, (c) fires without being asked, and
 (d) never silently loses a write or returns a stale fact as current. Reproducible
@@ -332,7 +332,7 @@ Backend-unreachable and autostart paths already logged. Not done: counters/metri
 export and decider-decision logging — add when something consumes them.
 
 ### 4.3 Install & secrets story — ✅ DONE (and it was not a docs task: the documented install was broken)
-`pip install continuum-memory[mcp]` clean-venv path; the MCP registration
+`pip install continuum-mcp[mcp]` clean-venv path; the MCP registration
 one-liner; document that `continuum.yaml` is git-tracked and must not hold a
 machine DSN (nearly leaked a username into the public repo this cycle).
 **Effort:** S.

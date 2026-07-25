@@ -81,7 +81,7 @@ Repo: https://github.com/Genkryptos/Continuum
 
 ## Posting checklist (owner)
 - [ ] Keys rotated, `release-3.0` merged to `main`, tag `v2.0.0`.
-- [ ] PyPI `continuum-memory` published; `pip install continuum-memory` verified
+- [ ] PyPI `continuum-mcp` published; `pip install continuum-mcp` verified
       on a clean machine.
 - [ ] README numbers match a fresh benchmark run (RELEASE_PLAN WS-B).
 - [ ] Links in this file resolve.

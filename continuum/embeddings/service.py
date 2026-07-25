@@ -273,7 +273,7 @@ class EmbeddingService:
         except ImportError as exc:  # pragma: no cover - exercised via factory
             raise ImportError(
                 "sentence-transformers is required for EmbeddingService.\n"
-                "Install it with:  pip install 'continuum-memory[embed]'"
+                "Install it with:  pip install 'continuum-mcp[embed]'"
             ) from exc
 
         log.info("loading embedding model %s on %s", self.config.model_name, device)
