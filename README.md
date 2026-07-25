@@ -145,7 +145,7 @@ Each box is a swappable component. The retriever and optimizer chain are protoco
 
 ## Quick start (no infra)
 
-**Use it in Python** — the library API (`pip install continuum-memory`):
+**Use it in Python** — the library API (`pip install continuum-mcp`):
 
 ```python
 import asyncio
@@ -179,8 +179,26 @@ capped by `limit`, and it **retires** rows the same way supersession does —
 recoverable. Nothing prunes on a timer, and it is not exposed as an MCP tool:
 an agent should not be able to decide to forget things about you.
 
-Or plug it into any MCP client (Claude Code, Cursor, …) with zero glue — see
-[docs/mcp.md](docs/mcp.md): `pip install "continuum-memory[mcp]"` then `continuum-mcp`.
+**Use it as an MCP server** — plug it into any MCP client (Claude Code, Claude
+Desktop, Cursor) with zero glue. Memory becomes four tools: `remember`, `recall`,
+`current`, `timeline`.
+
+```bash
+pip install "continuum-mcp[mcp,postgres,embed]"
+
+# point it at a Postgres + pgvector database — migrate once
+python -m continuum.db.migrate --dsn "$CONTINUUM_DB_DSN"
+
+# register with Claude Code over stdio (any MCP client works the same way)
+claude mcp add continuum -e CONTINUUM_DB_DSN="$CONTINUUM_DB_DSN" -- continuum-mcp
+
+# …or serve over HTTP and connect by URL instead:
+#   continuum-mcp --http --port 8000
+#   claude mcp add -t http continuum http://127.0.0.1:8000/mcp
+```
+
+Embeddings run locally on `bge-m3` — no API key is needed for memory itself.
+Full transport, backend, and client-config reference: [docs/mcp.md](docs/mcp.md).
 
 > Supersession + bi-temporal history are strongest on the Postgres path (below);
 > `Memory.in_memory()` is the zero-setup path for demos and tests. Honest scope

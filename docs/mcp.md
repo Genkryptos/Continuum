@@ -6,7 +6,7 @@ supersession-aware memory with zero glue code.
 ## Install & run
 
 ```bash
-pip install "continuum-memory[mcp,postgres,embed]"   # the real thing (see below)
+pip install "continuum-mcp[mcp,postgres,embed]"   # the real thing (see below)
 continuum-mcp                       # stdio — an MCP client spawns this itself
 continuum-mcp --http --port 8000    # standalone always-on HTTP server (connect by URL)
 ```
