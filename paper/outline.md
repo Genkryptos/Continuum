@@ -86,8 +86,7 @@ static store; Continuum's contribution is *correctness under contradiction and t
 | **Bi-temporal "as of"** (20 = 15 point-in-time + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (pit 0/15) · `naive_chronological` **75%** (pit 100%, **retroactive 0/5**) | `bench/bi_temporal.py` |
 | LongMemEval-S (500 Q, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | Retrieval recall vs store size | ~100% @ tens · 95% @ 3k · 75% @ 47k | — | embedder_bakeoff |
-| **Retrieval-only @ 3k** (real hybrid pipeline) | **R@1 .900 · R@5 .950 · R@10 1.00 · R@20 1.00 · MRR .916 · NDCG@20 .935** | **[NEEDS pgvector/Mem0 baselines]** | `scripts/retrieval_metrics.py` |
-| Retrieval-only sweep @ 25k / 47k | **[NEEDS run]** | — | `scripts/retrieval_metrics.py --sizes 25000 47000` |
+| **Retrieval-only decay** (real hybrid pipeline, 20 needles, depth 20) | R@10 / MRR: **3k 1.00/.916 · 25k .90/.90 · 47k .85/.80** (NDCG@20 .935→.900→.813) | **[NEEDS pgvector/Mem0 baselines]** | `scripts/retrieval_metrics.py` |
 | Mem0 head-to-head (LOCOMO) | **[NEEDS clean run]** | — | README (preliminary) |
 
 - **Ablations** (from existing harnesses): dense-only vs sparse-only vs RRF; `ef_search`
@@ -108,6 +107,14 @@ is a mechanism result, not just a headline number.
 > release the scenario generator (`bench/synth.py`) + scoring script so the sets are
 > reproducible; (iii) note the 6 attribute types (location, employer, pet, marital,
 > vehicle, hobby).
+
+**Retrieval degrades gracefully, and it bounds the ceiling claim.** Through the real
+hybrid pipeline, R@10 falls 1.00 → .90 → .85 as the store grows 3k → 25k → 47k (16×);
+misses are near-bimodal (a needle is rank-1 or absent). So "retrieval isn't the ceiling"
+holds *strongly* at small/mid stores (R@10 = 100% at 3k while judged accuracy is ~74%),
+and remains the honest read even at 47k (retrieval 85% vs answerer ~74%) — but the curve
+shows retrieval *does* start to matter at very large stores, which we state plainly
+rather than claiming retrieval is solved unconditionally.
 
 ### 6. The retrieval-vs-reasoning decomposition (the honest finding)
 - Seven sweeps × four model families × six retrievers found a hard **32–34% substring
