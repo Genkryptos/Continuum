@@ -1791,6 +1791,94 @@ class STMSemanticRetriever:
         )
 
 
+_ENTITY_STOP = frozenset({
+    "the", "this", "that", "there", "then", "they", "when", "what", "where",
+    "which", "user", "assistant", "you", "your", "yours", "we", "our", "it",
+    "he", "she", "his", "her", "how", "why", "who", "and", "but", "for",
+})
+
+
+def _extract_entities(text: str) -> set[str]:
+    """Cheap, transparent named-entity signal — quoted spans + capitalized
+    proper-noun phrases. Mirrors the regex baseline in
+    ``continuum.extraction.entity_extractor`` (no model needed). Lowercased so
+    the match against item text is case-insensitive."""
+    ents: set[str] = set()
+    for a, b in re.findall(r'"([^"]{2,60})"|“([^”]{2,60})”', text):
+        s = (a or b).strip()
+        if len(s) >= 3:
+            ents.add(s.lower())
+    for m in re.findall(
+        r"\b[A-Z][\w'&-]+(?:\s+(?:[A-Z][\w'&-]+|of|the|and|&|de|la)){0,4}\b", text
+    ):
+        s = m.strip()
+        if len(s) >= 4 and s.lower() not in _ENTITY_STOP:
+            ents.add(s.lower())
+    return ents
+
+
+class GraphExpandRetriever:
+    """Entity-matching / 1-hop graph expansion layered over any base retriever.
+
+    Mirrors ``continuum.retrieval.retriever._graph_expand`` but on the flat
+    LongMemEval haystack: after the base retriever picks its top-k, this pulls
+    in up to ``n`` *unpicked* haystack items that share a named entity with the
+    query or the top hits — the Mem0-style entity signal the eval's own
+    dense/BM25 retrievers lack. Off unless ``--graph-expand N`` (N > 0), so
+    every existing config is byte-for-byte unchanged.
+    """
+
+    def __init__(self, base: Any, *, store: "FlatHaystackStore", n: int) -> None:
+        self.base = base
+        self.store = store
+        self.n = n
+
+    async def retrieve(self, query: Query, budget: TokenBudget) -> ContextBundle:
+        import dataclasses
+
+        bundle = await self.base.retrieve(query, budget)
+        if self.n <= 0:
+            return bundle
+        seed = query.text + " " + " ".join(
+            (it.content or "") for it in bundle.items[:5]
+        )
+        ents = _extract_entities(seed)
+        if not ents:
+            return bundle
+        seen = {id(it) for it in bundle.items}
+        seen_text = {(it.content or "").strip() for it in bundle.items}
+        cands: list[tuple[int, MemoryItem]] = []
+        for it in self.store.items:
+            if id(it) in seen or (it.content or "").strip() in seen_text:
+                continue
+            c = (it.content or "").lower()
+            hits = sum(1 for e in ents if e in c)
+            if hits:
+                cands.append((hits, it))
+        cands.sort(key=lambda x: -x[0])
+        add = [it for _h, it in cands[: self.n]]
+        if not add:
+            return bundle
+        new_items = list(bundle.items) + add
+        new_msgs = list(bundle.messages) + [
+            {
+                "role": str(it.metadata.get("role", "user")) if it.metadata else "user",
+                "content": it.content,
+            }
+            for it in add
+        ]
+        new_tokens = bundle.tokens_used + sum(
+            estimate_tokens_text(it.content) for it in add
+        )
+        dbg = dict(bundle.debug_info or {})
+        dbg["graph_added"] = len(add)
+        dbg["retrieval_mode"] = str(dbg.get("retrieval_mode", "")) + "+graph"
+        return dataclasses.replace(
+            bundle, items=new_items, messages=new_msgs,
+            tokens_used=new_tokens, debug_info=dbg,
+        )
+
+
 class BM25HaystackRetriever:
     """
     BM25 sibling of :class:`STMSemanticRetriever`.
@@ -4901,6 +4989,7 @@ def make_adapter_factory(
     reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
     router: bool = False,
     vote_n: int = 1,
+    graph_expand: int = 0,
     distill: bool = False,
     distill_max_tokens: int = 1024,
     distill_types: frozenset[str] = _DISTILL_DEFAULT_TYPES,
@@ -5017,6 +5106,10 @@ def make_adapter_factory(
                 )
             else:  # cosine (default)
                 base_retriever = cosine_retriever
+        if graph_expand > 0:
+            base_retriever = GraphExpandRetriever(
+                base_retriever, store=store, n=graph_expand,
+            )
         retriever: Any = base_retriever
         if decompose and not decompose_answer:
             retriever = DecompositionRetriever(
@@ -5594,6 +5687,7 @@ async def main_async(args: argparse.Namespace) -> int:
         session_aware_retrieval=args.session_aware_retrieval,
         session_top_k=args.session_top_k,
         turns_per_session=args.turns_per_session,
+        graph_expand=args.graph_expand,
         wiki_memory=args.wiki_memory,
         wiki_top_k=args.wiki_top_k,
         content_wiki_memory=args.content_wiki_memory,
@@ -5825,6 +5919,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument("--top-k", type=int, default=8)
+    p.add_argument(
+        "--graph-expand", type=int, default=0,
+        help=(
+            "Entity-matching 1-hop expansion (0=off). After the base retriever "
+            "picks top-k, add N unpicked haystack items that share a named "
+            "entity with the query/top hits — the Mem0-style entity signal. "
+            "Mirrors continuum.retrieval graph expansion; A/B with 0 vs N."
+        ),
+    )
     p.add_argument(
         "--retrieval-mode",
         choices=("topk", "auto", "long"),
