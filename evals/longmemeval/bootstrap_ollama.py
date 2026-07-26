@@ -1600,6 +1600,7 @@ class STMSemanticRetriever:
         max_context_tokens: int = 100_000,
         score_weights: dict[str, float] | None = None,
         tau_hours: float = 168.0,
+        chrono_sort: bool = False,
     ) -> None:
         if mode not in ("topk", "long", "auto"):
             raise ValueError(f"unknown retrieval mode: {mode!r}")
@@ -1609,6 +1610,11 @@ class STMSemanticRetriever:
         self.session_id = session_id
         self.mode = mode
         self.max_context_tokens = max_context_tokens
+        # When set, the top-K items are still *selected* by relevance but
+        # *presented* in chronological (original haystack) order. Restores
+        # the timeline the cosine ranking scrambles — the lever for
+        # event-ordering questions. Off by default (opt-in via --chrono-sort).
+        self.chrono_sort = chrono_sort
         # Composite scorer (Prompt 38). For LongMemEval the haystack
         # carries no per-message importance/confidence, so those two
         # inputs are uniform constants — the *effective* tuning knob is
@@ -1755,6 +1761,13 @@ class STMSemanticRetriever:
             + w["confidence"] * conf
         )
         order = np.argsort(-composite)[: self.top_k]
+        if self.chrono_sort:
+            # Select by relevance, present in time order. ``_cached_items``
+            # is in chronological haystack order, so sorting the selected
+            # indices ascending restores the timeline. ``rel``/``rec``/… are
+            # indexed by original item index, so the score mapping below
+            # stays aligned regardless of this permutation.
+            order = np.sort(order)
         picked = [self._cached_items[i] for i in order]
 
         scored = [
@@ -4990,6 +5003,7 @@ def make_adapter_factory(
     router: bool = False,
     vote_n: int = 1,
     graph_expand: int = 0,
+    chrono_sort: bool = False,
     distill: bool = False,
     distill_max_tokens: int = 1024,
     distill_types: frozenset[str] = _DISTILL_DEFAULT_TYPES,
@@ -5088,6 +5102,7 @@ def make_adapter_factory(
                 store=store, embedder=embedder, top_k=top_k,
                 mode=retrieval_mode, max_context_tokens=max_context_tokens,
                 score_weights=score_weights, tau_hours=tau_hours,
+                chrono_sort=chrono_sort,
                 **retriever_kwargs,
             )
             # ── --retriever {cosine,bm25,hybrid} ────────────────────────
@@ -5688,6 +5703,7 @@ async def main_async(args: argparse.Namespace) -> int:
         session_top_k=args.session_top_k,
         turns_per_session=args.turns_per_session,
         graph_expand=args.graph_expand,
+        chrono_sort=args.chrono_sort,
         wiki_memory=args.wiki_memory,
         wiki_top_k=args.wiki_top_k,
         content_wiki_memory=args.content_wiki_memory,
@@ -5926,6 +5942,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "picks top-k, add N unpicked haystack items that share a named "
             "entity with the query/top hits — the Mem0-style entity signal. "
             "Mirrors continuum.retrieval graph expansion; A/B with 0 vs N."
+        ),
+    )
+    p.add_argument(
+        "--chrono-sort", action="store_true",
+        help=(
+            "Select the top-K by relevance as usual, but PRESENT them in "
+            "chronological (original haystack) order instead of score order. "
+            "Cosine top-K otherwise scrambles the timeline, which is fatal "
+            "for event-ordering questions. Opt-in; only affects the default "
+            "cosine retriever's top-K branch."
         ),
     )
     p.add_argument(
