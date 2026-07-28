@@ -25,29 +25,28 @@
 \maketitle
 
 \begin{abstract}
-AI agents built on large language models have no native persistence: across sessions they forget,
-and within a growing memory they surface \emph{stale} facts as if they were current. We present
-\textsc{Continuum}, a tiered (short-/mid-/long-term) memory system whose long-term store is
-\textbf{bi-temporal}---every fact carries both a \emph{valid-time} (when it was true in the world)
-and a \emph{transaction-time} (when the system learned it)---and \textbf{supersession-aware}: a
-newer fact retires the one it contradicts \emph{in place} via soft-invalidation, so retrieval
-stays current while history stays intact and auditable. On scripted knowledge-update and
-point-in-time (``as-of'') benchmarks, \textsc{Continuum} answers \textbf{100\%} correctly, versus
-\textbf{38\%} for a naive append-only store and \textbf{20\%/75\%} for single-axis
-(recency/chronological) baselines. Run on the \emph{same} scenarios, the leading agent-memory
-system \textbf{Mem0}---which resolves contradictions by \emph{deleting} the superseded fact and
-carries no valid-time axis---is competitive on returning the \emph{latest} value (72\%) but
-collapses on ``what was true then'': \textbf{27\%} on point-in-time queries and \textbf{30\%} on
-the bi-temporal set overall, against \textsc{Continuum}'s \textbf{100\%}. The failure is
-structural, not a tuning gap: an overwrite destroys the history an as-of query needs. On
-LongMemEval-S \textsc{Continuum} reaches \textbf{$\sim$74\%} judged accuracy; a controlled
-decomposition finds the ceiling on that benchmark is set by multi-hop reasoning in the answerer,
-not retrieval recall---a reasoning loop we built was net-negative and removed. We also report an
-honest negative result on BEAM and a clean \emph{presentation-order} finding: displaying retrieved
-memory chronologically rather than by relevance lifts contradiction resolution by \textbf{+25
-percentage points} under BEAM's own rubric judge. \textsc{Continuum} is open-source, hybrid (dense
-bge-m3 + BM25 fused with RRF over an HNSW-indexed pgvector store), MCP-exposed, and reproducible;
-we release the code, the memory server, and the supersession/bi-temporal benchmark sets.
+LLM agents do not persist. They forget across sessions, and within a growing memory they surface
+stale facts as if current. We present \textsc{Continuum}, a tiered (short/mid/long-term) memory
+system whose long-term store is \emph{bi-temporal}: every fact carries a valid-time (when it held
+in the world) and a transaction-time (when the system learned it). Supersession is soft. A newer
+fact retires the one it contradicts in place, so retrieval stays current while history stays
+intact and auditable.
+
+On scripted knowledge-update and point-in-time (``as-of'') benchmarks, \textsc{Continuum} answers
+100\% correctly, against 38\% for an append-only store and 20\%/75\% for single-axis (recency,
+chronological) baselines. We also run the real Mem0 SDK on the same scenarios. Mem0 resolves
+contradictions by deleting the superseded fact and has no valid-time axis. It is competitive at
+returning the latest value (72\%) but scores 27\% on point-in-time queries and 30\% on the
+bi-temporal set, against \textsc{Continuum}'s 100\%. The gap is structural, not a matter of tuning:
+deleting a fact destroys the history an as-of query needs.
+
+On LongMemEval-S \textsc{Continuum} reaches about 74\% judged accuracy. A controlled decomposition
+finds the ceiling on that benchmark is answerer reasoning, not retrieval recall; a reasoning loop
+we built was net-negative and removed. On BEAM, presenting retrieved memory in chronological rather
+than relevance order raises contradiction resolution by 25 points under BEAM's rubric judge, though
+\textsc{Continuum} does not out-score Mem0 there. \textsc{Continuum} is open-source, hybrid (bge-m3
++ BM25 fused with RRF over an HNSW-indexed pgvector store), and MCP-exposed. We release the code,
+the server, and the benchmark sets.
 \end{abstract}
 
 \section{Introduction}
@@ -58,34 +57,28 @@ conflates two failure modes that are, in fact, distinct:
 \begin{itemize}[leftmargin=1.4em]
   \item \textbf{(a) Knowledge-update.} A fact changes (``I moved from Boston to Seattle''). The old
   fact remains retrievable, so the agent answers with stale information. Recall is not the
-  problem---the stale fact is retrieved \emph{correctly}; nothing marks it as retired.
+  problem: the stale fact is retrieved \emph{correctly}; nothing marks it as retired.
   \item \textbf{(b) As-of / point-in-time.} ``Where did I live in 2021?'' requires reconstructing
   what was true \emph{at a past time}, not what is true now. A store with a single time axis cannot
   answer this; a store with no time axis cannot even represent the question.
 \end{itemize}
-Vector stores and flat/recency memories get both wrong, and single end-to-end benchmark scores hide
-(b) entirely. \textsc{Continuum} treats memory as a \textbf{correctness-under-time} problem rather
-than a similarity problem. Our contributions are: (1) a bi-temporal, supersession-aware long-term
-store that makes knowledge-update and as-of queries \emph{deterministically} correct, with no LLM
-in the critical path; (2) released benchmark sets for knowledge-update and as-of queries, with
-defined baselines and a run of the real Mem0 SDK on the same scenarios; (3) an honest
-retrieval-vs-reasoning decomposition on LongMemEval, including a reasoning enhancement removed for
-being net-negative; and (4) a production, MCP-exposed open-source system.
+Vector stores and flat/recency memories get both wrong, and a single end-to-end score hides (b)
+entirely. \textsc{Continuum} treats memory as a correctness-under-time problem rather than a
+similarity problem. Our contributions are: (1) a bi-temporal, supersession-aware long-term store
+that makes knowledge-update and as-of queries \emph{deterministically} correct, with no LLM in the
+critical path; (2) released benchmark sets for knowledge-update and as-of queries, with defined
+baselines and a run of the real Mem0 SDK on the same scenarios; (3) a retrieval-vs-reasoning
+decomposition on LongMemEval, including a reasoning enhancement we removed for being net-negative;
+and (4) a production, MCP-exposed open-source system.
 
-\paragraph{Why correctness, not recall.} In a long-lived, correctness-sensitive assistant---a
-customer agent that must not quote a stale address, an assistant asked ``what was true at the
-time'' for an audit---a memory error is a wrong answer with consequences, and a \emph{confidently}
-wrong one, since the stale fact is retrieved perfectly. In these settings a guarantee that the
-current value is returned \emph{without a model guessing} is worth more than a few points of
-end-to-end accuracy. This is the regime \textsc{Continuum} targets. We claim the \emph{design} is
-aimed at this regime, not that the current single-writer, self-hosted implementation is a drop-in
-for a specific regulated deployment; scale, multi-tenancy, and compliance hardening are engineering
-work beyond this paper's scope.
-
-The through-line is honesty about what is and is not a win. Where the advantage is large and
-deterministic (supersession, as-of), we show it against defined baselines and the real Mem0 SDK.
-Where a comparison is null (hybrid vs.\ cosine) or negative (BEAM, the reasoning loop), we report
-it plainly, because that is what keeps the strong claims credible.
+\paragraph{Why correctness, not recall.} Consider a long-lived assistant where memory is
+correctness-sensitive: a customer agent that must not quote a stale address, or one asked ``what
+was true at the time'' for an audit. Here a memory error is a wrong answer with consequences, and a
+confidently wrong one, because the stale fact is retrieved perfectly. A guarantee that the current
+value is returned without a model guessing is then worth more than a few points of end-to-end
+accuracy. This is the regime \textsc{Continuum} targets. We claim the \emph{design} is aimed at
+this regime. We do not claim the current single-writer, self-hosted implementation is a drop-in for
+a regulated deployment; scale, multi-tenancy, and compliance hardening are out of scope here.
 
 \section{Related Work}
 
@@ -96,7 +89,7 @@ note store. All optimize \emph{what to store and retrieve} and delegate contradi
 an LLM. \textsc{Continuum} differs in \emph{where} the guarantee lives: correctness under
 contradiction and time is a property of the store's bi-temporal schema and deterministic
 \code{current()}/\code{timeline()} operators, not of an extraction model. Concretely, none of these
-systems carries a \emph{transaction-time} axis, so---by Proposition~\ref{prop:retro}---they cannot
+systems carries a \emph{transaction-time} axis, so by Proposition~\ref{prop:retro} they cannot
 represent a retroactive correction. We stated this as a falsifiable prediction and tested it
 directly (\S\ref{sec:results}): prediction confirmed.
 
@@ -136,7 +129,7 @@ interval ($v^+=\infty$ denotes ``still true''), and $[t^-,t^+)$ the \emph{transa
 interval ($t^+=\infty$ denotes ``not yet invalidated''). The store $S$ is a set of such facts; a
 fact is \emph{live} at transaction time $\tau_t$ iff $\tau_t \in [t^-, t^+)$. Supersession is
 \emph{soft}: when a newer fact contradicts an older one on the same $(s,a)$, the older fact's
-interval is closed---nothing is deleted.
+interval is closed; nothing is deleted.
 
 \paragraph{Point-in-time query.} For valid time $\tau_v$ and transaction time $\tau_t$ (both default
 to \emph{now}):
@@ -147,7 +140,7 @@ to \emph{now}):
 subject to $s(f){=}s,\ a(f){=}a,\ \tau_v \in [v^-,v^+),\ \tau_t \in [t^-,t^+)$: among facts for
 $(s,a)$ whose valid interval contains $\tau_v$ and that were believed at $\tau_t$, return the one
 with the latest valid-from. \code{timeline}$(s,a)$ returns all such facts ordered by $v^-$. Both are
-pure index lookups---no embedding, ranking, or LLM.
+pure index lookups, with no embedding, ranking, or LLM.
 
 \begin{algorithm}[t]
 \caption{Deterministic supersession on write (no LLM)}\label{alg:super}
@@ -178,7 +171,7 @@ orders facts by a single clock ranks such a correction as stale.
 ($v^-=\tau_1$). At $\tau_2 > \tau_1$ the user says ``I moved to Porto on July~1'' with
 $\text{Jul 1} < \tau_1$ ($v^-=\text{Jul 1}$, learned at $\tau_2$). Ordering by valid-time alone
 makes \emph{Lisbon} look newer than the \emph{Porto} correction, so a single valid-axis store
-answers ``Lisbon''---wrong. Transaction time disambiguates: Porto was believed later, so it
+answers ``Lisbon,'' which is wrong. Transaction time disambiguates: Porto was believed later, so it
 supersedes (Figure~\ref{fig:bitemporal}). This is exactly the \code{naive\_chronological} failure
 measured in \S\ref{sec:results} (point-in-time 100\%, retroactive 0/5); the bi-temporal split
 recovers all five.
@@ -220,23 +213,23 @@ identifies Porto as the later belief. A single valid-time axis answers wrongly.}
 The \code{recall} path is hybrid: dense (bge-m3, 1024-d) and BM25 fused with RRF over an
 HNSW-indexed (\code{halfvec\_cosine\_ops}) pgvector store. Retrieval is relevance-ranked and must
 \emph{filter} superseded facts, whereas \code{current}/\code{timeline} are exact. \textsc{Continuum}
-exposes four MCP tools---\code{remember}, \code{recall}, \code{current}, \code{timeline}---shipped
+exposes four MCP tools (\code{remember}, \code{recall}, \code{current}, \code{timeline}), shipped
 as \code{continuum-mcp}, making the deterministic operators directly available to any MCP-capable
 agent.
 
 \section{Evaluation Setup}
 
-\textbf{Datasets.} (i) LongMemEval-S---500 questions, LLM-judged. (ii) A scripted
-\textbf{supersession} set---50 knowledge-update scenarios across 6 attribute types. (iii) A scripted
-\textbf{bi-temporal as-of} set---20 timelines (15 point-in-time + 5 retroactive corrections).
+\textbf{Datasets.} (i) LongMemEval-S (500 questions, LLM-judged). (ii) A scripted
+\textbf{supersession} set of 50 knowledge-update scenarios across 6 attribute types. (iii) A
+scripted \textbf{bi-temporal as-of} set of 20 timelines (15 point-in-time, 5 retroactive corrections).
 
 \textbf{Determinism.} All supersession and as-of numbers use the LLM supersession decider
-\emph{disabled}---they exercise only the deterministic exact-tag + valid-time path
+\emph{disabled}: they exercise only the deterministic exact-tag + valid-time path
 (\code{bench/supersession\_e2e.py} runs with no API key).
 
-\textbf{Mem0 comparison.} The real Mem0 SDK (v0.1.67) configured fully locally---HuggingFace
-\code{all-MiniLM-L6-v2} embedder, Chroma vector store, gpt-4o-mini for Mem0's internal
-extraction/update and for the answer step---with a fresh \code{user\_id} per scenario. Statements
+\textbf{Mem0 comparison.} The real Mem0 SDK (v0.1.67) is configured fully locally: a HuggingFace
+\code{all-MiniLM-L6-v2} embedder, a Chroma vector store, and gpt-4o-mini for Mem0's internal
+extraction/update and for the answer step, with a fresh \code{user\_id} per scenario. Statements
 are ingested in learned (transaction-time) order; the query is answered over Mem0's retrieved
 memories and scored against the same ground truth (\code{bench/mem0\_compare.py}).
 
@@ -263,54 +256,51 @@ Hybrid vs.\ cosine (MRR) & .916 / .900 / .800 & .916 / .903 / .750 (within noise
 \paragraph{The two-axis argument.} \code{naive\_chronological} (a single valid-time axis) gets
 point-in-time queries 100\% right yet 0/5 on retroactive corrections: a fact learned late about the
 past is invisible to a one-axis store. Splitting valid- from transaction-time recovers all five,
-taking \textsc{Continuum} to 20/20---a mechanism result, not just a headline number.
+taking \textsc{Continuum} to 20/20. The result is a consequence of the data model, not of tuning.
 
 \paragraph{End-to-end validation.} Replaying the 50 supersession scenarios through the shipped
 \code{Memory.from\_postgres} path gives \code{current()} 100\% (50/50, 0 stale) with no LLM and no
-API key. Through the same path \code{recall} top-1 is only 20\%---which locates the LLM precisely:
+API key. Through the same path \code{recall} top-1 is only 20\%. This shows where the LLM matters:
 the decider is needed only to keep the relevance-ranked \code{recall} path from surfacing stale
 facts, not for \code{current}/\code{timeline} correctness.
 
-\paragraph{Head-to-head with Mem0.} We ran the real Mem0 SDK on the same scenarios. Two findings,
-one conceded and one decisive. \emph{(i) Conceded:} on returning the current value, Mem0's
-LLM-driven update reaches 72\% (36/50)---it beats \textsc{Continuum}'s un-decidered \code{recall}
-path (20\%), though it trails the deterministic \code{current()} (100\%). \emph{(ii) Decisive:} on
-``what was true \emph{then}'', Mem0 collapses---4/15 (27\%) point-in-time, 2/5 retroactive, 30\%
-overall, versus \textsc{Continuum}'s 100\%. The mechanism is visible in Mem0's store: for ``where
-did the user live in mid-2024?'' (answer: Boston) Mem0's \emph{entire} memory was
-\texttt{['Relocated to Austin last week']}---the Boston and NYC facts had been \emph{deleted} by its
-update operation, so it answered \emph{UNKNOWN}; and where it retained both facts it answered the
-wrong era (\emph{Portland} for a late-2022 query) for lack of a valid-time axis. This confirms
-Proposition~\ref{prop:retro}: a system that resolves contradictions by \emph{overwriting} cannot
-answer as-of queries, because the overwrite destroys the very history the query needs. It is a
-structural consequence of the data model, not a tuning gap.
+\paragraph{Head-to-head with Mem0.} We ran the real Mem0 SDK on the same scenarios. On returning
+the current value, Mem0's LLM-driven update reaches 72\% (36/50). That beats \textsc{Continuum}'s
+un-decidered \code{recall} path (20\%), though it trails the deterministic \code{current()} (100\%).
+On ``what was true \emph{then}'', Mem0 fails: 4/15 (27\%) point-in-time, 2/5 retroactive, 30\%
+overall, against \textsc{Continuum}'s 100\%. The store shows why. For ``where did the user live in
+mid-2024?'' (answer: Boston), Mem0's entire memory was \texttt{['Relocated to Austin last week']}:
+the Boston and NYC facts had been deleted by its update operation, so it answered \emph{UNKNOWN}.
+Where it retained both facts, it answered the wrong era (\emph{Portland} for a late-2022 query),
+having no valid-time axis to select on. This confirms Proposition~\ref{prop:retro}. A system that
+resolves contradictions by overwriting cannot answer as-of queries, because the overwrite destroys
+the history the query needs.
 
-\paragraph{Hybrid vs.\ cosine---an honest null.} Across 3k/25k/47k the shipped hybrid and a plain
-pgvector cosine scan are statistically indistinguishable (every gap is a single needle out of 20,
-within HNSW build noise). We do \emph{not} claim hybrid beats cosine on this semantic set; the
-honest claim is $\ge$, no worse. Reporting the null keeps the (large, deterministic) supersession
-and bi-temporal claims credible.
+\paragraph{Hybrid vs.\ cosine.} Across 3k/25k/47k the shipped hybrid and a plain pgvector cosine
+scan are statistically indistinguishable (every gap is a single needle out of 20, within HNSW build
+noise). We do not claim hybrid beats cosine on this semantic set; the claim is $\ge$, no worse. The
+lexical channel's contribution would have to be shown on an exact-match query set, which we leave to
+future work.
 
 \section{The Retrieval-vs-Reasoning Decomposition}
 
 Seven sweeps across four model families and six retrievers found a hard $\sim$32--34\% substring
 ceiling \emph{even at 100\% recall}, localizing the bottleneck to multi-hop reasoning in the
-answerer. What moved the end-to-end number was a stronger answerer over clean retrieval plus honest
-judged scoring (60.8\% $\to$ $\sim$74\%). A reasoning loop we predicted we would need was built,
-A/B-tested, and cut as net-negative---the empirical core of the ``retrieval isn't the ceiling''
-claim.
+answerer. What moved the end-to-end number was a stronger answerer over direct retrieval with judged
+scoring (60.8\% to about 74\%). A reasoning loop we predicted we would need was built, A/B-tested,
+and cut as net-negative. That is the empirical core of the ``retrieval is not the ceiling'' claim.
 
-\section{Presentation Order, and an Honest BEAM Result}\label{sec:beam}
+\section{Presentation Order, and a Negative BEAM Result}\label{sec:beam}
 
 BEAM scores categories with per-question rubric nuggets (each judged 0/0.5/1.0; a question passes
-at mean $\ge 0.5$). \emph{Presentation order is a real lever}: on BEAM-100K (gpt-oss-120b answerer,
-rubric judge), presenting the top-$k$ retrieved turns in \emph{chronological} rather than
-\emph{relevance} order lifts contradiction resolution from 7.5\% to 32.5\% (+25pp) and nudges event
-ordering 27.5\% $\to$ 32.5\%; time-ordering surfaces \emph{both sides} of a contradiction. \emph{The
-honest negative}: \textsc{Continuum} does not out-score Mem0 on BEAM. Mem0's published numbers
-(48.6\% / 60.0\%) use a gpt-5 answerer and judge on the 1M split; ours use an open answerer on the
-100K split, and the rubric rewards verbose both-sides answers---so answer style, not just
-capability, drives the score. We treat BEAM as a measured comparison point, not a headline.
+at mean $\ge 0.5$). Presentation order matters here. On BEAM-100K (gpt-oss-120b answerer, rubric
+judge), presenting the top-$k$ retrieved turns in chronological rather than relevance order lifts
+contradiction resolution from 7.5\% to 32.5\% (+25pp) and nudges event ordering 27.5\% to 32.5\%;
+time-ordering surfaces both sides of a contradiction. \textsc{Continuum} does not out-score Mem0 on
+BEAM. Mem0's published numbers (48.6\% / 60.0\%) use a gpt-5 answerer and judge on the 1M split;
+ours use an open answerer on the 100K split, and the rubric rewards verbose both-sides answers, so
+the score reflects answer style as much as memory quality. We treat BEAM as a comparison point
+rather than a headline.
 
 \section{Limitations}
 
@@ -334,8 +324,7 @@ capability, drives the score. We treat BEAM as a measured comparison point, not 
 \textsc{Continuum} reframes agent memory from similarity to \emph{correctness under contradiction
 and time}. Its bi-temporal, supersession-aware store answers knowledge-update and as-of queries
 deterministically (100\% vs 38\%/20\%/75\% baselines, and vs Mem0's 30\% on the bi-temporal set),
-while an honest decomposition shows the residual end-to-end ceiling is answerer reasoning, not
-retrieval. We release the repository, \code{continuum-mcp}, the harnesses, and the
+while a decomposition shows the residual end-to-end ceiling is answerer reasoning, not retrieval. We release the repository, \code{continuum-mcp}, the harnesses, and the
 supersession/bi-temporal benchmark sets with scoring scripts.
 
 \begin{thebibliography}{99}
