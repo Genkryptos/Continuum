@@ -59,3 +59,9 @@ samples/control_failed_ids.json
 
 # Personal, machine-specific Claude Code settings (hooks reference local services)
 .claude/settings.local.json
+
+# LaTeX build artifacts
+paper/*.pdf
+paper/*.aux
+paper/*.log
+paper/*.out
