@@ -1,4 +1,6 @@
-# Continuum: Bi-Temporal, Supersession-Aware Memory for AI Agents
+# Correctness Under Time: Bi-Temporal, Supersession-Aware Memory for AI Agents
+
+*(System: Continuum.)*
 
 **Draft preprint — working version.** Target: arXiv → agent-memory workshop (NeurIPS/ICLR/EMNLP).
 Artifacts: open-source repository, `continuum-mcp` on PyPI, released benchmark sets.
@@ -18,8 +20,13 @@ present **Continuum**, a tiered (short-/mid-/long-term) memory system whose long
 retires the one it contradicts *in place* via soft-invalidation, so retrieval stays current
 while history stays intact and auditable. On scripted knowledge-update and point-in-time
 ("as-of") benchmarks, Continuum answers **100%** correctly, versus **38%** for a naive
-append-only store and **20%/75%** for single-axis (recency / chronological) baselines. On
-LongMemEval-S it reaches **~74%** judged accuracy. We further run a controlled decomposition
+append-only store and **20%/75%** for single-axis (recency / chronological) baselines. Run on
+the *same* scenarios, the leading agent-memory system **Mem0** — which resolves contradictions by
+*deleting* the superseded fact and carries no valid-time axis — is competitive on returning the
+*latest* value (72%) but collapses on "what was true then": **27%** on point-in-time queries and
+**30%** on the bi-temporal set overall, against Continuum's **100%**. The failure is structural,
+not a tuning gap: an overwrite destroys the history an as-of query needs. On
+LongMemEval-S Continuum reaches **~74%** judged accuracy. We further run a controlled decomposition
 that separates retrieval quality from answering, and find that the accuracy ceiling on this
 benchmark is set by **multi-hop reasoning in the answerer, not by retrieval recall** — a
 reasoning loop we built and measured was net-negative and removed. Finally, we report an
@@ -89,8 +96,10 @@ contradiction handling to an LLM at write or read time. Continuum differs in *wh
 lives: correctness under contradiction and time is a property of the **store's bi-temporal schema
 and deterministic `current()`/`timeline()` operators**, not of an extraction model. Concretely,
 none of these systems carries a *transaction-time* axis, so — by the proposition of §3.2.1 — they
-cannot represent a retroactive correction; we treat that as a falsifiable prediction and test it
-directly (§8, the open [NEEDS] Mem0 comparison).
+cannot represent a retroactive correction. We stated this as a falsifiable prediction and tested
+it directly: run on our scenarios, Mem0 is competitive on latest-value supersession (72%) but
+scores **27%** on point-in-time and **30%** on the bi-temporal set overall (§5), because its
+update operation *deletes* the superseded fact — prediction confirmed.
 
 **Retrieval-augmented generation.** Dense retrieval + generation (RAG; Lewis et al., 2020) and its
 hybrid variants — Reciprocal Rank Fusion (Cormack et al., 2009) over dense (e.g. bge-m3; Chen et
@@ -241,8 +250,8 @@ vehicle, hobby). (iii) A scripted **bi-temporal as-of** set — 20 timelines (15
 NDCG; supersession correctness (`current()` and `recall` top-1); as-of correctness.
 
 **Baselines.** `naive_append` (append-only, no supersession); `naive_latest` (single recency
-axis); `naive_chronological` (single valid-time axis); plain pgvector cosine; **[NEEDS: a clean
-Mem0 run on the supersession/as-of sets — see §8].**
+axis); `naive_chronological` (single valid-time axis); plain pgvector cosine; and the **real Mem0
+SDK** run on the same supersession/as-of scenarios (§5, §4.1).
 
 ### 4.1 Implementation & configuration
 
@@ -272,6 +281,12 @@ gpt-oss-120b and scored with a faithful port of BEAM's rubric-nugget judge (each
 question passes at mean ≥ 0.5) using gpt-4o-mini. Substring/recall metrics are **not** meaningful
 for BEAM (long free-form rubric answers; no gold session ids) and are excluded.
 
+**Mem0 comparison (§5).** The real Mem0 SDK (v0.1.67) configured fully locally — HuggingFace
+`all-MiniLM-L6-v2` embedder, Chroma vector store, gpt-4o-mini (via OpenRouter) for Mem0's internal
+extraction/update and for the answer step — with a fresh `user_id` per scenario. Statements are
+ingested in learned (transaction-time) order; the query is answered over Mem0's retrieved
+memories and scored against the same ground truth as the analytical baselines (`bench/mem0_compare.py`).
+
 **Reproducibility caveat.** HNSW build order introduces ±1–2-needle noise run-to-run; we pin
 build parameters where possible and flag comparisons within that band as inconclusive rather than
 reporting them as wins. Seeds and exact configs per table are the remaining reproducibility work
@@ -282,8 +297,8 @@ reporting them as wins. Seeds and exact configs per table are the remaining repr
 | Result | Continuum | Baseline(s) | Source |
 |---|---|---|---|
 | **Supersession — in-memory schema sim** (50) | **100%** (50/50, 0 stale) | `naive_append` **38%** (19/50) → **+62pp** | `bench/supersession_correctness.py` |
-| **Supersession — end-to-end through Postgres** (50, no LLM) | `current()` **100%** (50/50, 0 stale) · `recall` top-1 **20%** | — | `bench/supersession_e2e.py` |
-| **Bi-temporal "as-of"** (20 = 15 PIT + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (PIT 0/15) · `naive_chronological` **75%** (PIT 100%, **retroactive 0/5**) | `bench/bi_temporal.py` |
+| **Supersession — end-to-end through Postgres** (50, no LLM) | `current()` **100%** (50/50, 0 stale) · `recall` top-1 **20%** | **Mem0** (real SDK) **72%** (36/50) | `bench/supersession_e2e.py`, `bench/mem0_compare.py` |
+| **Bi-temporal "as-of"** (20 = 15 PIT + 5 retroactive) | **100%** (20/20) | `naive_latest` **20%** (PIT 0/15) · `naive_chronological` **75%** (PIT 100%, **retroactive 0/5**) · **Mem0 30%** (PIT **4/15**, retro **2/5**) | `bench/bi_temporal.py`, `bench/mem0_compare.py` |
 | LongMemEval-S (500, judged, gpt-oss-120b) | **~74%** (73.6–75.6%) | 60.8% v1.0 · 34.4% May ceiling | README |
 | **Retrieval-only decay** (real hybrid, 20 needles, depth 20) | R@10/MRR: **3k 1.00/.916 · 25k .90/.90 · 47k .85/.80**; NDCG@20 .935→.900→.813 | pgvector-cosine (below) | `scripts/retrieval_metrics.py` |
 | **Hybrid vs pgvector-cosine** (MRR) | 3k **.916** · 25k **.900** · 47k **.800** | 3k .916 · 25k .903 · 47k .750 | `scripts/retrieval_metrics.py` |
@@ -305,6 +320,23 @@ invalidate rows so the relevance-ranked `recall` path stops surfacing stale fact
 needed for `current`/`timeline` correctness. So the robust, no-dependency claim is the
 deterministic axis; recall-level staleness filtering is an explicitly optional, LLM-gated
 enhancement.
+
+**Head-to-head with Mem0 (`bench/mem0_compare.py`).** We ran the real Mem0 SDK (fully local:
+HuggingFace embedder + Chroma; gpt-4o-mini for extraction and answering) on the *same* scenarios,
+ingesting each statement and answering queries over Mem0's own retrieved memories. Two findings,
+one conceded and one decisive. **(i) Conceded:** on returning the *current* value, Mem0's
+LLM-driven update reaches **72%** (36/50) — it *beats Continuum's un-decidered `recall` path*
+(20%), a fair result that motivates the validity-aware recall work (§8), though it still trails
+the deterministic `current()` (100%). **(ii) Decisive:** on "what was true *then*", Mem0
+collapses — **4/15 (27%)** point-in-time, **2/5** retroactive, **30%** overall, versus Continuum's
+**100%**. The mechanism is visible in Mem0's store: for *"where did the user live in mid-2024?"*
+(answer: Boston) Mem0's *entire* memory was `['Relocated to Austin last week']` — the Boston and
+NYC facts had been **deleted** by its update operation, so it answered *UNKNOWN*; and where it
+*did* retain both facts (`['Lived in Seattle…', 'Moved to Portland…']`) it still answered the
+wrong era (*Portland* for a late-2022 query) because it has no valid-time axis to select on. This
+confirms the §2 prediction: a system that resolves contradictions by *overwriting* cannot answer
+as-of queries, because the overwrite destroys the very history the query needs. It is a structural
+consequence of the data model, not a tuning gap.
 
 **Hybrid vs. pure cosine — an honest, null-ish ablation.** Across 3k/25k/47k, the shipped hybrid
 and a plain pgvector cosine scan are statistically indistinguishable: MRR ties at 3k (.916),
@@ -366,10 +398,16 @@ not a headline, and locate Continuum's advantage on the deterministic axes of §
 - The 20-needle retrieval set cannot resolve sub-5pp differences (1 needle = 5pp), which is why
   the hybrid-vs-cosine comparison is inconclusive. Fix before submission: a larger needle set +
   bootstrap CIs, and a separate exact-match query set to isolate the BM25 channel.
-- **[NEEDS: a clean Mem0 baseline on the supersession/as-of sets.]** This is the single
-  highest-value remaining experiment — showing Mem0 fails the knowledge-update / as-of scenarios
-  where Continuum is 100% would convert "we beat toy baselines" into "we beat the SOTA memory
-  system where correctness-under-time matters."
+- **Continuum's un-decidered `recall` path (20%) is weaker than Mem0's LLM-update recall (72%)**
+  on returning the current value. The deterministic `current()` path is 100%, but the
+  relevance-ranked `recall` surfaces stale facts unless the optional decider has invalidated them.
+  Closing this — deterministic, validity-aware `recall` that filters superseded facts at the query
+  layer without an LLM — is the highest-value engineering item, and would make the recall path as
+  strong as the exact path.
+- The Mem0 comparison uses gpt-4o-mini for both Mem0's internal extraction and the answer step,
+  and a small local embedder; a larger answerer or Mem0's hosted platform could shift the
+  *latest-value* number, but not the point-in-time result, which is bounded by the data model
+  (a deleted fact cannot be retrieved at any answerer strength).
 
 ## 9. Conclusion & released artifacts
 
