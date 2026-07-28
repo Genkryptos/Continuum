@@ -78,21 +78,44 @@ that is what keeps the strong claims credible.
 
 ## 2. Related work
 
-**Agent-memory systems.** Mem0, MemGPT/Letta, and A-Mem optimize what to store and what to
-retrieve from a largely static store. Mem0 in particular performs LLM-based fact extraction
-(add/update/delete) and multi-signal retrieval. Continuum differs in *where* it puts the
-guarantee: correctness under contradiction and time is enforced by the store's bi-temporal
-schema and deterministic `current()` / `timeline()` operators, not by an extraction LLM.
+> Citation keys below are placeholders to be finalized against the bibliography;
+> author/year are given where known and marked [cite] otherwise.
 
-**Vector RAG and temporal KGs.** Dense/sparse retrieval and reranking (the RAG stack) address
-recall on a fixed corpus; bi-temporal databases and temporal knowledge graphs address
-valid-vs-transaction time in structured data. Continuum sits at the intersection: a bi-temporal
-store with a hybrid retrieval front-end, exposed to an agent as tools.
+**Agent-memory systems.** Mem0 [cite] performs LLM-based fact extraction (add/update/delete) with
+multi-signal (semantic + lexical + entity) retrieval; MemGPT/Letta (Packer et al., 2023) treat
+context as a virtual memory hierarchy paged in and out by the model; A-Mem [cite] builds an
+evolving, self-linking note store. All three optimize *what to store and retrieve* and delegate
+contradiction handling to an LLM at write or read time. Continuum differs in *where* the guarantee
+lives: correctness under contradiction and time is a property of the **store's bi-temporal schema
+and deterministic `current()`/`timeline()` operators**, not of an extraction model. Concretely,
+none of these systems carries a *transaction-time* axis, so — by the proposition of §3.2.1 — they
+cannot represent a retroactive correction; we treat that as a falsifiable prediction and test it
+directly (§8, the open [NEEDS] Mem0 comparison).
 
-**Benchmarks.** LongMemEval and LOCOMO measure end-to-end long-term QA; BEAM adds rubric-scored
-categories (contradiction resolution, event ordering, etc.). We use LongMemEval-S as our primary
-end-to-end benchmark, add scripted supersession/as-of sets to isolate the two failure modes
-above, and report BEAM as a measured-honestly comparison point (§7).
+**Retrieval-augmented generation.** Dense retrieval + generation (RAG; Lewis et al., 2020) and its
+hybrid variants — Reciprocal Rank Fusion (Cormack et al., 2009) over dense (e.g. bge-m3; Chen et
+al., 2024) and BM25 (Robertson & Zaragoza, 2009) channels, on ANN indices such as HNSW (Malkov &
+Yashunin, 2018) — target *recall on a fixed corpus*. Continuum uses this stack for its `recall`
+path but does not rely on it for correctness: recall is the best-effort, relevance-ranked view,
+while `current`/`timeline` are exact. Our own ablation finds the hybrid channel statistically
+indistinguishable from pure cosine on a semantic needle set (§5), which we report as a null.
+
+**Temporal data management.** Bi-temporal modeling — separating *valid time* from
+*transaction time* — is long-established in databases: TSQL2 and the temporal-database literature
+(Snodgrass; Jensen & Snodgrass), and standardized as system-/application-time tables in SQL:2011.
+Temporal knowledge graphs likewise timestamp edges. Continuum's contribution is not the temporal
+model itself but **bringing it to LLM-agent memory**: exposing bi-temporal `current`/`timeline`
+as agent tools over unstructured conversational facts, where prior agent-memory work uses at most
+a single (recency/creation) clock. This is the intersection the paper occupies — a bi-temporal
+store with a hybrid retrieval front-end, surfaced to an agent via MCP.
+
+**Benchmarks.** LongMemEval (Wu et al., 2024) and LOCOMO (Maharana et al., 2024) measure
+end-to-end long-term QA; BEAM [cite] adds rubric-scored categories (contradiction resolution,
+event ordering, etc.). A single end-to-end score conflates retrieval, reasoning, and the
+correctness-under-time failure modes this paper isolates. We therefore use LongMemEval-S as the
+primary end-to-end benchmark, add scripted supersession/as-of sets to isolate knowledge-update and
+point-in-time correctness, and report BEAM as a measured-honestly comparison point (§7) rather
+than a headline.
 
 ## 3. System
 
@@ -170,6 +193,29 @@ disambiguates: Porto was **believed later** (t⁻ = τ₂), so it supersedes. Th
 `naive_chronological` failure measured in §5 (point-in-time 100%, retroactive **0/5**); the
 bi-temporal split recovers all five.
 
+**Figure 1.** *The two-axis view of the retroactive example.* Each fact is a point in
+(valid-time, transaction-time). A single valid-time axis (projection onto the horizontal) orders
+*Lisbon* after *Porto* and answers wrongly; the vertical (transaction) axis reveals *Porto* as the
+later belief. Query = "residence as of Jul 15, as believed now (τ₂)."
+
+```
+ transaction         │
+ time (when learned) │
+        τ₂ ──────────┼───────────────●  Porto   ⟨valid_from=Jul 1, learned=τ₂⟩   ← later belief ⇒ wins
+                     │              ╱
+                     │            ╱  (Porto valid on [Jul 1, ∞) ⊇ Jul 15)
+        τ₁ ──────────┼───●───────────────────────  Lisbon ⟨valid_from=τ₁, learned=τ₁⟩
+                     │   │ (Lisbon valid only from τ₁ > Jul 15 ⇒ not valid at Jul 15)
+                     └───┼───────────┼───────────────▶  valid time (when true)
+                       Jul 15       τ₁
+   single-axis (valid only): argmax valid_from = Lisbon  ✗
+   bi-temporal current(·; τ_v=Jul 15, τ_t=τ₂):           Porto  ✓
+```
+
+*TikZ sketch (for the LaTeX build): two orthogonal axes; two dots at (τ₁,τ₁) [Lisbon] and
+(Jul 1,τ₂) [Porto]; a horizontal dashed query line at τ_v = Jul 15; shade each fact's valid
+half-line; annotate the two verdicts.*
+
 ### 3.3 Hybrid retrieval
 
 The `recall` path is hybrid: dense retrieval (bge-m3, 1024-d) and BM25, fused with Reciprocal
@@ -197,6 +243,39 @@ NDCG; supersession correctness (`current()` and `recall` top-1); as-of correctne
 **Baselines.** `naive_append` (append-only, no supersession); `naive_latest` (single recency
 axis); `naive_chronological` (single valid-time axis); plain pgvector cosine; **[NEEDS: a clean
 Mem0 run on the supersession/as-of sets — see §8].**
+
+### 4.1 Implementation & configuration
+
+**Store.** PostgreSQL with pgvector; dense retrieval uses bge-m3 (1024-d) with a `halfvec`
+HNSW index (`halfvec_cosine_ops`, tunable `hnsw.ef_search`), fused with BM25 via Reciprocal
+Rank Fusion on the `recall` path. `current`/`timeline` are exact index lookups over the
+bi-temporal columns and touch neither the embedder nor the ANN index.
+
+**Determinism of the correctness results.** All supersession and as-of numbers in §5 are produced
+with the LLM supersession decider **disabled** — they exercise only the deterministic exact-tag +
+valid-time path (`bench/supersession_e2e.py` runs with no API key). The optional decider
+(gpt-4o-mini via OpenRouter) affects only recall-path staleness filtering and is reported
+separately.
+
+**End-to-end (LongMemEval-S).** Answerer: gpt-oss-120b via OpenRouter; judge: gpt-4o-mini as an
+LLM-judge; a response is scored correct on substring match **or** judge agreement. **[NEEDS: exact
+top-k, prompt, and decoding params per reported run; provider pin for variance control.]**
+
+**Retrieval-only metrics.** Recall@k / MRR / NDCG computed by `scripts/retrieval_metrics.py` over
+a 20-needle set at retrieval depth 20, comparing `Memory.recall` (the shipped hybrid pipeline)
+against a plain pgvector-cosine scan at store sizes 3k / 25k / 47k. The 20-needle set cannot
+resolve sub-5pp differences (1 needle = 5pp); we note this wherever it matters (§5, §8).
+
+**BEAM (§7).** BEAM-100K conversations are converted to the evaluation row schema (contradiction
+resolution + event ordering; 80 questions) by `evals/beam/`; answers are generated with
+gpt-oss-120b and scored with a faithful port of BEAM's rubric-nugget judge (each nugget 0/0.5/1.0;
+question passes at mean ≥ 0.5) using gpt-4o-mini. Substring/recall metrics are **not** meaningful
+for BEAM (long free-form rubric answers; no gold session ids) and are excluded.
+
+**Reproducibility caveat.** HNSW build order introduces ±1–2-needle noise run-to-run; we pin
+build parameters where possible and flag comparisons within that band as inconclusive rather than
+reporting them as wins. Seeds and exact configs per table are the remaining reproducibility work
+(checklist below).
 
 ## 5. Results
 
