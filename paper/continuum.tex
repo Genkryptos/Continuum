@@ -15,6 +15,7 @@
 
 \newtheorem{proposition}{Proposition}
 \newcommand{\code}[1]{\texttt{#1}}
+\setlength{\emergencystretch}{3em}  % absorb long \texttt tokens instead of overflowing
 
 \title{\textbf{Correctness Under Time:} \\ Bi-Temporal, Supersession-Aware Memory for AI Agents}
 \author{Mayank Sahu \\ \small Independent Researcher \\ \small System: \textsc{Continuum} (open-source; \code{continuum-mcp} on PyPI)}
@@ -203,10 +204,11 @@ recovers all five.
   % query line
   \draw[dashed] (2,0) -- (2,4.2) node[above] {\small as-of $=$ Jul 15};
   \fill (2,3.6) circle (1.6pt);
-  % verdict
-  \node[align=left,anchor=west] at (0.2,-0.9)
-    {\small single-axis (valid only): $\arg\max v^- =$ Lisbon~\textcolor{red}{\ding{55}}\quad
-     bi-temporal \code{current}$(\cdot;\text{Jul 15},\tau_2) =$ Porto~\textcolor{green!60!black}{$\checkmark$}};
+  % verdict (two explicit lines so they never run off the right margin)
+  \node[anchor=west,font=\footnotesize] at (0.2,-1.0)
+    {single-axis (valid only): $\arg\max v^- =$ Lisbon~\textcolor{red}{\ding{55}}};
+  \node[anchor=west,font=\footnotesize] at (0.2,-1.5)
+    {bi-temporal \code{current}$(\cdot;\,\text{Jul 15},\tau_2) =$ Porto~\textcolor{green!60!black}{$\checkmark$}};
 \end{tikzpicture}
 \caption{The two-axis view of the retroactive example. The query at valid time Jul~15 meets Porto's
 valid half-line $[\text{Jul 1},\infty)$ but not Lisbon's $[\tau_1,\infty)$; the transaction axis
