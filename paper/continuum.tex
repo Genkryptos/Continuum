@@ -233,6 +233,11 @@ extraction/update and for the answer step, with a fresh \code{user\_id} per scen
 are ingested in learned (transaction-time) order; the query is answered over Mem0's retrieved
 memories and scored against the same ground truth (\code{bench/mem0\_compare.py}).
 
+\textbf{Reproducibility.} Exact configurations, seeds, retrieval depths, prompts, and judge model
+for every reported number are released with the harnesses in the repository (\code{bench/},
+\code{evals/}, \code{scripts/}), with a scoring script per benchmark. The deterministic
+supersession and as-of results run with no API key.
+
 \section{Results}\label{sec:results}
 
 \begin{table}[t]
@@ -327,6 +332,9 @@ deterministically (100\% vs 38\%/20\%/75\% baselines, and vs Mem0's 30\% on the 
 while a decomposition shows the residual end-to-end ceiling is answerer reasoning, not retrieval. We release the repository, \code{continuum-mcp}, the harnesses, and the
 supersession/bi-temporal benchmark sets with scoring scripts.
 
+% TODO before submission: verify author lists / arXiv IDs / venues against the
+% primary sources (esp. mem0 technical report, amem, beam). Entries below are
+% draft-accurate but not yet confirmed line-by-line.
 \begin{thebibliography}{99}
 \small
 \bibitem{mem0} Mem0: The Memory Layer for Personalized AI. \url{https://github.com/mem0ai/mem0}, 2024.
