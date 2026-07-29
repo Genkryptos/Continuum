@@ -1,5 +1,7 @@
 # Continuum
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21691914.svg)](https://doi.org/10.5281/zenodo.21691914)
+
 **Production-grade memory infrastructure for AI agents.** Tiered storage (STM / MTM / LTM), first-class supersession and bi-temporal queries, cost-efficient retrieval. Plugs in under whatever reasoner you're using — LangGraph, AutoGen, custom — and provides the memory layer they all lack.
 
 ```bash
@@ -37,6 +39,25 @@ between runs); the LongMemEval number is honest but carries reader variance.
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) |
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
+
+## Paper
+
+The design, the formal bi-temporal model, and a head-to-head against the real Mem0 SDK are written up in the preprint:
+
+> Sahu, M. (2026). *Correctness Under Time: Bi-Temporal, Supersession-Aware Memory for AI Agents.* Zenodo. https://doi.org/10.5281/zenodo.21691914
+
+Source and build: [`paper/continuum.tex`](paper/continuum.tex) (`cd paper && tectonic continuum.tex`). Key result: run on the same scenarios, Mem0 answers *latest-value* queries competitively (72 %) but only **27 %** of point-in-time ("what was true then") queries, because it deletes superseded facts; Continuum's bi-temporal store answers **100 %**.
+
+```bibtex
+@misc{sahu2026continuum,
+  author    = {Sahu, Mayank},
+  title     = {Correctness Under Time: Bi-Temporal, Supersession-Aware Memory for AI Agents},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.21691914},
+  url       = {https://doi.org/10.5281/zenodo.21691914}
+}
+```
 
 > **Honest headline — read this.** On LongMemEval-S the judged number is **~74 %**
 > (73.6 – 75.6 % across repeated same-setup runs). `gpt-oss-120b` has ~±3–5 pp
