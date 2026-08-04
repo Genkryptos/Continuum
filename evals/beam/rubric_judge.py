@@ -13,7 +13,6 @@ then:
     question_score = mean(nugget_scores)          # PASS if >= 0.5
     category_acc   = fraction of questions with score >= 0.5
 
-which is exactly the number Mem0 reports (contradiction 25%, event_ordering 15%).
 This script re-scores *already-generated* answers (no re-inference): it joins a
 bootstrap_ollama results file (question_id -> answer) against the converted BEAM
 dataset (question_id -> question, question_type, rubric) and reports per-category
@@ -22,6 +21,33 @@ pass-rate + mean score.
 The nugget prompt + system prompt are vendored verbatim from BEAM's
 ``unified_llm_judge_base_prompt`` (via the public Mem0 memory-benchmarks port) so
 the numbers are comparable to published BEAM results.
+
+.. warning::
+
+   **Do not compare our score against "contradiction 25% / event_ordering 15%".**
+   An earlier revision of this docstring cited those as Mem0's published BEAM
+   numbers; that was a misreading. Mem0's reported BEAM result is substantially
+   higher (~48.6 overall, produced with **gpt-5** as the answerer). Any published
+   comparison must hold the answerer model fixed on both sides.
+
+   Current standing (``results/beam_topk*``, n=80, **answerer gpt-oss-120b**,
+   judge gpt-4o-mini — note the answerer and the judge are different models and
+   are routinely confused; ``rubric_judged.json:model`` is the *judge*, the
+   ``answerer`` field in the baseline file is the answerer):
+
+       beam_topk         contradiction  7.5% · event_ordering 27.5% · overall 17.5%
+       beam_topk_chrono  contradiction 32.5% · event_ordering 32.5% · overall 32.5%
+
+   i.e. we are **behind** Mem0 on BEAM, and the gap is not explained away by
+   answerer strength — gpt-oss-120b is a capable answerer, not a small model.
+   ``results/beam_gpt5_smoke`` (answerer gpt-5) scored **0/5**, far too small to
+   conclude anything, but it is emphatically not evidence that a frontier
+   answerer closes the gap.
+
+   The real, defensible finding here is the ``--chrono-sort`` delta: **+25pp on
+   contradiction** (7.5% -> 32.5%) from ordering context by validity and
+   labelling superseded facts — our bi-temporal machinery paying off on someone
+   else's benchmark.
 
     set -a && source .env && set +a
     python3.12 -m evals.beam.rubric_judge \
