@@ -233,7 +233,8 @@ async def run(answers_path: Path, dataset_path: Path, model: str, out_path: Path
     print(f"  {'category':28s} {'PASS-rate (acc)':>18s}   {'mean score':>10s}")
     allp: list[bool] = []
     for t in sorted(by_type_pass):
-        p = by_type_pass[t]; s = by_type_score[t]
+        p = by_type_pass[t]
+        s = by_type_score[t]
         allp += p
         print(f"  {t:28s} {sum(p):2d}/{len(p):2d} = {100*sum(p)/len(p):5.1f}%     "
               f"{statistics.mean(s):6.3f}")
