@@ -28,13 +28,20 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
-_CHROMA = Path("/private/tmp/claude-501/mem0_compare_chroma")
+# Chroma's on-disk store. Overridable via MEM0_COMPARE_CHROMA; defaults to the
+# OS temp dir (a sibling of a sandbox scratchpad can be reaped mid-run, which
+# surfaces as sqlite "unable to open database file" on a long run).
+_CHROMA = Path(
+    os.environ.get("MEM0_COMPARE_CHROMA")
+    or (Path(tempfile.gettempdir()) / "mem0_compare_chroma")
+)
 _JUDGE_MODEL = "openai/gpt-4o-mini"
 
 
@@ -87,9 +94,26 @@ def _match(answer: str, value: str) -> bool:
     return value.lower() in answer.lower()
 
 
+# ── domain selection ─────────────────────────────────────────────────────────
+def _supersession_builder(domain: str):
+    if domain == "banking":
+        from bench.supersession_banking import _build_scenarios
+    else:
+        from bench.supersession_correctness import _build_scenarios
+    return _build_scenarios
+
+
+def _bitemporal_scenarios(domain: str, n: int):
+    if domain == "banking":
+        from bench.bi_temporal_banking import _build_scenarios
+        return _build_scenarios(n)
+    from bench.bi_temporal import _build_scenarios
+    return _build_scenarios()  # general set is a fixed 20-scenario corpus
+
+
 # ── supersession ────────────────────────────────────────────────────────────
-def run_supersession(mem, n: int, limit: int | None) -> dict[str, Any]:
-    from bench.supersession_correctness import _build_scenarios
+def run_supersession(mem, n: int, limit: int | None, domain: str = "general") -> dict[str, Any]:
+    _build_scenarios = _supersession_builder(domain)
     scenarios = _build_scenarios(n)
     if limit:
         scenarios = scenarios[:limit]
@@ -113,9 +137,9 @@ def run_supersession(mem, n: int, limit: int | None) -> dict[str, Any]:
 
 
 # ── bi-temporal ─────────────────────────────────────────────────────────────
-def run_bitemporal(mem, limit: int | None) -> dict[str, Any]:
-    from bench.bi_temporal import _build_scenarios
-    scenarios = _build_scenarios()
+def run_bitemporal(mem, limit: int | None, domain: str = "general",
+                   bt_scenarios: int = 20) -> dict[str, Any]:
+    scenarios = _bitemporal_scenarios(domain, bt_scenarios)
     if limit:
         scenarios = [s for s in scenarios if s.kind == "point_in_time"][:limit] + \
                     [s for s in scenarios if s.kind == "retroactive_correction"][:limit]
@@ -131,9 +155,11 @@ def run_bitemporal(mem, limit: int | None) -> dict[str, Any]:
         correct = (_match(ans, exp) if exp else ("unknown" in ans.lower()))
         is_retro = sc.kind == "retroactive_correction"
         if is_retro:
-            retro_tot += 1; retro_ok += correct
+            retro_tot += 1
+            retro_ok += correct
         else:
-            pit_tot += 1; pit_ok += correct
+            pit_tot += 1
+            pit_ok += correct
         if len(samples) < 4:
             samples.append({"kind": sc.kind, "query": sc.query, "expected": exp,
                             "mem0_answer": ans, "mem0_memories": mems})
@@ -147,33 +173,61 @@ def run_bitemporal(mem, limit: int | None) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--scenarios", type=int, default=50, help="supersession count")
+    p.add_argument("--bt-scenarios", type=int, default=20,
+                   help="bi-temporal count (banking domain only; general is fixed 20)")
+    p.add_argument("--domain", choices=["general", "banking"], default="general",
+                   help="which scenario corpus to run Mem0 against")
     p.add_argument("--limit", type=int, default=None, help="cap per set (quick check)")
     a = p.parse_args(argv)
 
     mem = _build_memory()
-    print(f"  running Mem0 (real SDK) on supersession + bi_temporal "
+    print(f"  running Mem0 (real SDK) on {a.domain} supersession + bi_temporal "
           f"(limit={a.limit}) …", flush=True)
-    ss = run_supersession(mem, a.scenarios, a.limit)
-    bt = run_bitemporal(mem, a.limit)
+    ss = run_supersession(mem, a.scenarios, a.limit, a.domain)
+    bt = run_bitemporal(mem, a.limit, a.domain, a.bt_scenarios)
+
+    # Known Continuum reference numbers for the same corpus.
+    ref = {
+        "general": {"ss": "current() 100% · recall 20%", "bt": "100% (20/20)",
+                    "pit": "15/15 (100%)", "retro": "5/5 (100%)"},
+        "banking": {"ss": "100% · naive_append 58%", "bt": "100%",
+                    "pit": "100%", "retro": "100%"},
+    }[a.domain]
 
     print("\n" + "=" * 78)
-    print("  Mem0 (real SDK, local) vs Continuum — same scenarios, same ground truth")
+    print(f"  Mem0 (real SDK, local) vs Continuum — {a.domain} corpus, same ground truth")
     print("=" * 78)
     print(f"  {'benchmark':<22}{'Mem0':>16}{'Continuum (known)':>26}")
     print("-" * 78)
     print(f"  {'supersession (recall)':<22}{ss['correct']}/{ss['n']} = {ss['pct']:>5}%"
-          f"{'current() 100% · recall 20%':>26}")
+          f"{ref['ss']:>26}")
     print(f"  {'bi_temporal overall':<22}{bt['correct']}/{bt['n']} = {bt['pct']:>5}%"
-          f"{'100% (20/20)':>26}")
-    print(f"  {'  point_in_time':<22}{bt['point_in_time']:>16}{'15/15 (100%)':>26}")
-    print(f"  {'  retroactive':<22}{bt['retroactive']:>16}{'5/5 (100%)':>26}")
+          f"{ref['bt']:>26}")
+    print(f"  {'  point_in_time':<22}{bt['point_in_time']:>16}{ref['pit']:>26}")
+    print(f"  {'  retroactive':<22}{bt['retroactive']:>16}{ref['retro']:>26}")
     print("=" * 78)
+    if a.limit:
+        print(f"  ⚠ CAPPED SAMPLE (--limit {a.limit}): n={ss['n']} supersession, "
+              f"n={bt['n']} bi-temporal — directional only, NOT a full run.\n"
+              f"    Mem0 makes a live LLM call per stored fact, so full runs are slow.\n"
+              f"    Do not quote these percentages without the sample size.")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y%m%dT%H%M%S")
-    out = RESULTS_DIR / f"mem0_compare_{ts}.json"
-    out.write_text(json.dumps({"timestamp": ts, "judge_model": _JUDGE_MODEL,
-                               "supersession": ss, "bi_temporal": bt}, indent=2, default=str))
+    tag = "" if a.domain == "general" else f"_{a.domain}"
+    out = RESULTS_DIR / f"mem0_compare{tag}_{ts}.json"
+    out.write_text(json.dumps({
+        "timestamp": ts, "domain": a.domain, "judge_model": _JUDGE_MODEL,
+        # Provenance so a capped run can never be misread as a full one.
+        "limit": a.limit,
+        "capped_sample": bool(a.limit),
+        "sample_note": (
+            f"CAPPED: --limit {a.limit} → n={ss['n']} supersession, n={bt['n']} "
+            f"bi-temporal. Directional only; do not quote percentages without n."
+            if a.limit else
+            f"Full run: n={ss['n']} supersession, n={bt['n']} bi-temporal."
+        ),
+        "supersession": ss, "bi_temporal": bt}, indent=2, default=str))
     print(f"\n  results: {out.relative_to(Path(__file__).resolve().parents[1])}")
     return 0
 

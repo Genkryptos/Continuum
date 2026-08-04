@@ -12,6 +12,11 @@ Thresholds (matching the README headline table)::
     retrieval_quality.continuum_stm                  ≥ naive_cosine recall@4 − 5pp
     ingest_throughput.continuum_full                 available + finite
 
+Banking domain-transfer suite (skipped when absent, strict when present)::
+
+    supersession_banking.continuum_supersession      ≥ 95 % AND 0 stale
+    bi_temporal_banking.continuum_bitemporal         = 100 % AND retroactive all-correct
+
 Called from ``.github/workflows/benchmarks.yml`` as the regression
 guard, and runnable locally after ``make bench-all`` to confirm a
 local change hasn't broken anything important.
@@ -115,11 +120,63 @@ def check_ingest_throughput() -> tuple[bool, str]:
     )
 
 
+# ── Banking domain-transfer suite ────────────────────────────────────────────
+# These are the domain-transfer instantiations (`make bench-banking`). They are
+# *skipped* when their results are absent — not every CI job runs them — but
+# enforced strictly when present, because the published banking claims cite
+# these exact numbers.
+
+
+def check_supersession_banking() -> tuple[bool | None, str]:
+    d = _load("supersession_banking")
+    if d is None:
+        return None, "supersession_banking: no results — run `make bench-supersession-banking`"
+    sys_ = _by_name(d, "continuum_supersession")
+    if sys_ is None:
+        return False, "continuum_supersession entry missing from supersession_banking results"
+    pct = float(sys_.get("correctness_pct", 0))
+    stale = int(sys_.get("n_stale_returned", -1))
+    bar = 95.0
+    ok = pct >= bar and stale == 0
+    return ok, (
+        f"supersession_banking: continuum_supersession = {pct:.1f}% "
+        f"(bar {bar}%), stale returned = {stale} (need 0)"
+    )
+
+
+def check_bi_temporal_banking() -> tuple[bool | None, str]:
+    d = _load("bi_temporal_banking")
+    if d is None:
+        return None, "bi_temporal_banking: no results — run `make bench-bitemporal-banking`"
+    cont = _by_name(d, "continuum_bitemporal")
+    if cont is None:
+        return False, "continuum_bitemporal entry missing from bi_temporal_banking results"
+    n = int(cont.get("n_total", 0))
+    correct = int(cont.get("n_correct", 0))
+    # The published claim is 100% overall *and* 100% on the retroactive block —
+    # the retroactive split is the load-bearing result, so gate it explicitly.
+    # Field format is "<correct>/<total> (<pct>%)".
+    retro = str(cont.get("retroactive", ""))
+    retro_ok = False
+    if "/" in retro:
+        got, _, rest = retro.partition("/")
+        tot = rest.split()[0]
+        if got.strip().isdigit() and tot.strip().isdigit():
+            retro_ok = int(got) == int(tot) and int(tot) > 0
+    ok = correct == n and n >= 20 and retro_ok
+    return ok, (
+        f"bi_temporal_banking: continuum_bitemporal = {correct}/{n}, "
+        f"retroactive = {retro or 'n/a'} (need all correct)"
+    )
+
+
 CHECKS = [
     ("supersession", check_supersession),
     ("bi_temporal",  check_bi_temporal),
     ("retrieval",    check_retrieval_quality),
     ("ingest",       check_ingest_throughput),
+    ("supersession_banking", check_supersession_banking),
+    ("bi_temporal_banking",  check_bi_temporal_banking),
 ]
 
 
@@ -128,17 +185,23 @@ def main() -> int:
     print("  Phase-3B benchmark regression gate")
     print("=" * 72)
     fails = 0
+    skips = 0
     for _name, fn in CHECKS:
         ok, msg = fn()
+        if ok is None:
+            skips += 1
+            print(f"  [SKIP] {msg}")
+            continue
         status = "OK  " if ok else "FAIL"
         print(f"  [{status}] {msg}")
         if not ok:
             fails += 1
     print("=" * 72)
     if fails:
-        print(f"  ❌ {fails} regression(s)")
+        print(f"  ❌ {fails} regression(s)" + (f", {skips} skipped" if skips else ""))
         return 1
-    print("  ✅ all benchmarks within contract thresholds")
+    print("  ✅ all benchmarks within contract thresholds"
+          + (f" ({skips} skipped)" if skips else ""))
     return 0
 
 

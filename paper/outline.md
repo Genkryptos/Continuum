@@ -96,6 +96,38 @@ static store; Continuum's contribution is *correctness under contradiction and t
   sweep; embedder bake-off; HNSW vs exact-scan crossover; reranker (built, measured
   net-negative — report it).
 
+**Domain transfer — banking / compliance (`bench/supersession_banking.py`,
+`bench/bi_temporal_banking.py`).** The two correctness axes re-run on a banking
+customer-service corpus with the *identical* systems + scorer (only the fact corpus
+swapped), to show the result isn't an artifact of the consumer-life-fact phrasing and
+to land the contribution in the domain where bi-temporal semantics are a regulatory
+requirement, not a nicety. Attributes are compliance-critical: mailing address (statements/
+cards), registered OTP number (2FA), employer/KYC, account nominee/beneficiary, product
+plan, autopay default; the bi-temporal queries are "as of" the statement/audit/dispute
+date plus backdated corrections (fee reversal, promo-rate correction, late-processed
+beneficiary form). Results (2026-08-01):
+| Banking result | Continuum | Baseline(s) |
+|---|---|---|
+| Supersession (50, real hybrid embedder) | **100%** (50/50, 0 stale) | `naive_append` **58%** (21 stale) → **+42pp** |
+| Bi-temporal "as of" (20 = 15 pit + 5 retroactive) | **100%** (20/20) | `naive_latest` **0%** · `naive_chronological` **75%** (pit 15/15, **retroactive 0/5**) |
+| **Bi-temporal "as of" — tense-level scale (500 = 375 pit + 125 retroactive)** | **100%** (500/500) | `naive_latest` **0%** · `naive_chronological` **75.0%** (pit 375/375, **retroactive 0/125**) |
+
+The 500-question run (`make bench-bitemporal-banking-500`, matching LongMemEval-S's
+500-Q scale) is procedurally generated across 12 banking attributes with a deterministic
+seed. Ground truth is defined by construction — each scenario lays down validity intervals
+and the answer is the interval the as-of date falls in (the bare definition of a bi-temporal
+as-of), so Continuum's 100% is a correctness proof, not a tuned result; the naive baselines
+implement different (wrong) definitions and the single-time-axis store fails *every one* of
+the 125 backdated corrections. The 75.0% chronological / 100% bi-temporal split is stable
+from n=20 to n=500.
+
+The banking `naive_append` (58%) beats the general one (38%) because addresses/phone
+numbers are lexically distinct enough for cosine to sometimes land the current fact by
+luck — report this honestly; the deterministic 100% axes are unchanged, which is the
+point of the transfer. Framing home for the intro/motivation: soft-invalidation = audit
+trail, as-of = regulatory point-in-time reporting, supersession = stale-record
+suppression.
+
 **The two-axis argument (why bi-temporal, not just chronological).** The bi-temporal
 result is the paper's cleanest figure: `naive_chronological` (single time axis) gets
 point-in-time queries **100%** right yet **0/5** on retroactive corrections — a fact
