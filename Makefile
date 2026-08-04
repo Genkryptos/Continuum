@@ -20,7 +20,7 @@
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
         mcp-install mcp-smoke mcp-eval mcp-bench scale-test mcp-serve mcp-serve-http mcp-claude \
         backfill rerank-ab recall-at-scale soak repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
-        bench-bitemporal bench-supersession-banking bench-bitemporal-banking bench-bitemporal-banking-500 bench-banking bench-locomo bench-all bench-gate demo-chat build build-verify
+        bench-bitemporal bench-supersession-banking bench-bitemporal-banking bench-bitemporal-banking-500 bench-banking bench-head-to-head bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
 
@@ -318,3 +318,6 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+
+bench-head-to-head: ## True head-to-head on identical sampled scenarios: Continuum vs naive baselines vs real Mem0 SDK (needs OPENROUTER_API_KEY)
+	@$(BENCH_PYTHON) -m bench.head_to_head_banking --pit 20 --retro 20 --ss 25

@@ -112,6 +112,35 @@ beneficiary form). Results (2026-08-01):
 | Bi-temporal "as of" (20 = 15 pit + 5 retroactive) | **100%** (20/20) | `naive_latest` **0%** · `naive_chronological` **75%** (pit 15/15, **retroactive 0/5**) |
 | **Bi-temporal "as of" — tense-level scale (500 = 375 pit + 125 retroactive)** | **100%** (500/500) | `naive_latest` **0%** · `naive_chronological` **75.0%** (pit 375/375, **retroactive 0/125**) |
 
+**Head-to-head vs real Mem0 SDK (`bench/head_to_head_banking.py`, 2026-08-04).** All
+systems scored on the *same* sampled scenarios (seed 20260804) — not juxtaposed
+reference numbers. Retroactive stratum deliberately oversampled for power; the
+corpus-weighted column reconstructs the true 375/125 composition.
+
+| System | point-in-time | retroactive | corpus-weighted |
+|---|---|---|---|
+| **continuum_bitemporal** | **20/20** | **20/20** | **100%** |
+| naive_chronological | 20/20 | 0/20 | 75% |
+| naive_latest | 0/20 | 0/20 | 0% |
+| **mem0** (real SDK) | **0/20** | **0/20** | **0%** |
+
+| Supersession (same 25) | score |
+|---|---|
+| **continuum_supersession** | **25/25 (100%)** |
+| mem0 | 14/25 (56%) |
+| naive_append | 11/25 (44%) |
+
+**Mechanism, not a black box.** Mem0's retrieved memory sets contain exactly *one*
+row per attribute (e.g. `['Registered phone number is 555-3073']`) where the scenario
+planted 2–4 historical updates: it consolidates contradictions **destructively**, so
+prior values no longer exist to retrieve and it degenerates to `naive_latest` on every
+"as of" query. This confirms the Related-Work prediction as a measurement, not an
+assumption. Note the honest flip side: on **supersession** mem0 (56%) *beats* the
+naive_append baseline (44%) on the same sample — the same consolidation that wins
+"what's current" is what destroys the history "as of" needs. The claim to make is
+therefore narrow and precise: Mem0 is optimized for current-value recall; the
+bi-temporal axis is where it has no representation at all.
+
 The 500-question run (`make bench-bitemporal-banking-500`, matching LongMemEval-S's
 500-Q scale) is procedurally generated across 12 banking attributes with a deterministic
 seed. Ground truth is defined by construction — each scenario lays down validity intervals
