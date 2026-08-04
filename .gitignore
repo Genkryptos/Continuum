@@ -65,3 +65,7 @@ paper/*.pdf
 paper/*.aux
 paper/*.log
 paper/*.out
+
+# Converted BEAM datasets — derived artifacts, rebuild with:
+#   python3.12 -m evals.beam.convert --split 100K --out evals/beam/data/beam_100K_c_o.json
+evals/beam/data/

@@ -26,23 +26,45 @@ the numbers are comparable to published BEAM results.
 
    **Do not compare our score against "contradiction 25% / event_ordering 15%".**
    An earlier revision of this docstring cited those as Mem0's published BEAM
-   numbers; that was a misreading. Mem0's reported BEAM result is substantially
-   higher (~48.6 overall, produced with **gpt-5** as the answerer). Any published
-   comparison must hold the answerer model fixed on both sides.
+   numbers; that was a misreading. So was the follow-up correction. The verified
+   published figures (mem0.ai, BEAM @ ICLR 2026) are:
 
-   Current standing (``results/beam_topk*``, n=80, **answerer gpt-oss-120b**,
-   judge gpt-4o-mini — note the answerer and the judge are different models and
-   are routinely confused; ``rubric_judged.json:model`` is the *judge*, the
-   ``answerer`` field in the baseline file is the answerer):
+       Mem0 BEAM = **64.1 at the 1M scale**, **48.6 at the 10M scale**
+
+   Those are **aggregate scores over all ten BEAM categories**, not a
+   contradiction/event_ordering pair. (An earlier note in this repo read
+   "48.6/60" as "contradiction/event_ordering on the 1M split" — it is not;
+   64.1/48.6 is 1M/10M.)
+
+   **Our number and their number do not measure the same thing.** Ours
+   (``results/beam_topk*``) is:
+
+       axis        Mem0 published            ours
+       split       1M / 10M                  ~128K  (the EASIEST split)
+       categories  all 10 (aggregate)        only contradiction + event_ordering
+       answerer    gpt-5                     gpt-oss-120b
+       judge       gpt-5                     gpt-4o-mini
+
+   Both mismatches push in *opposite* directions: the 128K split flatters us,
+   while restricting to contradiction + event_ordering penalises us badly —
+   BEAM's own authors and Mem0 both note those two are among the weakest
+   categories field-wide, so Mem0's all-category aggregate is buoyed by easy
+   categories (information extraction, preference following) that we never ran.
+
+   Conclusion: **the sign of the gap is currently unknown.** Do not claim we
+   beat Mem0 on BEAM, and do not claim a specific deficit either. A defensible
+   comparison must match split, category subset, answerer and judge.
+
+   Current standing (``results/beam_topk*``, n=80 — note the answerer and the
+   judge are different models and are routinely confused;
+   ``rubric_judged.json:model`` is the *judge*, the ``answerer`` field in the
+   baseline file is the answerer):
 
        beam_topk         contradiction  7.5% · event_ordering 27.5% · overall 17.5%
        beam_topk_chrono  contradiction 32.5% · event_ordering 32.5% · overall 32.5%
 
-   i.e. we are **behind** Mem0 on BEAM, and the gap is not explained away by
-   answerer strength — gpt-oss-120b is a capable answerer, not a small model.
-   ``results/beam_gpt5_smoke`` (answerer gpt-5) scored **0/5**, far too small to
-   conclude anything, but it is emphatically not evidence that a frontier
-   answerer closes the gap.
+   ``results/beam_gpt5_smoke`` (answerer gpt-5) scored **0/5** — far too small
+   to conclude anything, and not evidence either way about a frontier answerer.
 
    The real, defensible finding here is the ``--chrono-sort`` delta: **+25pp on
    contradiction** (7.5% -> 32.5%) from ordering context by validity and
