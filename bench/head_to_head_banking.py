@@ -220,6 +220,25 @@ def _pct(ok: int, n: int) -> float:
     return round(100 * ok / n, 1) if n else 0.0
 
 
+def _wilson(ok: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval (percent). Chosen over the normal approximation
+    because these proportions sit at the 0 and 1 boundaries, where the normal
+    interval is degenerate (it returns a zero-width interval at p=0 or p=1)."""
+    if n == 0:
+        return (0.0, 0.0)
+    p = ok / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = (z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)) / denom
+    return (round(100 * max(0.0, centre - half), 1),
+            round(100 * min(1.0, centre + half), 1))
+
+
+def _ci_str(ok: int, n: int) -> str:
+    lo, hi = _wilson(ok, n)
+    return f"[{lo:.0f}–{hi:.0f}]"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--pit", type=int, default=20, help="point-in-time sample size")
@@ -251,8 +270,10 @@ def main(argv: list[str] | None = None) -> int:
             "system": name,
             "point_in_time": f"{t['pit_ok']}/{t['pit_n']}",
             "point_in_time_pct": pit_p,
+            "point_in_time_ci95": list(_wilson(t["pit_ok"], t["pit_n"])),
             "retroactive": f"{t['retro_ok']}/{t['retro_n']}",
             "retroactive_pct": retro_p,
+            "retroactive_ci95": list(_wilson(t["retro_ok"], t["retro_n"])),
             "corpus_weighted_pct": round(w_pit * pit_p + w_retro * retro_p, 1),
         })
     order = {"continuum_bitemporal": 0, "naive_chronological": 1,
@@ -262,13 +283,18 @@ def main(argv: list[str] | None = None) -> int:
     print("\n" + "=" * 92)
     print("  HEAD-TO-HEAD — banking bi-temporal (same sampled scenarios, same ground truth)")
     print("=" * 92)
-    print(f"  {'system':<24}{'point-in-time':>18}{'retroactive':>18}{'corpus-weighted':>20}")
+    print(f"  {'system':<24}{'point-in-time':>26}{'retroactive':>26}{'weighted':>12}")
     print("-" * 92)
     for r in rows:
-        pit_cell = "{} ({}%)".format(r["point_in_time"], r["point_in_time_pct"])
-        retro_cell = "{} ({}%)".format(r["retroactive"], r["retroactive_pct"])
+        pit_cell = "{} {}%  {}".format(
+            r["point_in_time"], r["point_in_time_pct"],
+            "[{:.0f}-{:.0f}]".format(*r["point_in_time_ci95"]))
+        retro_cell = "{} {}%  {}".format(
+            r["retroactive"], r["retroactive_pct"],
+            "[{:.0f}-{:.0f}]".format(*r["retroactive_ci95"]))
         weighted_cell = "{}%".format(r["corpus_weighted_pct"])
-        print(f"  {r['system']:<24}{pit_cell:>18}{retro_cell:>18}{weighted_cell:>20}")
+        print(f"  {r['system']:<24}{pit_cell:>26}{retro_cell:>26}{weighted_cell:>12}")
+    print("  (bracketed = 95% Wilson score interval)")
     print("=" * 92)
     print(f"  weights: point-in-time {w_pit:.0%} · retroactive {w_retro:.0%} "
           f"(true corpus = {corpus_pit} pit / {corpus_retro} retro)")
@@ -277,9 +303,10 @@ def main(argv: list[str] | None = None) -> int:
     print("\n" + "=" * 92)
     print("  HEAD-TO-HEAD — banking supersession (same sampled scenarios)")
     print("=" * 92)
-    for name in ("continuum_supersession", "naive_append", "mem0"):
+    for name in ("continuum_supersession", "mem0", "naive_append"):
         t = ss["tally"][name]
-        print(f"  {name:<24}{t['ok']}/{t['n']} = {_pct(t['ok'], t['n']):>5}%")
+        print(f"  {name:<24}{t['ok']}/{t['n']} = {_pct(t['ok'], t['n']):>5}%  "
+              f"95% CI {_ci_str(t['ok'], t['n'])}")
     print("=" * 92)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -299,7 +326,8 @@ def main(argv: list[str] | None = None) -> int:
                    "corpus_retroactive": corpus_retro},
         "bi_temporal": rows,
         "supersession": [
-            {"system": k, "correct": v["ok"], "n": v["n"], "pct": _pct(v["ok"], v["n"])}
+            {"system": k, "correct": v["ok"], "n": v["n"], "pct": _pct(v["ok"], v["n"]),
+             "ci95": list(_wilson(v["ok"], v["n"]))}
             for k, v in ss["tally"].items()
         ],
         "bi_temporal_samples": bt["samples"],

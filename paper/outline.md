@@ -113,33 +113,44 @@ beneficiary form). Results (2026-08-01):
 | **Bi-temporal "as of" — tense-level scale (500 = 375 pit + 125 retroactive)** | **100%** (500/500) | `naive_latest` **0%** · `naive_chronological` **75.0%** (pit 375/375, **retroactive 0/125**) |
 
 **Head-to-head vs real Mem0 SDK (`bench/head_to_head_banking.py`, 2026-08-04).** All
-systems scored on the *same* sampled scenarios (seed 20260804) — not juxtaposed
-reference numbers. Retroactive stratum deliberately oversampled for power; the
-corpus-weighted column reconstructs the true 375/125 composition.
+systems scored on the *same* scenarios (seed 20260804) — not juxtaposed reference
+numbers. Retroactive stratum deliberately oversampled for power; the corpus-weighted
+column reconstructs the true 375/125 composition. Brackets are 95% Wilson intervals
+(Wilson, not normal-approx: every headline result sits at a 0/1 boundary where the
+normal interval degenerates to zero width).
 
 | System | point-in-time | retroactive | corpus-weighted |
 |---|---|---|---|
-| **continuum_bitemporal** | **20/20** | **20/20** | **100%** |
-| naive_chronological | 20/20 | 0/20 | 75% |
-| naive_latest | 0/20 | 0/20 | 0% |
-| **mem0** (real SDK) | **0/20** | **0/20** | **0%** |
+| **continuum_bitemporal** | **50/50 100%** [93–100] | **50/50 100%** [93–100] | **100%** |
+| naive_chronological | 50/50 100% [93–100] | 0/50 0% [0–7] | 75% |
+| naive_latest | 0/50 0% [0–7] | 0/50 0% [0–7] | 0% |
+| **mem0** (real SDK) | **5/50 10%** [4–21] | **0/50 0%** [0–7] | **7.5%** |
 
-| Supersession (same 25) | score |
-|---|---|
-| **continuum_supersession** | **25/25 (100%)** |
-| mem0 | 14/25 (56%) |
-| naive_append | 11/25 (44%) |
+Supersession — the **full 50-scenario corpus**, not a sample:
+
+| System | score | 95% CI |
+|---|---|---|
+| **continuum_supersession** | **50/50 (100%)** | [93–100] |
+| naive_append | 29/50 (58%) | [44–71] |
+| mem0 | 19/50 (38%) | [26–52] |
 
 **Mechanism, not a black box.** Mem0's retrieved memory sets contain exactly *one*
 row per attribute (e.g. `['Registered phone number is 555-3073']`) where the scenario
 planted 2–4 historical updates: it consolidates contradictions **destructively**, so
-prior values no longer exist to retrieve and it degenerates to `naive_latest` on every
-"as of" query. This confirms the Related-Work prediction as a measurement, not an
-assumption. Note the honest flip side: on **supersession** mem0 (56%) *beats* the
-naive_append baseline (44%) on the same sample — the same consolidation that wins
-"what's current" is what destroys the history "as of" needs. The claim to make is
-therefore narrow and precise: Mem0 is optimized for current-value recall; the
-bi-temporal axis is where it has no representation at all.
+prior values no longer exist to retrieve and it degenerates to a latest-value store on
+"as of" queries. Confirms the Related-Work prediction as a measurement, not an
+assumption.
+
+**Sample-size caution — recorded because we got this wrong twice.** An interim n=25
+supersession sample showed mem0 (56%) *beating* naive_append (44%). The full n=50
+corpus reverses it: naive_append **58%**, mem0 **38%**. The n=25 CIs ([37–74] vs
+[24–66]) overlapped heavily, so that ordering was never supported — we should not have
+stated it as a finding. Likewise mem0's point-in-time score was 0/20 at n=20 but 5/50
+at n=50: the honest statement is "~10%, CI [4–21]", not "zero". The one result stable
+across every n is **mem0 retroactive = 0** (0/20, then 0/50, CI [0–7]) — that is the
+architectural claim, and it is the only one to lean on. Cross-check: `naive_append`
+scores 29/50 = 58% here, matching the standalone `bench/supersession_banking.py` run
+exactly, which validates that the head-to-head harness scores identically.
 
 The 500-question run (`make bench-bitemporal-banking-500`, matching LongMemEval-S's
 500-Q scale) is procedurally generated across 12 banking attributes with a deterministic
