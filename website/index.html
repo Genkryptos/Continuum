@@ -77,13 +77,14 @@ await mem.timeline("residence")            # bi-temporal history</code></pre>
 continuum-mcp        # exposes recall / remember / current / timeline as tools</code></pre>
 
   <h2>How it compares</h2>
+  <p class="note">Only reader-matched numbers below — all on <b>gpt-oss-120b</b>, the same reader we use, so this compares memory layers rather than model choice.</p>
   <table>
-    <tr><th>System</th><th>Approach</th><th class="r">LongMemEval-S*</th></tr>
-    <tr><td>Mem0</td><td>auto-extract → vector + graph + KV</td><td class="r">~49%</td></tr>
-    <tr><td>Zep</td><td>bi-temporal knowledge graph</td><td class="r">~63.8%</td></tr>
+    <tr><th>System</th><th>Approach</th><th class="r">LongMemEval*</th></tr>
+    <tr><td><a href="https://arxiv.org/abs/2512.12818">Hindsight</a></td><td>four memory networks + read-time reflection</td><td class="r">~89%</td></tr>
     <tr><td><b>Continuum</b></td><td>tiered + supersession + bi-temporal</td><td class="r"><b>~74%</b></td></tr>
+    <tr><td>Mem0-S</td><td>auto-extract → vector + graph + KV</td><td class="r">67.6%</td></tr>
   </table>
-  <p class="note">*Not perfectly comparable across setups/readers — directional. Continuum's edge is temporal / supersession correctness.</p>
+  <p class="note">*Mem0-S figure as reported by Hindsight at the same reader. We are ~6pp above Mem0-S and ~15pp below the current best — and with ±3–5pp run-to-run variance, that 6pp is a modest lead, not a decisive one. The 15pp gap is the more informative number: measured at the <em>same</em> reader, it is evidence our remaining ceiling is architectural rather than model-bound. Continuum's edge is temporal / supersession correctness, which is measured deterministically at 100% and does not depend on a reader at all.</p>
 
   <h2>What we tried that didn't work</h2>
   <p>We spent real effort proving four ideas <em>wrong</em> — counting in code, a deterministic answer router, evidence distillation, temporal date-math — all net-negative, because you can't bolt deterministic machinery onto a mid-size model's unreliable intermediate outputs. The prompt/sampling levers we kept are about accuracy-neutral (within noise) — the reproducible wins are the deterministic supersession benches above. The negative results, and the measurement mistake that made them look good at first, are in the <a href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">report</a>.</p>
