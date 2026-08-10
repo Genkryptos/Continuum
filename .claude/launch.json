@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3.12",
       "runtimeArgs": ["-m", "http.server", "8000", "--directory", "website/dist"],
       "port": 8000
+    },
+    {
+      "name": "website-src",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "http.server", "8001", "--directory", "website"],
+      "port": 8001
     }
   ]
 }

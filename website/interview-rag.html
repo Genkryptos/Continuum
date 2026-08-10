@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAG interview prep — research depth, system design, and your own stories | Continuum</title>
+<meta name="description" content="Interview preparation for research-leaning RAG roles: the retrieval literature, how embedding models are actually trained, ANN theory, evaluation statistics, three worked system designs with capacity math, and measured findings framed as STAR narratives." />
+<style>
+  :root {
+    --bg: #ffffff; --fg: #14171a; --muted: #5b6470; --line: #e6e9ec;
+    --accent: #2b6cb0; --card: #f7f9fb; --code-bg: #0e1116; --code-fg: #e6edf3;
+    --good: #237a4d; --warn: #9a5b00; --bad: #a52a2a;
+    --good-bg: #eef7f1; --warn-bg: #fdf6ea; --bad-bg: #fdf0f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1116; --fg:#e6edf3; --muted:#9aa4af; --line:#232a31;
+            --accent:#6ea8fe; --card:#161b22; --code-bg:#010409; --code-fg:#e6edf3;
+            --good:#5fd39b; --warn:#e3b341; --bad:#f88b8b;
+            --good-bg:#12261c; --warn-bg:#2a2113; --bad-bg:#2b1618; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 72px 0 24px; }
+  h1 { font-size: 2.6rem; line-height:1.1; margin:0 0 12px; letter-spacing:-0.02em; }
+  .tag { color:var(--muted); font-size:1.2rem; margin:0 0 28px; }
+  h2 { font-size:1.4rem; margin:52px 0 14px; letter-spacing:-0.01em;
+       padding-top:10px; border-top:1px solid var(--line); }
+  h2 .n { color:var(--muted); font-weight:600; margin-right:.5em; font-variant-numeric:tabular-nums; }
+  h3 { font-size:1.08rem; margin:28px 0 10px; letter-spacing:-0.01em; }
+  h4 { font-size:.97rem; margin:20px 0 8px; color:var(--muted);
+       text-transform:uppercase; letter-spacing:.06em; }
+  p { margin: 0 0 14px; } a { color:var(--accent); }
+  ul, ol { margin:0 0 14px; padding-left:22px; } li { margin:0 0 7px; }
+  .btns { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+  .btn { display:inline-block; padding:10px 18px; border-radius:8px; text-decoration:none;
+    border:1px solid var(--line); color:var(--fg); font-weight:600; }
+  .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  pre { background:var(--code-bg); color:var(--code-fg); padding:16px; border-radius:10px;
+    overflow-x:auto; font: 13.5px/1.55 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  code { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  p code, li code, td code { background:var(--card); border:1px solid var(--line);
+    border-radius:5px; padding:1px 5px; font-size:.9em; }
+  pre code { background:none; border:none; padding:0; font-size:inherit; }
+  .tablewrap { overflow-x:auto; margin:6px 0 14px; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  td.r, th.r { text-align:right; font-variant-numeric:tabular-nums; }
+  .note { color:var(--muted); font-size:.9rem; }
+  footer { margin:56px 0 40px; color:var(--muted); font-size:.9rem;
+           border-top:1px solid var(--line); padding-top:20px; }
+
+  .lede { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:20px 22px; margin:0 0 8px; }
+  .lede p:last-child { margin-bottom:0; }
+
+  .box { border:1px solid var(--line); border-left-width:4px; border-radius:10px;
+         padding:14px 18px; margin:18px 0; background:var(--card); font-size:.95rem; }
+  .box p:last-child, .box ul:last-child, .box ol:last-child { margin-bottom:0; }
+  .box .lbl { display:block; font-size:.74rem; font-weight:700; letter-spacing:.09em;
+              text-transform:uppercase; margin-bottom:7px; }
+  .box.measured { border-left-color:var(--accent); } .box.measured .lbl { color:var(--accent); }
+  .box.do   { border-left-color:var(--good); background:var(--good-bg); } .box.do .lbl { color:var(--good); }
+  .box.dont { border-left-color:var(--bad);  background:var(--bad-bg); }  .box.dont .lbl { color:var(--bad); }
+  .box.warn { border-left-color:var(--warn); background:var(--warn-bg); } .box.warn .lbl { color:var(--warn); }
+
+  .toc { background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:18px 22px; margin:28px 0 8px; }
+  .toc h4 { margin:0 0 10px; }
+  .toc ol { margin:0 0 4px; padding-left:20px; font-size:.94rem; }
+  .toc li { margin:0 0 5px; }
+  .toc a { text-decoration:none; } .toc a:hover { text-decoration:underline; }
+  .toc .pt { font-weight:700; margin:14px 0 6px; font-size:.8rem; letter-spacing:.08em;
+             text-transform:uppercase; color:var(--muted); }
+
+  .rail { display:none; }
+  @media (min-width:1240px){
+    .rail { display:block; position:fixed; top:0; left:0; width:calc(50vw - 430px);
+            height:100vh; overflow-y:auto; padding:28px 16px 28px 24px;
+            border-right:1px solid var(--line); font-size:.86rem; }
+    .rail ul { list-style:none; margin:0 0 14px; padding:0; }
+    .rail li { margin:0 0 3px; }
+    .rail a { display:block; padding:4px 8px; border-radius:6px; color:var(--muted);
+              text-decoration:none; line-height:1.35; }
+    .rail a:hover { background:var(--card); color:var(--fg); }
+    .rail .rt { font-weight:700; color:var(--fg); margin:0 0 12px; padding:0 8px;
+                font-size:.95rem; letter-spacing:-0.01em; }
+    .rail .rg { font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+                color:var(--muted); opacity:.7; padding:0 8px; margin:14px 0 5px; font-weight:700; }
+  }
+
+  /* STAR blocks */
+  .star { border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:20px 0; }
+  .star > .sh { background:var(--card); padding:13px 18px; border-bottom:1px solid var(--line); }
+  .star > .sh b { display:block; font-size:1.02rem; letter-spacing:-0.01em; }
+  .star > .sh span { color:var(--muted); font-size:.88rem; }
+  .star > .sb { padding:4px 18px 14px; }
+  .star dl { margin:0; } .star dt { font-size:.74rem; font-weight:700; letter-spacing:.09em;
+      text-transform:uppercase; color:var(--accent); margin:14px 0 5px; }
+  .star dd { margin:0; font-size:.95rem; }
+  .probe { border-top:1px dashed var(--line); margin-top:14px; padding-top:12px; font-size:.93rem; }
+  .probe .q { font-weight:600; margin:10px 0 3px; }
+  .probe .q::before { content:"Q "; color:var(--muted); font-weight:700; }
+  .probe .a { margin:0 0 4px; color:var(--muted); }
+  .probe .a::before { content:"A "; font-weight:700; }
+
+  .step { counter-reset:st; list-style:none; padding-left:0; margin:14px 0; }
+  .step > li { counter-increment:st; position:relative; padding-left:44px; margin-bottom:18px; }
+  .step > li::before { content:counter(st); position:absolute; left:0; top:0;
+      width:28px; height:28px; border-radius:50%; background:var(--card);
+      border:1px solid var(--line); color:var(--muted); font-size:.85rem;
+      font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .step > li > b { display:block; margin-bottom:3px; }
+
+  .pill { display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.06em;
+          text-transform:uppercase; padding:2px 8px; border-radius:999px;
+          border:1px solid var(--line); color:var(--muted); vertical-align:middle; margin-left:8px; }
+  .pill.m { color:var(--accent); border-color:var(--accent); }
+
+  .math { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:14px 18px; margin:14px 0; overflow-x:auto;
+          font: 14px/1.7 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  figure { margin:18px 0; } figure svg { width:100%; height:auto; display:block; }
+  figcaption { color:var(--muted); font-size:.86rem; margin-top:8px; }
+
+  @media (max-width:640px){ h1{font-size:2.05rem;} header{padding-top:48px;} }
+</style>
+</head>
+<body>
+
+<nav class="rail" aria-label="Section navigation">
+  <p class="rt">RAG interview prep</p>
+  <div class="rg">Part A — Research depth</div>
+  <ul>
+    <li><a href="#a1">1 · The retrieval literature</a></li>
+    <li><a href="#a2">2 · How embedders are trained</a></li>
+    <li><a href="#a3">3 · ANN theory</a></li>
+    <li><a href="#a4">4 · Evaluation &amp; statistics</a></li>
+    <li><a href="#a5">5 · Open problems</a></li>
+  </ul>
+  <div class="rg">Part B — System design</div>
+  <ul>
+    <li><a href="#b0">6 · The method</a></li>
+    <li><a href="#b1">7 · 10M docs @ 1000 QPS</a></li>
+    <li><a href="#b2">8 · Agent memory, multi-tenant</a></li>
+    <li><a href="#b3">9 · Multi-hop research corpus</a></li>
+  </ul>
+  <div class="rg">Part C — Your stories</div>
+  <ul>
+    <li><a href="#c0">10 · How to use these</a></li>
+    <li><a href="#c1">11 · Seven STAR narratives</a></li>
+    <li><a href="#c2">12 · Questions to ask them</a></li>
+  </ul>
+</nav>
+
+<div class="wrap">
+  <header>
+    <h1>RAG interviews:<br>depth, design, and evidence.</h1>
+    <p class="tag">Research-leaning preparation — the retrieval literature and the mathematics behind it, three worked system designs with the capacity arithmetic done, and your own measured findings framed as narratives that survive follow-up questions.</p>
+    <div class="btns">
+      <a class="btn primary" href="learn-rag.html">Production RAG module</a>
+      <a class="btn" href="https://github.com/Genkryptos/Continuum">Continuum on GitHub</a>
+      <a class="btn" href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">Technical report</a>
+    </div>
+  </header>
+
+  <div class="lede">
+    <p><b>The thesis of this document.</b> In a research-leaning interview, mechanism knowledge gets you to competent. What separates candidates is <b>evidence</b> — whether you can name a belief you held, the experiment that killed it, and what you changed as a result.</p>
+    <p>You have several of those already, and they are unusually good ones. Part C turns them into narratives. Parts A and B make sure that when an interviewer pulls the thread, the depth underneath holds.</p>
+    <p class="note"><b>On citations:</b> papers are referenced by author and idea so you can search and read them yourself. Verify any specific claim before repeating it in an interview — a misattributed result is worse than not citing at all, and this document has not fact-checked the literature to the standard your own benchmark numbers were held to.</p>
+  </div>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <p class="pt">Part A — Research depth</p>
+    <ol>
+      <li><a href="#a1">The retrieval literature, as a single argument</a></li>
+      <li><a href="#a2">How embedding models are actually trained</a></li>
+      <li><a href="#a3">ANN theory — why approximation is necessary</a></li>
+      <li><a href="#a4">Evaluation &amp; statistics — the part that gets probed</a></li>
+      <li><a href="#a5">Open problems worth having an opinion on</a></li>
+    </ol>
+    <p class="pt">Part B — System design</p>
+    <ol start="6">
+      <li><a href="#b0">The method — a repeatable 45-minute structure</a></li>
+      <li><a href="#b1">Design 1 — document QA, 10M docs, 1000 QPS</a></li>
+      <li><a href="#b2">Design 2 — agent memory, multi-tenant, mutable</a></li>
+      <li><a href="#b3">Design 3 — multi-hop research assistant</a></li>
+    </ol>
+    <p class="pt">Part C — Your stories</p>
+    <ol start="10">
+      <li><a href="#c0">How to use these without over-rehearsing</a></li>
+      <li><a href="#c1">Seven STAR narratives with follow-up handling</a></li>
+      <li><a href="#c2">Questions to ask them</a></li>
+    </ol>
+  </div>
+
+  <!-- ══════════════════ PART A ══════════════════ -->
+  <h2 id="a1"><span class="n">01</span>The retrieval literature, as a single argument</h2>
+
+  <p>Do not memorise a list of papers. Learn the <b>argument</b> the field has been having, because interviewers ask "why did the field move from X to Y" far more often than "what year was DPR published".</p>
+
+  <p>The argument runs like this: <i>lexical matching is precise but cannot handle paraphrase → learn a dense representation instead → but a single vector loses token-level detail → so restore token-level interaction, or learn sparsity, or just use both.</i></p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Stage</th><th>Representative work</th><th>The move it made</th><th>What it gave up</th></tr>
+    <tr><td><b>Sparse</b></td><td>BM25 (Robertson &amp; Zaragoza)</td><td>Term frequency with saturation + length normalisation; no training at all</td><td>Vocabulary mismatch — zero recall on paraphrase</td></tr>
+    <tr><td><b>Dense bi-encoder</b></td><td>DPR (Karpukhin et al., 2020)</td><td>Encode query and passage separately, retrieve by inner product; passages embeddable offline</td><td>One vector per passage — token detail is averaged away</td></tr>
+    <tr><td><b>Cross-encoder</b></td><td>monoBERT (Nogueira &amp; Cho, 2019)</td><td>Joint encoding of (query, passage); far more accurate</td><td>O(corpus) inference — unusable as first-stage retrieval</td></tr>
+    <tr><td><b>Late interaction</b></td><td>ColBERT (Khattab &amp; Zaharia, 2020)</td><td>Per-token embeddings, MaxSim at query time — most of the cross-encoder's power, precomputable</td><td>Storage explodes: one vector per <i>token</i></td></tr>
+    <tr><td><b>Learned sparse</b></td><td>SPLADE (Formal et al.)</td><td>Learn term weights and expansions over the vocabulary; runs on an inverted index</td><td>Still tied to vocabulary space</td></tr>
+    <tr><td><b>Unsupervised dense</b></td><td>Contriever (Izacard et al.)</td><td>Contrastive pretraining without labelled pairs</td><td>Generally below supervised in-domain</td></tr>
+    <tr><td><b>Generation-side</b></td><td>RAG (Lewis et al., 2020), FiD (Izacard &amp; Grave)</td><td>Condition generation on retrieved passages; FiD encodes passages separately and fuses in the decoder</td><td>Retrieval quality becomes a hard ceiling</td></tr>
+    <tr><td><b>Adaptive</b></td><td>Self-RAG (Asai et al.), FLARE (Jiang et al.)</td><td>Decide <i>when</i> to retrieve, and critique what came back</td><td>Latency, and extra model calls on the critical path</td></tr>
+  </table></div>
+
+  <h3>BM25, precisely — because it gets asked</h3>
+  <div class="math">score(D,Q) = Σ<sub>i</sub> IDF(q<sub>i</sub>) · [ f(q<sub>i</sub>,D) · (k₁+1) ] / [ f(q<sub>i</sub>,D) + k₁·(1 − b + b·|D|/avgdl) ]
+
+IDF(q<sub>i</sub>) = ln( (N − n(q<sub>i</sub>) + 0.5) / (n(q<sub>i</sub>) + 0.5) + 1 )</div>
+  <p>Three things to be able to say without hesitating:</p>
+  <ul>
+    <li><code>k₁</code> (≈1.2–2.0) controls <b>term-frequency saturation</b> — the tenth occurrence of a word adds far less than the second. This is what distinguishes BM25 from raw TF-IDF.</li>
+    <li><code>b</code> (≈0.75) controls <b>length normalisation</b>. At <code>b=0</code> document length is ignored; at <code>b=1</code> it is fully normalised.</li>
+    <li>IDF is <b>corpus-dependent</b> — which is why BM25 scores are not comparable across corpora, and why RRF fusing on ranks rather than scores is the pragmatic choice.</li>
+  </ul>
+
+  <h3>Reciprocal Rank Fusion</h3>
+  <div class="math">RRF(d) = Σ<sub>i ∈ channels</sub> 1 / (k + rank<sub>i</sub>(d))        k ≈ 60</div>
+  <p>The interesting question is <b>why <code>k=60</code></b>. It damps the difference between top ranks: without it, rank 1 scores 1.0 and rank 2 scores 0.5 — a 2× gap for a one-place difference. With <code>k=60</code>, ranks 1 and 2 score 0.0164 and 0.0161. The constant encodes a prior that <i>ranks are noisy and small differences are not meaningful</i>, which is exactly right for combining two systems that disagree.</p>
+
+  <div class="box do">
+    <span class="lbl">Answer that lands</span>
+    <p>Asked "why RRF instead of a weighted score combination", the strong answer names the invariance: <b>RRF requires no score normalisation</b>, so it is robust to two channels on incomparable scales, and it needs no training data to tune weights. Then name the cost — it discards score magnitude, so an overwhelmingly-best match is treated like a narrow winner — and say when you would switch: <b>when you have labelled data, a learned fusion or a cross-encoder beats RRF.</b></p>
+  </div>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="a2"><span class="n">02</span>How embedding models are actually trained</h2>
+
+  <p>This is the most reliable depth probe in a research-leaning RAG interview, because it separates people who <i>use</i> embeddings from people who understand what the number means.</p>
+
+  <h3>The contrastive objective</h3>
+  <p>Retrieval embedders are trained to pull relevant pairs together and push everything else apart. The standard loss is InfoNCE (van den Oord et al.):</p>
+  <div class="math">L = − log [ exp( sim(q, d⁺) / τ )  /  Σ<sub>j</sub> exp( sim(q, d<sub>j</sub>) / τ ) ]</div>
+  <p>where <code>d⁺</code> is the relevant passage, <code>d_j</code> ranges over the positive and all negatives, and <code>τ</code> is a temperature. Read it as a <b>softmax classification over candidates</b>: given the query, pick the right passage out of the batch.</p>
+
+  <h4>Why this shapes everything downstream</h4>
+  <ul>
+    <li><b>In-batch negatives.</b> Every other passage in the batch serves as a negative, which makes larger batches strictly more informative — the task gets harder and the gradient sharper. This is why retrieval training is batch-size hungry and why techniques like gradient caching exist.</li>
+    <li><b>Hard negatives matter more than more negatives.</b> Random negatives are trivially separable and stop teaching quickly. Mining hard negatives — passages that a current retriever ranks highly but are not relevant — is typically the single largest quality lever in the training pipeline.</li>
+    <li><b>False negatives are the trap.</b> Mine hard negatives too aggressively and you sample passages that are <i>actually relevant but unlabelled</i>, and you train the model to push apart things that belong together. Handling this — thresholding, denoising, cross-encoder filtering of mined negatives — is a real research problem, and saying so signals you have done it.</li>
+    <li><b>Temperature <code>τ</code></b> controls how sharply the model discriminates. Low <code>τ</code> concentrates on the hardest negatives; too low and training destabilises.</li>
+  </ul>
+
+  <h3>Why query and passage prefixes exist</h3>
+  <p>Queries and passages have different surface statistics — a question and a paragraph are distributed differently even when they mean the same thing. Asymmetric models handle this by prefixing (<code>query:</code> / <code>passage:</code>) so one shared encoder can occupy two modes. <b>Omitting the prefix at inference puts your query in the wrong mode</b>, degrading retrieval silently, with no error. It is one of the most common real-world misuses, and mentioning it unprompted reads as production experience.</p>
+
+  <h3>Cosine versus dot product</h3>
+  <p>Precise answer, because interviewers use this to check whether you reason or recite: they are equivalent <b>if and only if</b> vectors are L2-normalised, since <code>cos(a,b) = a·b / (‖a‖‖b‖)</code>. If not normalised, dot product rewards magnitude — and in models trained without normalisation, magnitude often correlates with token count or frequency, meaning <b>dot product will systematically prefer longer passages</b>. Which to use is decided by how the model was trained, not by preference.</p>
+
+  <div class="box warn">
+    <span class="lbl">Follow-up you should expect</span>
+    <p><i>"Your embedding model was trained with in-batch negatives on web data. Your corpus is internal legal documents. What breaks?"</i></p>
+    <p>The strong answer: the negatives it learned to separate were <b>topically diverse</b>, so it learned coarse distinctions. In a single-domain corpus every passage is topically close — the model is being asked for a discrimination it was never trained to make, and the embedding space is locally under-resolved. That is precisely the regime where lexical matching and reranking earn their keep, and where domain fine-tuning with in-domain hard negatives has the largest payoff.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="a3"><span class="n">03</span>ANN theory — why approximation is necessary</h2>
+
+  <h3>The curse of dimensionality, stated correctly</h3>
+  <p>In high dimensions, distances concentrate: the ratio between the nearest and farthest point from a query approaches 1 as dimension grows. Two consequences interviewers probe:</p>
+  <ul>
+    <li>Space-partitioning structures (k-d trees, ball trees) degrade to brute force, because a query ball intersects nearly every partition. This is <em>why</em> the field uses graph and quantization methods rather than classical trees.</li>
+    <li>Learned embeddings are saved by living on a much lower-dimensional <b>manifold</b> inside the ambient space. ANN methods work in practice because they exploit that structure, not because the curse does not apply.</li>
+  </ul>
+
+  <h3>HNSW, mechanically</h3>
+  <p>Hierarchical Navigable Small World (Malkov &amp; Yashunin) builds a multi-layer proximity graph. Say it as a <b>probabilistic skip list over a graph</b>:</p>
+  <ol>
+    <li>Each inserted node is assigned a maximum layer drawn from an exponentially decaying distribution — most nodes exist only at layer 0, few reach the top.</li>
+    <li>Upper layers are sparse, with long-range links; layer 0 contains every node with short-range links.</li>
+    <li>Search starts at the top entry point and greedily walks to the nearest neighbour of the query, descending a layer when it can no longer improve.</li>
+    <li>At layer 0 it runs a beam search of width <code>ef_search</code>, maintaining a candidate set and returning the best <code>k</code>.</li>
+  </ol>
+  <p>The upper layers give logarithmic-ish approach to the right region; layer 0 does the fine search. Recall is lost when the greedy descent enters the wrong region and the beam is too narrow to escape it.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Parameter</th><th>Set at</th><th>Raising it</th></tr>
+    <tr><td><code>m</code></td><td>build</td><td>More links per node → better connectivity and recall; more memory; slower build</td></tr>
+    <tr><td><code>ef_construction</code></td><td>build</td><td>Wider beam while inserting → better-quality graph; slower build; <b>no</b> query cost</td></tr>
+    <tr><td><code>ef_search</code></td><td>query</td><td>Wider beam at search → better recall; slower queries; the only one tunable without a rebuild</td></tr>
+  </table></div>
+
+  <div class="box do">
+    <span class="lbl">The answer that separates you</span>
+    <p>Most candidates stop at "HNSW is a graph index, tune <code>ef_search</code> for recall". The distinguishing point is that <b><code>m</code> and <code>ef_construction</code> are baked into the graph and cannot be recovered at query time.</b> If the graph is poorly connected, raising <code>ef_search</code> hits a ceiling — you are searching a structure that lacks the edges to reach the right region.</p>
+    <p>You can then land your own measurement: <i>"we hit exactly that — <code>ef_search</code> was already at pgvector's cap of 1000 and recall was still 65% against 90% for exact scan, so no query-time setting could reach it."</i> That is a mechanism claim <b>and</b> an experiment, which is the combination they are listening for.</p>
+    <p>Be careful not to over-close it. The natural next sentence is "so we rebuilt at higher <code>m</code>" — <b>we did, and it did not work</b> (story 1). Saying "raising <code>ef_search</code> and rebuilding both failed, and we do not yet have a working ANN configuration at that scale" is a stronger answer than a tidy resolution you cannot defend, and it invites the follow-up you actually want.</p>
+  </div>
+
+  <h3>IVF and product quantization, briefly</h3>
+  <ul>
+    <li><b>IVF</b> clusters vectors (k-means) into lists and searches only the <code>nprobe</code> nearest lists. It needs a <b>training step on representative data</b>, and it degrades when the data distribution shifts after training — a genuine operational hazard for growing corpora, and a good contrast to HNSW's training-free construction.</li>
+    <li><b>Product quantization</b> splits each vector into sub-vectors and replaces each with a codebook centroid id, compressing enormously at the cost of distance precision. Usually paired with a rescoring pass over full-precision vectors for the top candidates.</li>
+    <li><b>Binary quantization</b> takes this to 1 bit per dimension; distances become Hamming and extremely fast, and a rescoring pass becomes mandatory rather than optional.</li>
+  </ul>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="a4"><span class="n">04</span>Evaluation &amp; statistics — the part that gets probed</h2>
+
+  <p>For a research-leaning role this is the section that matters most, and it is where you have a genuine advantage: you have run experiments that produced <b>nulls</b>, which means you have met the statistics honestly.</p>
+
+  <h3>The metrics, with their formulas</h3>
+  <div class="math">Recall@k  = |relevant ∩ retrieved<sub>k</sub>| / |relevant|
+
+MRR       = (1/|Q|) · Σ<sub>q</sub> 1 / rank of first relevant result
+
+DCG@k     = Σ<sub>i=1..k</sub> (2<sup>rel<sub>i</sub></sup> − 1) / log₂(i + 1)
+NDCG@k    = DCG@k / IDCG@k</div>
+  <p>When each is right:</p>
+  <ul>
+    <li><b>Recall@k</b> — when a downstream stage will re-rank anyway. Position does not matter; presence does. This is the correct first-stage metric.</li>
+    <li><b>MRR</b> — exactly one correct answer and position matters. Fragile: it only sees the first hit.</li>
+    <li><b>NDCG</b> — graded relevance, multiple relevant documents. The log discount encodes "position 1 matters much more than position 10".</li>
+  </ul>
+
+  <h3>The statistical point that wins the section</h3>
+  <p>How many evaluation items do you need to detect a 3-point improvement over a 75% baseline, at 95% confidence and 80% power? The two-proportion sample size:</p>
+  <div class="math">n ≈ (z<sub>α/2</sub> + z<sub>β</sub>)² · [ p₁(1−p₁) + p₂(1−p₂) ] / (p₁ − p₂)²
+
+  ≈ (1.96 + 0.84)² · [0.75·0.25 + 0.78·0.22] / (0.03)²
+
+  ≈ 7.84 · 0.359 / 0.0009  ≈  3,100 per arm</div>
+
+  <div class="box measured">
+    <span class="lbl">Why this is your best statistics answer</span>
+    <p><b>~3,100 items per arm</b> to resolve 3 points. Typical RAG evaluation sets are 100–200. That means <b>the overwhelming majority of reported RAG improvements are statistically indistinguishable from noise</b> — and you can say so with the arithmetic, not as an opinion.</p>
+    <p>Then land your own case: Continuum compared hybrid retrieval against pure cosine on a 20-needle set. MRR tied at 3k (.916/.916), cosine edged 25k (.903 vs .900), hybrid edged 47k (.800 vs .750). <b>Every gap was about one needle in twenty.</b> The published conclusion was "hybrid ≥ cosine, no clean win" rather than a flattering headline — because a 20-item set cannot resolve what was being claimed.</p>
+  </div>
+
+  <p>Report a confidence interval, and prefer <b>Wilson</b> over the normal approximation for proportions — it behaves properly near 0 and 1 and at small <code>n</code>:</p>
+  <div class="math">( p̂ + z²/2n  ±  z·√[ p̂(1−p̂)/n + z²/4n² ] ) / ( 1 + z²/n )</div>
+
+  <h3>Variance, and why a control must be run more than once</h3>
+  <div class="box warn">
+    <span class="lbl">Expect: "how do you know your improvement is real?"</span>
+    <p>The complete answer has three parts. <b>One:</b> establish the noise floor by running the unchanged control multiple times — Continuum's reader shows ±3–5pp run-to-run variance on identical configuration, with a ~74% headline across a 73.6–75.6% observed range. <b>Two:</b> any claimed delta below that band is not measurable with a single run, full stop. <b>Three:</b> report the interval and the number of runs alongside the point estimate.</p>
+    <p>Then the honest part, which is the part that lands: Continuum's own documentation states that its read-side additions are <i>within noise</i> of the control, and that the reproducible wins are the deterministic supersession benches. <b>Choosing to publish that costs a headline number and buys the credibility of every other number in the report.</b></p>
+  </div>
+
+  <h3>LLM-as-judge, and its failure modes</h3>
+  <p>Know these, because a research interviewer will push:</p>
+  <ul>
+    <li><b>Position bias</b> — judges favour the first-presented option in pairwise comparison. Mitigate by randomising and evaluating both orders.</li>
+    <li><b>Verbosity bias</b> — longer answers score higher independent of correctness.</li>
+    <li><b>Self-preference</b> — a judge tends to favour outputs from its own model family. Use a different family from the system under test.</li>
+    <li><b>Non-reproducibility across snapshots</b> — the judge changes under you, silently rebasing every historical number. Pin the version and re-baseline deliberately when you change it.</li>
+    <li><b>Agreement must be validated</b> — measure judge/human agreement (Cohen's κ) on a sample before trusting the judge as ground truth.</li>
+  </ul>
+  <p>Your concrete case: substring matching undercounted by ~9pp uniformly, and reported <b>0.0%</b> on a preference category whose judged accuracy was ~57%. A scorer artifact that severe would have sent a team to rebuild a component that worked correctly.</p>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="a5"><span class="n">05</span>Open problems worth having an opinion on</h2>
+
+  <p>Research-leaning interviews usually end with "what do you think is unsolved?" Having a considered answer with a stake in it is worth more than breadth.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Problem</th><th>The state of it</th><th>A defensible position</th></tr>
+    <tr><td><b>Multi-hop retrieval</b></td><td>Single-shot retrieval fails when the second hop depends on the first. Iterative and agentic retrieval helps at large latency cost.</td><td>Decomposition works when sub-questions are independent; genuinely sequential dependency remains open.</td></tr>
+    <tr><td><b>Aggregation over a corpus</b></td><td>"How many X" requires exhaustive retrieval, but retrieval is top-k by construction. Structurally mismatched.</td><td>You measured this: 58 of 118 failures were counting/aggregation. Argue it needs an index-time aggregate or a structured store, not better ranking.</td></tr>
+    <tr><td><b>Long context vs retrieval</b></td><td>As windows grow, "retrieve nothing, send everything" becomes viable for small corpora — but attention degrades over position and cost scales with tokens.</td><td>A cost/accuracy frontier question, not an ideological one. Measure the curve for your corpus; the answer is corpus-dependent.</td></tr>
+    <tr><td><b>Knowledge conflict</b></td><td>When retrieved context contradicts parametric knowledge, model behaviour is inconsistent and hard to steer.</td><td>Directly connects to supersession: two <i>retrieved</i> facts contradicting each other is the same problem one level down, and is addressable at the state layer rather than the prompt.</td></tr>
+    <tr><td><b>Evaluation itself</b></td><td>Benchmarks saturate, judges drift, sets are too small to resolve real differences.</td><td>Your strongest area — argue from the ~3,100-per-arm arithmetic that the field systematically under-powers its comparisons.</td></tr>
+  </table></div>
+
+  <!-- ══════════════════ PART B ══════════════════ -->
+  <h2 id="b0"><span class="n">06</span>System design — a repeatable structure</h2>
+
+  <p>Design rounds reward a visible method more than a clever architecture. Use the same six moves every time; the interviewer is scoring whether you drive the conversation.</p>
+
+  <ol class="step">
+    <li><b>Clarify before drawing anything (3–5 min).</b> Corpus size and growth rate. Query volume and shape. Latency target. Freshness requirement. Multi-tenant? Accuracy bar and how it is measured. <b>Ask what "good" means and how it will be evaluated</b> — in a research-leaning interview this question alone differentiates you.</li>
+    <li><b>Do the arithmetic out loud (5 min).</b> Chunks, vector bytes, index memory, QPS per stage, tokens per query, dollars per day. The numbers should <em>drive</em> the architecture rather than decorate it. This is where most candidates skip and most points are lost.</li>
+    <li><b>Sketch the two paths.</b> Offline indexing and online query, drawn separately. Name the recall ceiling and the precision funnel (§1 of the production module).</li>
+    <li><b>Take a position on 3–4 decisions and defend them.</b> Not a survey of options — a choice, its cost, and the condition under which you would reverse it.</li>
+    <li><b>Name the failure modes yourself</b> before they are asked. Stale index, tenant leakage, empty results under selective filters, cost blowup, injection.</li>
+    <li><b>State the evaluation plan.</b> What you measure per stage, what your noise floor is, what would tell you the design is wrong.</li>
+  </ol>
+
+  <!-- ── Design 1 ── -->
+  <h2 id="b1"><span class="n">07</span>Design 1 — document QA, 10M docs, 1000 QPS</h2>
+
+  <p><i>"Design a RAG system over 10 million documents serving 1,000 queries per second."</i></p>
+
+  <h3>Clarifications to ask</h3>
+  <ul>
+    <li>Average document length? <i>(assume ~4,000 tokens)</i></li>
+    <li>Read-mostly or high write churn? <i>(assume ~1% daily update)</i></li>
+    <li>Latency target — is p95 under 2s acceptable, given generation dominates?</li>
+    <li>Is 1,000 QPS <em>sustained</em> or peak? This changes the answer by an order of magnitude.</li>
+    <li>Does every query need generation, or are some navigational?</li>
+  </ul>
+
+  <h3>The arithmetic — and it reframes the whole problem</h3>
+  <div class="math">Chunks     10M docs × 4,000 tok ÷ 400 tok/chunk   = 100M chunks
+Vectors    100M × 1024 dim × 2 B (half precision) = 200 GB
+HNSW graph 100M × 32 links × 4 B × ~2 (bidir.)    ≈  25 GB
+                                            total ≈ 225 GB  → must shard
+
+Query load 1,000 QPS
+  embed    1,000 × ~1 ms GPU              → modest, batchable
+  ANN      1,000 × 20 ms  → ~20 cores of search across shards
+  rerank   1,000 × 50 docs = 50k pairs/s  → GPU fleet, the real retrieval cost
+  generate 1,000 QPS × ~2 s = ~2,000 concurrent generations</div>
+
+  <div class="box do">
+    <span class="lbl">The insight to state explicitly</span>
+    <p><b>Retrieval is the easy part of this system.</b> 225 GB across eight shards is unremarkable. The binding constraints are the reranker fleet and, overwhelmingly, generation.</p>
+    <p>Now the cost, which reframes the design entirely:</p>
+    <div class="math">1,000 QPS × 86,400 s   = 86.4M queries/day
+86.4M × ~4,000 input tokens = ~345B tokens/day
+at ~$0.10 / M tokens        ≈ $34,500/day ≈ $1M/month</div>
+    <p><b>At this volume the design is not a retrieval problem, it is a cost-avoidance problem.</b> The architecture must be organised around not calling the model: aggressive semantic caching, a cheap classifier routing navigational queries to plain search, extractive answers where they suffice, and a small model for the majority with escalation to a large one only on hard queries.</p>
+    <p>Arriving at that conclusion <i>from your own arithmetic</i> is the strongest possible thing to do in this round.</p>
+  </div>
+
+  <h3>Architecture</h3>
+  <ul>
+    <li><b>Sharding</b> — 8–16 shards by document id hash; scatter-gather with per-shard top-k, merged centrally. Random hashing keeps shards balanced; semantic sharding tempts but creates hotspots.</li>
+    <li><b>Replication</b> — 2–3× per shard for QPS and availability, since ANN search is CPU-bound and trivially parallel.</li>
+    <li><b>Index builds</b> — offline, versioned, atomic swap. At 100M vectors a rebuild is hours; never rebuild in place.</li>
+    <li><b>Incremental updates</b> — 1% daily = 1M chunks. Append to a small delta index searched alongside the main one, merged nightly. Standard, and it avoids a full rebuild per update.</li>
+    <li><b>Caching</b> — exact-query cache, then semantic cache on embedding proximity with a conservative threshold. Expect a substantial hit rate on real traffic, which directly attacks the $1M.</li>
+  </ul>
+
+  <h4>Failure modes to raise unprompted</h4>
+  <ul>
+    <li>Scatter-gather p95 is governed by the <b>slowest shard</b>, not the mean — a single degraded replica sets your tail latency.</li>
+    <li>Delta index grows through the day; recall drifts between merges unless you monitor it.</li>
+    <li>Semantic cache with a loose threshold returns confidently wrong cached answers. Tune it on labelled pairs, not intuition.</li>
+    <li>Reranker GPU saturation degrades quality invisibly if you silently fall back to retrieval order.</li>
+  </ul>
+
+  <!-- ── Design 2 ── -->
+  <h2 id="b2"><span class="n">08</span>Design 2 — agent memory, multi-tenant, mutable</h2>
+
+  <p><i>"Design a memory system for an AI assistant with a million users, where facts about each user change over time."</i></p>
+  <p>This is your home ground. Drive it toward the property that makes it different from Design 1: <b>the corpus mutates, and old versions must stop being retrievable.</b></p>
+
+  <h3>The arithmetic</h3>
+  <div class="math">1M users × ~1,000 memories        = 1B rows total
+but per-query scope is ONE user   → ~1,000 candidates
+
+1,000 candidates per tenant → exact scan is ~1 ms
+                            → an ANN index is unnecessary
+                              and costs recall (measured: 65% vs 90%)</div>
+
+  <div class="box do">
+    <span class="lbl">The move that wins this design</span>
+    <p>Total corpus size is 1 billion, but <b>the effective search space is one user's ~1,000 memories.</b> Partition by tenant and the ANN problem disappears — an exact scan within a partition is both faster and perfectly accurate.</p>
+    <p>Proposing "1B vectors, therefore a distributed vector database" is the trap, and most candidates walk into it. Recognising that multi-tenancy converts one enormous index into a million tiny ones is the senior answer — and you can attach a measurement: <i>"we measured our ANN index costing 25 points of recall to save 25 milliseconds. At per-tenant scale that trade is strictly negative."</i></p>
+  </div>
+
+  <h3>The part Design 1 does not have: state</h3>
+  <p>"I live in Boston" then "I moved to NYC". Both are indexed, both match "where do I live", and the older may rank higher for having more corroborating context. Chunk timestamps do not solve it — "most recent wins" breaks the moment someone mentions a past state in the present tense.</p>
+  <ol>
+    <li><b>Extract atomic facts</b> — subject, attribute, value — rather than storing raw text alone.</li>
+    <li><b>Detect contradiction on write</b>; mark the prior fact superseded rather than deleting it.</li>
+    <li><b>Filter to current state at query time</b>, so superseded facts cannot compete for top-k.</li>
+    <li><b>Keep bi-temporal validity</b> — when a fact was true, and when the system learned it — so "what was true as of March?" is answerable and auditable.</li>
+  </ol>
+
+  <div class="box warn">
+    <span class="lbl">The architectural consequence to state</span>
+    <p>If superseded facts must be excluded at query time, that exclusion has to be <b>atomic with the write that superseded them</b>. Split vectors into a separate store from state and you have created a window in which retrieval returns what the database already knows is false.</p>
+    <p>This is why the vectors belong in the transactional database — a design decision with a correctness argument rather than a performance one, which is exactly the kind of reasoning these rounds reward.</p>
+  </div>
+
+  <h4>Also raise</h4>
+  <ul>
+    <li><b>Tenant isolation as a query predicate</b>, never a post-filter. Post-filtering leaks existence and can return fewer than <code>k</code> results.</li>
+    <li><b>Right-to-deletion cascading</b> to vectors, derived facts, and caches — and tested, since ANN deletes are often tombstones.</li>
+    <li><b>Write path cost</b> — fact extraction per turn is an LLM call. Batch it, or use a deterministic extractor with LLM fallback.</li>
+    <li><b>Memory growth</b> — 1,000 memories per user is a design assumption, not a law. What happens at 100,000? Consolidation, decay, or tiering.</li>
+  </ul>
+
+  <!-- ── Design 3 ── -->
+  <h2 id="b3"><span class="n">09</span>Design 3 — multi-hop research assistant</h2>
+
+  <p><i>"Design a system that answers research questions over a scientific corpus, with citations, where answers may require combining several papers."</i></p>
+  <p>The research-leaning favourite, because single-shot retrieval genuinely cannot do it.</p>
+
+  <h3>Why the naive design fails</h3>
+  <p>"Which papers cite Smith et al. and also report a negative result on method X?" — no single chunk contains the answer. Embedding the whole question produces a vector that sits between two topics and near neither. This is a <b>structural</b> failure, not a ranking failure, and saying so is the point.</p>
+
+  <h3>Architecture</h3>
+  <ul>
+    <li><b>Decomposition</b> — split into sub-questions, retrieve per sub-question, then join. Works when sub-questions are independent.</li>
+    <li><b>Iterative retrieval</b> for genuinely sequential hops: retrieve, read, formulate the next query from what was found, retrieve again. Bound the loop — 3 hops maximum — and track a budget, or it runs away.</li>
+    <li><b>A structured layer for structured relations.</b> Citations are a <b>graph</b>, not a similarity problem. "Papers citing X" is a join, and answering it by embedding similarity is an architectural error. Combine a citation graph with vector search over content, and route each sub-question to the right one.</li>
+    <li><b>Metadata as first-class filters</b> — year, venue, authors, retraction status — pushed into the query rather than hoped for from embeddings.</li>
+    <li><b>Citation verification in code</b> — every claim must map to a chunk id that was actually sent to the model. This is verifiable deterministically and is non-negotiable in a research setting.</li>
+  </ul>
+
+  <div class="box do">
+    <span class="lbl">Where to take a strong position</span>
+    <p><b>Not everything should be a vector search.</b> Structured relations — citations, authorship, dates, retractions — belong in a structured store where they can be answered exactly. Vector search handles the unstructured semantic part. A router decides which of the two a sub-question needs.</p>
+    <p>Candidates who force every question through embeddings are demonstrating that the tool has replaced the analysis. Naming the boundary is what shows judgement.</p>
+  </div>
+
+  <h4>Evaluation, which they will ask about here specifically</h4>
+  <ul>
+    <li><b>Per-hop recall</b>, not just end-to-end. A 3-hop chain at 90% per hop is 73% overall — and the fix depends entirely on <i>which</i> hop is failing.</li>
+    <li><b>Citation precision</b> — of claims made, how many are supported by what was actually retrieved?</li>
+    <li><b>Abstention correctness</b> — for a research tool, confidently answering an unanswerable question is the worst possible failure, and should be weighted as such.</li>
+  </ul>
+
+  <!-- ══════════════════ PART C ══════════════════ -->
+  <h2 id="c0"><span class="n">10</span>Your stories — how to use them</h2>
+
+  <p>Seven narratives follow. Three rules for using them:</p>
+  <ul>
+    <li><b>Lead with the number, not the setup.</b> "Our ANN index was costing 25 points of recall to save 25 milliseconds" earns the next ninety seconds. A three-minute preamble does not.</li>
+    <li><b>Do not over-rehearse.</b> Interviewers detect recitation instantly, and it undermines exactly the credibility these stories are meant to build. Know the number, the mechanism, and the decision; let the words vary.</li>
+    <li><b>Volunteer the limitation.</b> Every one of these has a caveat — sample size, a single corpus, a confound. Saying it before you are asked converts a vulnerability into evidence of calibration, and it is the single highest-leverage habit in a research interview.</li>
+  </ul>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="c1"><span class="n">11</span>Seven STAR narratives</h2>
+
+  <div class="star">
+    <div class="sh"><b>1 · The index that was destroying recall</b>
+      <span>Best for: debugging depth · systems intuition · "tell me about a surprising result"</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>Retrieval recall was degrading as the memory store grew. At ~45,000 memories we were finding 13 of 20 planted needles — 65% — and the working assumption on the team was that the embedding model was too weak for the domain.</dd>
+        <dt>Task</dt>
+        <dd>Establish the actual cause before committing to an embedding migration, which would have meant re-embedding and re-indexing the entire corpus.</dd>
+        <dt>Action</dt>
+        <dd>I isolated the variables. First a model bake-off at 20k distractors: <code>mxbai-embed-large</code> found 19/20, <code>multilingual-e5-large</code> 16/20 — so the shipping model was already the better one. Then the decisive test: <b>drop the ANN index entirely and run an exact scan over the same stored vectors.</b> If the embeddings contained the answers, exact search would find them.</dd>
+        <dt>Result</dt>
+        <dd>Exact scan found 18 of 20 — <b>90% versus 65%</b> — at 157ms against 132ms. The index was discarding a quarter of retrievable memories to save 25 milliseconds. The embeddings had been fine the whole time, and <code>ef_search</code> could not rescue it: pgvector caps it at 1000 and we were already there. It killed the embedding migration outright.</dd>
+        <dt>Follow-through</dt>
+        <dd>My hypothesis was that the fix was a rebuild at higher <code>m</code>. <b>I tested that later and it was wrong.</b> At 50,000 rows on <code>m=32, ef_construction=200</code> the gap was <em>worse</em>, not better — 90% exact against 30–40% at the <code>ef_search</code> cap — and a REINDEX on the populated table changed nothing. So the honest current state is: I know the index is the cause, I know raising <code>ef_search</code> and rebuilding both fail to fix it, and I do not yet have a working ANN configuration. What I do have is a viable answer at our scale — dropping the index entirely restores 90% for about 26ms.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">Why does <code>ef_search</code> hit a ceiling?</p>
+        <p class="a">It is beam width at query time. If <code>m</code> and <code>ef_construction</code> produced a poorly-connected graph, the beam is searching a structure that lacks the edges to reach the right region — you cannot widen your way out of a missing link. Those two are baked in at build time.</p>
+        <p class="q">Why not just always use exact search?</p>
+        <p class="a">At 45k it is genuinely viable — 157ms is acceptable for our latency budget. It stops being viable when the corpus outgrows a linear scan, so the real answer is that the crossover point is a measurement, not a default. And in a multi-tenant design where each query scopes to one user's ~1,000 memories, exact is correct indefinitely.</p>
+        <p class="q">You rebuilt the index. Did it help?</p>
+        <p class="a">No — and that surprised me. At 50k on <code>m=32, ef_construction=200</code> the gap widened rather than closed, and REINDEX on the populated table did nothing. Worse for tuning purposes: rebuilding the same configuration twice moved recall by more than the entire <code>ef_search</code> sweep did, because HNSW assigns node layers randomly. So recall is a property of the individual build, not of the parameters — which means you cannot A/B <code>m</code> by comparing single builds, and I had been about to.</p>
+        <p class="q">What is the weakness in this result?</p>
+        <p class="a">Twenty needles is a small sample — each one is 5 points, so 65% versus 90% is five needles. I would not defend a 3-point gap from this set. A 25-point gap is well outside the range where sample size explains it, which is the only reason I trust the direction. And it is one corpus with one embedding model.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>2 · The null result I published anyway</b>
+      <span>Best for: scientific integrity · statistics · "a time you were wrong"</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>We shipped hybrid retrieval — dense plus lexical, fused with RRF — on the standard belief that hybrid beats pure dense. It was a headline feature of the system.</dd>
+        <dt>Task</dt>
+        <dd>Quantify the gain for a technical report, so the claim had a number behind it.</dd>
+        <dt>Action</dt>
+        <dd>I ran the shipped hybrid against a plain pgvector cosine baseline on the same needle set at three corpus sizes, measuring MRR.</dd>
+        <dt>Result</dt>
+        <dd>It tied at 3k (.916 vs .916), cosine edged us at 25k (.903 vs .900), hybrid edged cosine at 47k (.800 vs .750). Every gap was roughly one needle out of twenty — <b>inside our HNSW build noise.</b> We published "hybrid ≥ cosine, no clean win on this set" rather than the flattering 47k number. The deeper finding was about our evaluation, not our retriever: <b>a 20-item set cannot resolve a 3-point difference.</b> To detect 3 points at 75% baseline with 95% confidence and 80% power you need roughly 3,100 items per arm. We were two orders of magnitude short.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">Why keep hybrid if you could not prove it helps?</p>
+        <p class="a">Two reasons. It was never <i>worse</i>, and it has a mechanism argument the needle set does not test — exact-token matching on identifiers, error codes, and rare proper nouns, which our synthetic needles under-represent. So the honest position was "retained on mechanism, not on this measurement" — and I wrote that down rather than implying the measurement supported it.</p>
+        <p class="q">What would you have built instead, with hindsight?</p>
+        <p class="a">The evaluation set, first and properly powered — before the retriever. We built the system and then discovered our instrument could not measure it. That ordering is backwards and it is the mistake I would not repeat.</p>
+        <p class="q">Was there a cost to publishing the null?</p>
+        <p class="a">Yes — it removed a claim from the report. But the report also states that our read-side additions are within noise of the control and that the reproducible wins are the deterministic benches. Anyone auditing the numbers finds them consistent, which is what makes the remaining claims worth anything.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>3 · The measurement that inverted the roadmap</b>
+      <span>Best for: prioritisation · diagnosis before optimisation · impact</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>We were at ~76% on a 500-question long-term-memory benchmark, with a roadmap full of retrieval work — better embeddings, better fusion, graph expansion.</dd>
+        <dt>Task</dt>
+        <dd>Decide where the next quarter of effort should go.</dd>
+        <dt>Action</dt>
+        <dd>Rather than start on the roadmap, I classified all 118 failures by a single question: <b>was the answer-bearing session actually retrieved?</b> If it was, the failure cannot be retrieval's fault.</dd>
+        <dt>Result</dt>
+        <dd><b>Two</b> failures were retrieval-bound. <b>116</b> had the correct context and still answered wrong — recall was ~99%. The entire retrieval roadmap would have moved about two questions. Re-classifying by question shape showed the real residual: <b>58 of 118 were counting and aggregation</b> — "how many", "how long", "total" — concentrated in multi-session and knowledge-update. We dropped the retrieval work and moved to aggregation.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">Does that contradict your index finding, where retrieval <em>was</em> the problem?</p>
+        <p class="a">It looks contradictory and it is worth pulling apart, because it is my favourite thing about these two results. They measure different systems: the benchmark runs use an in-memory flat store over a small per-question haystack, so they never touch the HNSW path at all. The 65% figure is the production path at 45k memories. Both numbers are correct, and together they say something useful — <b>"is retrieval my bottleneck" has no permanent answer.</b> It is a measurement you re-take whenever the corpus shape changes.</p>
+        <p class="q">Why did nobody check this earlier?</p>
+        <p class="a">Because aggregate accuracy does not decompose, and retrieval work is more legible than reasoning work — it has obvious knobs. The check itself was a few hours of classification against data we already had. That ratio, cost to impact, is why I now run it first.</p>
+        <p class="q">Did fixing aggregation work?</p>
+        <p class="a">Not the way we first tried, and that is story four.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>4 · Four elegant ideas that all made it worse</b>
+      <span>Best for: intellectual honesty · knowing when to stop · negative results</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>Aggregation was our largest failure bucket. The model miscounted things that were present in its context — "three weddings" answered as "one".</dd>
+        <dt>Task</dt>
+        <dd>Stop the model doing arithmetic it was demonstrably bad at.</dd>
+        <dt>Action</dt>
+        <dd>Four mechanisms, built and measured independently: computing counts in code from extracted structure; a deterministic router that bypassed the reader entirely for counting questions; evidence distillation before answering; and temporal date arithmetic in code.</dd>
+        <dt>Result</dt>
+        <dd><b>All four were net-negative or within noise.</b> The common cause was the same each time and it is the transferable lesson: every mechanism assumed an upstream structured-extraction step was reliable enough to compute on. It wasn't — and a deterministic layer on top of unreliable extraction <b>amplifies</b> the errors rather than absorbing them. When the extraction is wrong, code turns a soft error into a confident one. We published all four as negative results.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">When <em>does</em> the deterministic-layer approach work?</p>
+        <p class="a">When the structured input is reliable by construction rather than by extraction. Our supersession and as-of-date benchmarks run at 100% precisely because they operate on facts already in the database with explicit validity intervals — no model in the loop. The lesson is not "avoid deterministic layers", it is "do not put one on top of a probabilistic extraction and expect it to fix the probability".</p>
+        <p class="q">How did you know when to stop?</p>
+        <p class="a">After the fourth, the pattern was clearly the shared assumption rather than four separate implementation problems. Continuing would have been testing the same hypothesis a fifth time with new packaging.</p>
+        <p class="q">Was that four wasted efforts?</p>
+        <p class="a">Three, honestly. The first was a legitimate hypothesis. By the third I should have noticed they shared a premise and tested <i>that</i> premise directly — measure extraction accuracy in isolation — instead of building another consumer of it. That is the process change I took away.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>5 · The flag that had never once done anything</b>
+      <span>Best for: instrumentation rigour · "a bug you are proud of finding"</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>Planning a cost/accuracy ablation — same pipeline at five context budgets — to find where accuracy breaks as we cut tokens.</dd>
+        <dt>Task</dt>
+        <dd>Before running roughly nine hours of compute, verify the instrumentation could actually measure what we were about to claim.</dd>
+        <dt>Action</dt>
+        <dd>I added three things: real tokenizer counts on the assembled prompt, per-row cost, and a metric I expected to be boring — <code>pct_rows_budget_bound</code>, the share of rows where the budget actually dropped a retrieved item. Then a 50-row verification run.</dd>
+        <dt>Result</dt>
+        <dd>Three findings, all from that one run. <b>The budget was bound on 0% of rows</b> — our flagship configuration ran with a 64,000-character cap while the retriever's actual output was p50 26,574, max 44,346. The flag had never engaged; the real ceiling was the reranker's keep count. <b>Cost was reported as $0</b> because the reader model was missing from the pricing table, so every historical run had claimed to be free. And the chars-per-token ratio everyone assumes to be 4.0 measured <b>4.70</b> on our data — every cost projection was off by nearly a fifth. Two of the five planned budget points would have measured nothing; I re-centred the ladder before spending the compute — and the re-centred ladder found a sharp elbow that the original one would have straddled without resolving.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">What made you add that metric?</p>
+        <p class="a">A prior about experiment design rather than a suspicion about that flag. If you are about to attribute accuracy differences to a knob, you need independent evidence the knob did something. Otherwise a no-op point and a real point look identical and you attribute noise to your intervention.</p>
+        <p class="q">Generalise it.</p>
+        <p class="a">For any configuration parameter, log whether it actually bound. Timeouts that never fire, caps that never clip, retries that never trigger — dead configuration is invisible and it silently makes your A/B tests meaningless.</p>
+        <p class="q">How did the pricing bug survive so long?</p>
+        <p class="a">Because the lookup returned 0.0 for unknown models instead of raising. Silence and free rendered identically. The fix is a one-line policy — an unpriced model warns rather than costing nothing — and it generalises to any default that is indistinguishable from a real value.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>6 · Presentation order was worth 25 points</b>
+      <span>Best for: cheap wins · understanding model behaviour · creativity</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>Event-ordering questions — "what did I do before X?" — were failing even though recall showed the right sessions were being retrieved.</dd>
+        <dt>Task</dt>
+        <dd>Explain the gap between correct retrieval and wrong answers on this category.</dd>
+        <dt>Action</dt>
+        <dd>I looked at the assembled prompt rather than the metrics. Retrieval returned the right turns and presented them in <b>relevance order</b> — so the model was reading a scrambled timeline and being asked to reason about sequence. I added a flag to keep the same top-k but present it in chronological order.</dd>
+        <dt>Result</dt>
+        <dd><b>~25 percentage points</b> on the affected category. The retrieved set was byte-identical; only the ordering changed. The generalisation is the part I actually use: <b>presentation order is a free variable that most systems never tune.</b> Relevance ordering is a default inherited from search, not a law — and models are demonstrably position-sensitive. We found the same shape elsewhere: reranking helped retrieval-bound categories and <i>hurt</i> preference questions, because it reordered away the turns the preference rubric needed, so we gated it off for that category.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">Why would ordering matter if all the information is present?</p>
+        <p class="a">Attention is position-sensitive, and there is published work on degraded recall for content in the middle of long contexts. But specifically for ordering questions, chronological presentation means the model can read sequence directly off the input instead of reconstructing it from timestamps scattered through a shuffled list. You are moving work out of the model and into the prompt assembly.</p>
+        <p class="q">How would you find more of these?</p>
+        <p class="a">Read assembled prompts for failing cases. Metrics tell you a category is failing; only the prompt tells you why. Nearly every cheap win we found came from looking at what the model actually received rather than at what the pipeline reported sending.</p>
+        <p class="q">Any risk in category-specific gating?</p>
+        <p class="a">Yes, and it is real: it depends on classifying the question type, so a misclassification applies the wrong treatment. It also multiplies configuration paths, which makes the system harder to reason about and evaluate. I would want mis-classification rate and accuracy on misclassified rows measured before expanding that pattern much further.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="star">
+    <div class="sh"><b>7 · The experiment that refuted my own design doc</b>
+      <span>Best for: research method · designing to data not intuition · "your most recent result"</span></div>
+    <div class="sb">
+      <dl>
+        <dt>Situation</dt>
+        <dd>We wanted to cut context cost without losing accuracy. I had written a plan proposing a query router: classify each question, give cheap categories a small context budget and expensive ones the full budget. The premise was that single-session questions — where the answer lives in one conversation — don't need wide context regardless of how accurate they currently are.</dd>
+        <dt>Task</dt>
+        <dd>Before building the router, establish the actual accuracy-versus-budget curve, broken out per category, so the budget classes were assigned from data rather than from that premise.</dd>
+        <dt>Action</dt>
+        <dd>Five budget points on a frozen, category-proportional 250-question subset, judged by an LLM judge. Only the context budget varied; everything else was held fixed. I logged the measured token count per row and — importantly — whether the budget had actually dropped a retrieved item on each row, so a budget that never engaged couldn't be mistaken for a real data point.</dd>
+        <dt>Result</dt>
+        <dd>Two findings, and the second one mattered more. <b>The aggregate elbow was sharp and the pre-registered target was missed:</b> 77.2% at the anchor, 75.6% one step down, then 72.0%, 64.8%, 53.6%. Only one point held within our 2-point bar, giving 1.6× token reduction against the ~3.5× the plan aimed for.</dd>
+        <dd style="margin-top:10px">Then the per-category table <b>refuted the routing premise the whole plan rested on.</b> The three single-session categories were supposed to form one cheap class. They diverged by 22 points of decline. <code>single-session-user</code> was genuinely robust — 94.3% down to <b>91.4% on a 94% token cut</b>. But <code>single-session-assistant</code>, the designated flagship of the cheap class, sitting at 100% accuracy, was the <b>second most budget-sensitive category in the suite</b> — a 25-point decline, monotone across all five points. Had I built the router to my own plan, I would have routed a 100%-accurate category into a small budget and lost about 11 points, then almost certainly blamed the classifier rather than the class assignment.</dd>
+      </dl>
+      <div class="probe">
+        <p class="q">Why did the "obviously cheap" category turn out to be fragile?</p>
+        <p class="a">Its natural context was already the smallest — about 3,000 tokens against ~5,200 for every other category. Being compact to begin with, each budget step removed a much larger fraction of what it had. That suggests the right routing signal isn't the category label at all; it's the ratio of the budget to that category's natural context size. That's the next thing I'd test.</p>
+        <p class="q">How confident are you in a per-category result at n=28?</p>
+        <p class="a">Not confident in any single step — one question is 3.6 points there, so the first step is literally one question. What I trust is that the decline is 25 points across the full range and <b>monotone across all five budgets</b>. Five points moving the same direction is a much stronger signal than any pairwise delta. I'd also flag the opposite case in the same table: knowledge-update came out non-monotone, higher at a tighter budget than at the anchor, which at n=39 is just noise — and I explicitly wrote in the findings that nothing should be built on it.</p>
+        <p class="q">You missed your target. What did you actually get out of it?</p>
+        <p class="a">A correct design instead of a plausible one, for about two and a half hours of compute and fifty cents. And it reset the strategy honestly: since budget cuts give 1.6× and routing adds maybe 1.4×, the compression story has to come from replacing raw conversation turns with extracted atomic facts — which was scoped as a refinement and is now the load-bearing phase. I'd rather know that before building the router than after.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ -->
+  <h2 id="c2"><span class="n">12</span>Questions to ask them</h2>
+
+  <p>In a research-leaning interview these are scored. Ask things that reveal whether the team measures.</p>
+  <ul>
+    <li><b>"How do you know when a retrieval change is a real improvement?"</b> — the single most revealing question you can ask. Listen for a noise floor and a sample size. If the answer is "we look at the eval score", you have learned a great deal.</li>
+    <li><b>"How large is your evaluation set, and how was it built?"</b></li>
+    <li><b>"What's the last thing you tried that didn't work?"</b> — a team that cannot answer either does not run experiments or does not talk about the ones that fail.</li>
+    <li><b>"Have you measured your ANN index's recall against exact search?"</b> — specific, unusual, and immediately signals depth.</li>
+    <li><b>"Are you retrieval-bound or reasoning-bound right now, and how do you know?"</b></li>
+    <li><b>"How do you handle documents that change or get superseded?"</b></li>
+    <li><b>"Who decides when a model or index gets replaced, and on what evidence?"</b></li>
+  </ul>
+
+  <div class="box do">
+    <span class="lbl">The one-sentence positioning</span>
+    <p>If you get a single sentence to say what you are about, something close to this is what your work actually supports:</p>
+    <p><i>"I build retrieval systems by measuring them — and most of what I know came from experiments that contradicted what I expected: the embedder that wasn't the bottleneck, the hybrid retrieval that produced a null, the budget flag that had never once bound."</i></p>
+    <p>It is specific, it is verifiable, and it is not a claim anyone can make without having done the work.</p>
+  </div>
+
+  <footer>
+    Interview preparation companion to the <a href="learn-rag.html">production RAG learning module</a>, from the <a href="https://github.com/Genkryptos/Continuum">Continuum</a> project.<br>
+    Measured claims come from Continuum's benchmark runs; literature references are pointers to read, not verified citations — check them before repeating them.
+  </footer>
+</div>
+</body>
+</html>

@@ -104,15 +104,45 @@ stronger reader moves it; the memory layer does not.
 
 ## 6. Positioning
 
-| system | philosophy | LongMemEval-S* |
-|---|---|---:|
-| Mem0 | auto-extract → vector+graph+KV | ~49% |
-| Zep | bi-temporal knowledge graph | ~63.8% |
-| **Continuum** | tiered + supersession + bi-temporal, honest measurement | **~74%** |
+Only reader-matched numbers are worth putting in a table. The figures below are
+all **LongMemEval with `gpt-oss-120b` as the reader** — the same reader we use,
+so the comparison is about the memory layer rather than about model choice.
 
-\*Numbers are not perfectly comparable across setups/readers; treat as
-directional. Continuum's edge is temporal/supersession correctness, at
-~5k tokens/query (comparable to Mem0's token efficiency).
+| system | philosophy | LongMemEval (gpt-oss-120b reader) |
+|---|---|---:|
+| Hindsight ([arXiv 2512.12818](https://arxiv.org/abs/2512.12818)) | four memory networks + read-time reflection | **~89%** |
+| **Continuum** | tiered + supersession + bi-temporal | **~74%** (73.6–75.6 across runs) |
+| Mem0-S (as reported by Hindsight) | auto-extract → vector+graph+KV | 67.6% |
+
+Read this table as: **we are ~6pp above Mem0-S and ~15pp below the current best**,
+at a matched reader. The 6pp edge is real but modest — §4 documents ±3–5pp
+run-to-run variance on this reader, so it is a lead of roughly one to two
+standard deviations, not a decisive one. The 15pp gap to Hindsight is the more
+important number: it is measured at the *same* reader, which is what makes it
+evidence that our remaining ceiling is architectural rather than model-bound
+(`findings/roadmap_v3.md` §2).
+
+**On the vendor numbers we previously cited.** Earlier revisions of this section
+carried "Mem0 ~49% / Zep ~63.8%". Those are vendor/blog figures measured **on
+GPT-4o**, they are uncited in this repo, and they are not comparable to a
+gpt-oss-120b result — putting them in one column with our number overstated the
+gap. They have been removed rather than re-caveated. `docs/positioning.md` keeps
+them for market context with the correct framing ("same arena", not "we win").
+
+**On BEAM.** We have BEAM results and they are *not* in the table above, because
+the comparison is currently indeterminate rather than favourable or unfavourable.
+Mem0's published BEAM figures (64.1 at 1M, 48.6 at 10M) are all-category
+aggregates produced with **gpt-5**; ours cover only contradiction +
+event_ordering on the ~128K split with **gpt-oss-120b**. Those mismatches push in
+opposite directions and do not cancel. Per `evals/beam/rubric_judge.py`: *the
+sign of the gap is unknown* — we claim neither a win nor a deficit until split,
+category subset, answerer and judge are matched. The defensible BEAM result is
+internal: `--chrono-sort` is worth **+25pp** (17.5% → 32.5% overall, n=80).
+
+**Token cost.** ~4,900 context tokens per query, measured rather than estimated —
+the Phase-1 budget ablation (`findings/budget_curve_2026-08.md`) puts the anchor
+config at **4,866 average context tokens**, and shows accuracy holding within
+1.6pp down to ~3,100.
 
 ## 7. Reproducibility
 
