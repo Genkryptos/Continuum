@@ -1,0 +1,53 @@
+{
+  "n_rows": 49989,
+  "k": 10,
+  "probes": {
+    "exact": {
+      "used_index": false,
+      "planner_would_seqscan": null,
+      "recall": 0.85,
+      "hits": 17,
+      "n": 20,
+      "p50_ms": 71.46629199996823,
+      "p95_ms": 714.3836250033928,
+      "mean_ms": 103.93072305014357,
+      "missed": [
+        "What is the safe window to bounce authentication nodes?",
+        "How are premium customer issues escalated?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    },
+    "hnsw_ef40": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.85,
+      "hits": 17,
+      "n": 20,
+      "p50_ms": 3.70558299619006,
+      "p95_ms": 7.991582999238744,
+      "mean_ms": 4.150870948797092,
+      "missed": [
+        "What is the safe window to bounce authentication nodes?",
+        "How are premium customer issues escalated?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    },
+    "hnsw_ef100": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.85,
+      "hits": 17,
+      "n": 20,
+      "p50_ms": 5.397083004936576,
+      "p95_ms": 9.18200000160141,
+      "mean_ms": 5.27167080072104,
+      "missed": [
+        "What is the safe window to bounce authentication nodes?",
+        "How are premium customer issues escalated?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    }
+  },
+  "index_recall_cost_pp": 0.0,
+  "finished_at": "2026-08-10T18:11:24.160634+00:00"
+}

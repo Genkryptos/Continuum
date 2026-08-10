@@ -1,0 +1,132 @@
+{
+  "n_rows": 50000,
+  "k": 10,
+  "probes": {
+    "exact": {
+      "used_index": false,
+      "planner_would_seqscan": null,
+      "recall": 0.9,
+      "hits": 18,
+      "n": 20,
+      "p50_ms": 68.49966700247023,
+      "p95_ms": 133.24029100112966,
+      "mean_ms": 71.65671659968211,
+      "missed": [
+        "What is the safe window to bounce authentication nodes?",
+        "How are premium customer issues escalated?"
+      ]
+    },
+    "hnsw_ef40": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.15,
+      "hits": 3,
+      "n": 20,
+      "p50_ms": 2.5220000025001355,
+      "p95_ms": 3.1203750004351605,
+      "mean_ms": 2.451239700349106,
+      "missed": [
+        "Where is invoice data kept, and does it leave Europe?",
+        "What is the safe window to bounce authentication nodes?",
+        "Who can access emergency database credentials?",
+        "At what corpus size does tenant search quality fall off?",
+        "How many delivery attempts before a callback is abandoned?",
+        "Which two batch jobs must never overlap?",
+        "Which percentile governs our published response time targets?",
+        "Why do toggles take so long to reach phones?",
+        "What explains intermittent caching test failures before a release?",
+        "How long do we keep logs now, and why did it change?",
+        "What is the rule for changing the orders schema safely?",
+        "How often is the recommender refreshed and how long does it take?",
+        "How are premium customer issues escalated?",
+        "What rate limit does the payments vendor enforce?",
+        "How stale is analytics data mid-day?",
+        "Why do picture dates go missing after upload?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    },
+    "hnsw_ef100": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.2,
+      "hits": 4,
+      "n": 20,
+      "p50_ms": 2.122583999152994,
+      "p95_ms": 2.7914999991480727,
+      "mean_ms": 2.1196103498368757,
+      "missed": [
+        "Where is invoice data kept, and does it leave Europe?",
+        "What is the safe window to bounce authentication nodes?",
+        "Who can access emergency database credentials?",
+        "At what corpus size does tenant search quality fall off?",
+        "How many delivery attempts before a callback is abandoned?",
+        "Which two batch jobs must never overlap?",
+        "Which percentile governs our published response time targets?",
+        "Why do toggles take so long to reach phones?",
+        "What explains intermittent caching test failures before a release?",
+        "How long do we keep logs now, and why did it change?",
+        "What is the rule for changing the orders schema safely?",
+        "How often is the recommender refreshed and how long does it take?",
+        "How are premium customer issues escalated?",
+        "What rate limit does the payments vendor enforce?",
+        "How stale is analytics data mid-day?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    },
+    "hnsw_ef400": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.25,
+      "hits": 5,
+      "n": 20,
+      "p50_ms": 2.686584000912262,
+      "p95_ms": 3.673082999739563,
+      "mean_ms": 2.7456750001874752,
+      "missed": [
+        "Where is invoice data kept, and does it leave Europe?",
+        "What is the safe window to bounce authentication nodes?",
+        "Who can access emergency database credentials?",
+        "At what corpus size does tenant search quality fall off?",
+        "How many delivery attempts before a callback is abandoned?",
+        "Which two batch jobs must never overlap?",
+        "Which percentile governs our published response time targets?",
+        "Why do toggles take so long to reach phones?",
+        "What explains intermittent caching test failures before a release?",
+        "How long do we keep logs now, and why did it change?",
+        "What is the rule for changing the orders schema safely?",
+        "How are premium customer issues escalated?",
+        "What rate limit does the payments vendor enforce?",
+        "How stale is analytics data mid-day?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    },
+    "hnsw_ef1000": {
+      "used_index": true,
+      "planner_would_seqscan": false,
+      "recall": 0.3,
+      "hits": 6,
+      "n": 20,
+      "p50_ms": 4.524416999629466,
+      "p95_ms": 5.713209000532515,
+      "mean_ms": 4.548950000753393,
+      "missed": [
+        "Where is invoice data kept, and does it leave Europe?",
+        "What is the safe window to bounce authentication nodes?",
+        "Who can access emergency database credentials?",
+        "How many delivery attempts before a callback is abandoned?",
+        "Which two batch jobs must never overlap?",
+        "Which percentile governs our published response time targets?",
+        "Why do toggles take so long to reach phones?",
+        "What explains intermittent caching test failures before a release?",
+        "How long do we keep logs now, and why did it change?",
+        "What is the rule for changing the orders schema safely?",
+        "How are premium customer issues escalated?",
+        "What rate limit does the payments vendor enforce?",
+        "How stale is analytics data mid-day?",
+        "Who signs off on letting a service call the internet?"
+      ]
+    }
+  },
+  "index_recall_cost_pp": 60.00000000000001,
+  "finished_at": "2026-08-09T00:13:08.652034+00:00"
+}
