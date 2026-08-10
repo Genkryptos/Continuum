@@ -1,0 +1,6 @@
+max_context_chars,avg_context_tokens,p95_context_tokens,accuracy,n_questions,pct_rows_budget_bound,measured_chars_per_token,total_cost_usd,judged
+32000,4865.8,6919.0,0.772,250,12.0,4.636,0.172,True
+16000,3114.0,3560.0,0.756,250,82.4,4.636,0.1238,True
+8000,1505.3,1777.0,0.72,250,98.0,4.627,0.0783,True
+4000,680.5,892.0,0.648,250,100.0,4.576,0.0531,True
+2000,300.2,440.0,0.536,250,100.0,4.551,0.041,True

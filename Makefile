@@ -20,6 +20,7 @@
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
         mcp-install mcp-smoke mcp-eval mcp-bench scale-test mcp-serve mcp-serve-http mcp-claude \
         backfill rerank-ab recall-at-scale soak repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
+        budget-sample budget-ablation budget-curve \
         bench-bitemporal bench-supersession-banking bench-bitemporal-banking bench-bitemporal-banking-500 bench-banking bench-head-to-head bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
@@ -206,6 +207,20 @@ clean: ## Remove caches, coverage artefacts, and build output
 	find . -type d -name htmlcov      -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -f .coverage coverage.xml
+
+# ── Cost/accuracy budget ablation (docs/LOW_BUDGET_PLAN.md) ─────────────────
+
+budget-sample: ## Build the frozen category-proportional 250-row ablation subset
+	@$(BENCH_PYTHON) scripts/build_budget_sample.py
+
+budget-ablation: ## Phase 1: the 5-point cost/accuracy curve (64k/32k/16k/8k/4k chars, n=250, ~3.5h, ~$1.15). Resumable.
+	@test -f samples/budget_strat_250.json || $(MAKE) budget-sample
+	@bash scripts/run_budget_ablation.sh
+
+budget-curve: ## Re-render the curve from whatever budget points already exist
+	@$(BENCH_PYTHON) findings/charts/budget_curve.py results/budget_*/ \
+		--csv findings/charts/budget_curve.csv \
+		--png findings/charts/budget_curve.png
 
 # ── Reproducibility — LongMemEval findings (Prompt 42) ───────────────────────
 
