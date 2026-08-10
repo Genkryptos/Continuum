@@ -214,10 +214,50 @@ async def embedding_coverage(ltm: PostgresLTM) -> tuple[int, int]:
 
 # ── phases ────────────────────────────────────────────────────────────────
 
-def build_corpus(n: int, seed: int) -> tuple[list[str], list[int]]:
+def _real_distractors(n: int, seed: int) -> list[str]:
+    """
+    Distractors drawn from the LongMemEval haystack — real conversational
+    turns rather than templates.
+
+    The synthetic generator produces one enormous tight cluster in embedding
+    space (distractor-to-distractor cosine 0.600 mean, 0.998 max), which is
+    close to the worst case for a proximity graph and almost certainly
+    overstates the ANN recall gap. Real turns are the control for that.
+    """
+    import json as _json
+
+    path = (Path(__file__).resolve().parents[1] / "evals" / "longmemeval"
+            / "LongMemEval" / "data" / "longmemeval_s_cleaned.json")
+    if not path.exists():
+        raise SystemExit(f"dataset not found for --corpus real: {path}")
+    rows = _json.loads(path.read_text())
+    seen: set[str] = set()
+    out: list[str] = []
+    for row in rows:
+        for session in row.get("haystack_sessions") or []:
+            for turn in session:
+                text = " ".join(str(turn.get("content", "")).split())
+                # Skip fragments and anything already stored: migration 007's
+                # unique-live-text constraint would collapse duplicates and the
+                # stored corpus would be smaller than the reported size.
+                if len(text) < 60 or text in seen:
+                    continue
+                seen.add(text)
+                out.append(text[:2000])
+                if len(out) >= n:
+                    return out
+    raise SystemExit(f"only {len(out)} distinct turns available, need {n}")
+
+
+def build_corpus(
+    n: int, seed: int, source: str = "synthetic",
+) -> tuple[list[str], list[int]]:
     """Distractors with the needles planted at deterministic positions."""
     rng = random.Random(seed)
-    texts = [_distractor(rng, i) for i in range(n)]
+    if source == "real":
+        texts = _real_distractors(n, seed)
+    else:
+        texts = [_distractor(rng, i) for i in range(n)]
     step = max(1, n // (len(NEEDLES) + 1))
     positions = []
     for i, needle in enumerate(NEEDLES):
@@ -227,11 +267,24 @@ def build_corpus(n: int, seed: int) -> tuple[list[str], list[int]]:
     return texts, positions
 
 
-def embed_all(texts: list[str], batch_size: int) -> tuple[list[list[float]], float]:
-    """Local BGE-M3 — the production embedder. Timed on its own."""
+#: BGE-M3 accepts 8192 tokens by default. Real conversational turns are long
+#: enough that a 64-wide batch at that limit exhausts MPS memory outright, and
+#: retrieval gains little from the tail — 512 is the usual retrieval setting.
+#: Held constant across corpora so the synthetic/real comparison stays fair.
+MAX_SEQ_LENGTH = 512
+
+
+def _load_encoder() -> Any:
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer("BAAI/bge-m3")
+    model.max_seq_length = MAX_SEQ_LENGTH
+    return model
+
+
+def embed_all(texts: list[str], batch_size: int) -> tuple[list[list[float]], float]:
+    """Local BGE-M3 — the production embedder. Timed on its own."""
+    model = _load_encoder()
     t0 = time.perf_counter()
     vecs = model.encode(
         texts, batch_size=batch_size, normalize_embeddings=True,
@@ -275,9 +328,7 @@ async def retrieve(
     ltm: PostgresLTM, k: int, repeats: int, batch_size: int,
 ) -> dict[str, Any]:
     """Paraphrase queries against the planted needles. Recall@k + latency."""
-    from sentence_transformers import SentenceTransformer
-
-    model = SentenceTransformer("BAAI/bge-m3")
+    model = _load_encoder()
     queries = [n.query for n in NEEDLES]
     qvecs = model.encode(queries, batch_size=batch_size, normalize_embeddings=True,
                          show_progress_bar=False, convert_to_numpy=True)
@@ -334,8 +385,9 @@ async def run(args: argparse.Namespace) -> int:
         if total:
             print(f"note     : database already holds {total} embedded rows")
 
-        print(f"\ncorpus   : building {args.n} records ({len(NEEDLES)} needles planted)")
-        texts, _ = build_corpus(args.n, args.seed)
+        print(f"\ncorpus   : building {args.n} {args.corpus} records "
+              f"({len(NEEDLES)} needles planted)")
+        texts, _ = build_corpus(args.n, args.seed, args.corpus)
 
         print("embed    : BGE-M3 (local, the production embedder)...")
         vecs, embed_s = embed_all(texts, args.batch_size)
@@ -373,9 +425,12 @@ async def run(args: argparse.Namespace) -> int:
 
         payload = {
             "n_records": args.n, "concurrency": args.concurrency, "seed": args.seed,
+            "corpus": args.corpus,
             "environment": env,
             "embed": {"seconds": embed_s, "texts_per_s": args.n / embed_s,
-                      "model": "BAAI/bge-m3", "dim": EMBED_DIM},
+                      "model": "BAAI/bge-m3", "dim": EMBED_DIM,
+                      "max_seq_length": MAX_SEQ_LENGTH,
+                      "batch_size": args.batch_size},
             "write": {"seconds": wphase.seconds, "writes_per_s": wphase.qps,
                       "latency_p50_ms": _pct(wlat, 0.50),
                       "latency_p95_ms": _pct(wlat, 0.95),
@@ -387,7 +442,8 @@ async def run(args: argparse.Namespace) -> int:
             "finished_at": datetime.now(UTC).isoformat(),
         }
         RESULTS.mkdir(parents=True, exist_ok=True)
-        out = RESULTS / f"scale_{args.n}_{datetime.now().strftime('%Y%m%dT%H%M%S')}.json"
+        out = RESULTS / (f"scale_{args.corpus}_{args.n}_"
+                         f"{datetime.now().strftime('%Y%m%dT%H%M%S')}.json")
         out.write_text(json.dumps(payload, indent=2, default=str))
         print(f"\nresults → {out}")
         return 0
@@ -400,10 +456,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dsn", default=DEFAULT_DSN)
     p.add_argument("--n", type=int, default=5000)
     p.add_argument("--concurrency", type=int, default=16)
-    p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--k", type=int, default=10)
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--corpus", choices=("synthetic", "real"), default="synthetic",
+        help=("'real' draws distractors from the LongMemEval haystack. The "
+              "synthetic generator forms one tight embedding cluster that is "
+              "adversarial for HNSW; 'real' is the control for that."))
     return asyncio.run(run(p.parse_args(argv)))
 
 
