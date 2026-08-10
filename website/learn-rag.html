@@ -154,6 +154,7 @@
       <a class="btn primary" href="https://github.com/Genkryptos/Continuum">Continuum on GitHub</a>
       <a class="btn" href="https://github.com/Genkryptos/Continuum/blob/main/docs/report.md">Technical report</a>
       <a class="btn" href="https://github.com/Genkryptos/Continuum/blob/main/docs/limitations.md">Honest limitations</a>
+      <a class="btn" href="interview-rag.html">Interview prep</a>
     </div>
   </header>
 
@@ -409,14 +410,15 @@ Employees with 12 months' continuous service are entitled to...</code></pre>
       <tr><td>With the HNSW index (what shipped)</td><td class="r">13/20 = <b>65%</b></td><td class="r">132 ms</td></tr>
       <tr><td>Index dropped — exact scan</td><td class="r">18/20 = <b>90%</b></td><td class="r">157 ms</td></tr>
     </table></div>
-    <p><b>The index was trading 25 points of recall for 25 milliseconds.</b> Raising <code>ef_search</code> could not rescue it — pgvector caps the setting at 1000, and it was already there. The index had been built at <code>m=16, ef_construction=64</code>; the fix is a rebuild at higher <code>m</code>, not a query-time knob.</p>
+    <p><b>On that store, the index was trading 25 points of recall for 25 milliseconds.</b> Raising <code>ef_search</code> could not rescue it — pgvector caps the setting at 1000, and it was already there.</p>
+    <p><b>Then the same experiment, run again on a different corpus, gave the opposite answer — and that is the actual lesson.</b> A later run at 50,000 rows measured HNSW at <em>15%</em> against exact search's 90%, an even wider gap. It looked like a devastating result. It was an artifact: the 50,000 distractors were generated near-duplicates, which collapse in embedding space into one dense cluster with the planted needles as isolated outliers — close to the worst possible case for a proximity graph. Re-run with distractors drawn from a real conversational dataset, changing nothing else, <b>the gap vanished entirely</b>: exact and HNSW both returned 85%, and HNSW was 20× faster.</p>
     <p class="note">Source: commit <code>0e31ae4</code>. Continuum's later migration rebuilds at <code>m=32, ef_construction=200</code>.</p>
   </div>
 
   <div class="box do">
     <span class="lbl">The experiment everyone should run and almost nobody does</span>
     <p><b>Drop your ANN index and measure recall with an exact scan on the same queries.</b> The difference is what your index is costing you. It takes an afternoon, needs no new infrastructure, and is the only way to learn this number — no vendor publishes it for your data, because it depends on your data.</p>
-    <p>If the gap is large and your corpus is small enough to scan, the correct production decision may genuinely be <b>no ANN index at all</b>.</p>
+    <p>If the gap is large and your corpus is small enough to scan, dropping the index may genuinely be the right call. But run it on <b>your own data</b> — the number is a property of how your embeddings are distributed, not of the index. The same code and the same parameters gave −75pp on synthetic text and 0pp on real text.</p>
   </div>
 
   <h3>Quantization and precision</h3>
@@ -497,6 +499,9 @@ WHERE ...  ORDER BY rrf DESC  LIMIT :k</code></pre>
     </table></div>
     <p>Every gap is roughly one needle out of twenty — <b>within HNSW build noise</b>. The honest claim is <i>hybrid ≥ cosine, no clean win on this set</i>, not "hybrid beats cosine".</p>
     <p>The lesson is not that hybrid is useless. It is that <b>a 20-needle evaluation set cannot resolve a 3-point difference</b>, and reporting the null instead of the flattering subset is what makes the rest of the numbers trustworthy.</p>
+    <p><b>A later experiment closed this properly, and it is worth following the reasoning.</b> The null above could not justify removing the lexical channel, because all 20 needles were <em>paraphrase</em> queries — precisely the regime where lexical matching is not supposed to help. Concluding "hybrid adds nothing" from them would have been the same error as testing a vector store with an exact-string needle. So the set was extended with 10 <em>identifier</em> needles, where the query shares a rare literal with the fact (<code>ERR_4021</code>, a version tag, a CVE id, a hyphenated surname) — the one regime with a mechanism argument for trigram matching.</p>
+    <p>Result on 50,000 rows of real text, same fixture, only the channel gated: <b>identifier recall 100% either way, paraphrase recall 85% either way, and the miss sets byte-identical</b> — the lexical channel returned zero documents the dense channel had not already found. It cost <b>2,276 ms per query</b>. Modern subword tokenisation evidently preserves rare literals well enough that the classic argument for lexical retrieval does not hold for this embedder.</p>
+    <p class="note">Note the shape of that argument, because it generalises: a null result was <em>not</em> treated as licence to remove the component. It was treated as a reason to go build the test that could actually settle it.</p>
     <p class="note">Source: commit <code>03715dd</code>, <code>scripts/retrieval_metrics.py</code>.</p>
   </div>
 
@@ -847,7 +852,7 @@ context = "\n".join(admitted)</code></pre>
     <tr><td><b>Post-retrieval access filtering</b></td><td>Not access control; leaks existence and influences ranking (§13).</td></tr>
     <tr><td><b>Ignoring superseded facts</b></td><td>Confidently returns information already known to be false (§9).</td></tr>
     <tr><td><b>Deterministic layers over unreliable extractions</b></td><td>Four measured attempts, all net-negative (§8).</td></tr>
-    <tr><td><b>Assuming an ANN index is free</b></td><td>Measured at 25 points of recall for 25 ms (§4).</td></tr>
+    <tr><td><b>Assuming an ANN index is free — or assuming it is costly</b></td><td>Measured at −25pp on one store and 0pp on another. It is a property of your embedding distribution; measure it (§4).</td></tr>
   </table></div>
 
   <!-- ═══════════════════════════════════════════════════════════════ -->

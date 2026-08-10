@@ -99,6 +99,34 @@ rows are ~733 bytes wide against 131 synthetic. Since recall is already saturate
 the store's `DEFAULT_HNSW_EF_SEARCH = 1000` buys nothing here and pushes the planner toward the
 expensive plan — **worth reconsidering as a default.**
 
+### 3.1b `DEFAULT_HNSW_EF_SEARCH = 1000` pushes the planner off the index
+
+The store sets `hnsw.ef_search = 1000` per query (`ltm.py:759`), chosen in commit `0e31ae4`
+when recall was degrading at scale. On this corpus that default is not merely unnecessary — it
+is **counterproductive**. Measured across the 30-needle set, real corpus, 49,989 rows:
+
+| `ef_search` | planner picks | recall@10 | p50 |
+|---:|---|---:|---:|
+| 40 | HNSW index | 87% | 14.9 ms |
+| **100** | **HNSW index** | **90%** | **5.5 ms** |
+| 200 | HNSW index | — | — |
+| 400 | **Seq Scan + Sort** | — | — |
+| **1000** *(the store default)* | **Seq Scan + Sort** | — | ~76 ms |
+
+pgvector's cost estimate for an HNSW scan grows with `ef_search`; past ~200 on these
+733-byte-wide rows it exceeds a full sort, so the planner abandons the index. **At the shipped
+default the dense channel is doing a sequential scan of the whole table** — which is why
+recall matched exact search exactly, and why it cost ~76 ms instead of 5.5 ms.
+
+`ef_search = 100` matches exact recall (90%, i.e. 27/30 — the same three the embedder cannot
+reach) at **14× lower latency than the default actually delivers**. `ef=40` loses exactly one
+needle.
+
+**Recommendation: lower `DEFAULT_HNSW_EF_SEARCH` to ~100.** Caveat: the crossover depends on
+row width, so a corpus of short rows may keep the index at higher `ef`. The check is one
+`EXPLAIN` — if the plan does not name `memory_nodes_embedding_hnsw_idx`, the setting is
+buying a sequential scan.
+
 ### 3.2 The lexical channel is the real cost
 
 | path | p50 |
@@ -219,8 +247,9 @@ mistake 4 — only running against real data could.
    identical recall, identical miss sets, 54× faster. `PostgresLTM` takes a
    `lexical_channel` flag; it still defaults to on pending a decision on the
    default and a check against other embedders.
-3. **Reconsider `DEFAULT_HNSW_EF_SEARCH = 1000`.** Recall saturates at `ef=40` here, and 1000
-   pushes the planner off the index entirely on wide rows.
+3. **Lower `DEFAULT_HNSW_EF_SEARCH` to ~100** (§3.1b). At 1000 the planner abandons the index
+   and sequentially scans; 100 matches exact recall at 5.5 ms against the ~76 ms the default
+   actually delivers.
 4. **For >85%, work on embeddings, not retrieval.** 3 of 20 needles are unreachable by exact
    dense search.
 5. **Re-measure before generalising.** This document's first version had the opposite headline
