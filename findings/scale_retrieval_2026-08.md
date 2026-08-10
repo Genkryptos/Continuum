@@ -77,8 +77,9 @@ Clean PostgreSQL **16.10**, migrations 001–007, HNSW `m=32, ef_construction=20
 
 ## 3. Retrieval
 
-20 needles retrieved by **paraphrase** (no shared rare tokens), 3 repeats, identical across
-repeats.
+30 needles — 20 retrieved by **paraphrase** (no shared rare tokens) and 10 by **identifier**
+(a rare literal shared with the fact) — 3 repeats, identical across repeats. §3.1 and §3.2
+predate the identifier needles and use the original 20; §3.2b uses all 30.
 
 ### 3.1 The ANN index is not the problem
 
@@ -115,10 +116,47 @@ on the needle set, the position is now: *the lexical channel has no measured rec
 costs 2.1 seconds per query.* That is the strongest case yet for gating it — by query type, by
 corpus size, or off by default with an opt-in for identifier-style queries.
 
+### 3.2b The lexical channel contributes nothing — tested in both regimes
+
+§3.2 established the sparse channel's cost. The obvious objection was that the
+20 original needles are all *paraphrase* style — semantic restatements sharing
+no rare vocabulary — which is precisely the regime where lexical matching
+should not help. Concluding "hybrid adds nothing" from them was not valid.
+
+So the needle set was extended with **10 identifier-style needles**, where the
+query shares a rare literal with the fact (`ERR_4021`, `SKU-77device-Q3B`,
+`v2.14.3-hotfix.2`, `CVE-2026-31337`, `clause 14.7(b)(iii)`, a hyphenated
+surname). That is the one regime with a mechanism argument for trigram matching.
+
+Same fixture, same queries, same 3 repeats — only `lexical_channel` gated:
+
+| | hybrid (lexical on) | dense-only | delta |
+|---|---:|---:|---:|
+| **identifier** recall@10 (n=10) | 100% | **100%** | 0pp |
+| **paraphrase** recall@10 (n=20) | 85% | **85%** | 0pp |
+| aggregate | 90% | 90% | 0pp |
+| p50 latency | 2,319 ms | **43 ms** | **54× faster** |
+
+**The miss sets are byte-identical.** Zero documents were retrieved by the
+lexical channel that the dense channel had not already found — in either
+regime. This is not a coincidental tie at the aggregate; it is the same three
+needles missed by both, and they are missed by exact dense search too (§3.3).
+
+The mechanism argument therefore fails empirically for this embedder: BGE-M3's
+subword tokenisation preserves rare literals well enough that identifier
+queries are already at 100% without any lexical help. **The channel costs
+2,276 ms per query and buys nothing measurable.**
+
+Recommendation: **flip `lexical_channel` to default off**, with the caveat in
+§4 about embedder dependence. The flag exists now
+(`PostgresLTM(lexical_channel=...)`) and still defaults to on, so nothing has
+changed for existing callers.
+
 ### 3.3 The 85% ceiling is the embedder
 
-Exact search tops out at 85%, so 3 of 20 needles are unreachable by dense retrieval at any `k`
-or `ef`. On the synthetic corpus the equivalent figure was 90%, and the measured cause there
+Exact search tops out at 85% on the paraphrase needles, so 3 of 20 are unreachable by dense
+retrieval at any `k` or `ef` — and unreachable by the lexical channel too (§3.2b). All 10
+identifier needles are found. On the synthetic corpus the equivalent figure was 90%, and the measured cause there
 was margin: 2 of 20 queries scored their true needle *below* the best distractor under exact
 cosine. Raising this requires better embeddings or chunk enrichment, not retrieval work.
 
@@ -136,6 +174,18 @@ cosine. Raising this requires better embeddings or chunk enrichment, not retriev
   sweep. Same observation as commit `f1e3703` ("HNSW recall is a distribution, not a number").
   On the real corpus recall is saturated, so build variance is invisible; it would reappear
   under a harder workload. **Never A/B `m` or `ef_construction` from single builds.**
+* **The identifier result depends on the embedder, and that is the main limit
+  on generalising it.** BGE-M3 is a strong multilingual model whose subword
+  tokenisation handles rare literals well. A smaller or more aggressively
+  pooled embedder may not, and the lexical channel could earn its place there.
+  Anyone adopting §3.2b's recommendation should re-run it on their own
+  embedder before flipping the default.
+* **n=10 identifier needles: one needle is 10pp.** 100% vs 100% is a tie with
+  no difference to detect, but a regression smaller than 10pp would be
+  invisible. The identical miss sets are the stronger evidence — they show the
+  channel returned nothing new, not merely that the totals matched.
+* Measured at `k=10`. A larger `k` gives the lexical channel more room to
+  contribute, and was not tested.
 * One corpus, one embedder, one machine.
 
 ---
@@ -165,8 +215,10 @@ mistake 4 — only running against real data could.
 
 1. **Keep the HNSW index.** 0pp recall cost, 25× faster. The previous "drop the index"
    recommendation is withdrawn.
-2. **Gate or drop the `pg_trgm` channel.** 2,112 ms per query for no measured recall benefit
-   (`03715dd`). Biggest single latency win available.
+2. **Gate the `pg_trgm` channel off.** Now tested in both regimes (§3.2b):
+   identical recall, identical miss sets, 54× faster. `PostgresLTM` takes a
+   `lexical_channel` flag; it still defaults to on pending a decision on the
+   default and a check against other embedders.
 3. **Reconsider `DEFAULT_HNSW_EF_SEARCH = 1000`.** Recall saturates at `ef=40` here, and 1000
    pushes the planner off the index entirely on wide rows.
 4. **For >85%, work on embeddings, not retrieval.** 3 of 20 needles are unreachable by exact

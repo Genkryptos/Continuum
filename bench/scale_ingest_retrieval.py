@@ -100,9 +100,17 @@ def _distractor(rng: random.Random, i: int) -> str:
 
 @dataclass(frozen=True)
 class Needle:
-    """A planted fact plus a paraphrased query that must retrieve it."""
+    """A planted fact plus the query that must retrieve it."""
     text: str
     query: str
+    #: "paraphrase" — semantic restatement, no shared rare tokens. The dense
+    #: channel has to earn these.
+    #: "identifier" — the query contains a rare literal (error code, SKU,
+    #: version, surname) that also appears in the fact. This is the ONLY
+    #: regime where the lexical channel has a mechanism argument, and the
+    #: original 20 needles contained none of them — which is why "hybrid adds
+    #: nothing" could not be concluded from them.
+    kind: str = "paraphrase"
 
 
 #: 20 needles. Each query is a *paraphrase* — it shares little or no rare
@@ -149,6 +157,32 @@ NEEDLES: list[Needle] = [
            "Why do picture dates go missing after upload?"),
     Needle("Only the platform team can approve new outbound network egress rules in production.",
            "Who signs off on letting a service call the internet?"),
+]
+
+#: Identifier-style needles. Rare literal tokens shared between fact and
+#: query — exactly what dense embeddings smooth away and trigram matches
+#: exactly. If the lexical channel earns its 2.1s anywhere, it is here.
+NEEDLES += [
+    Needle("Deployment ERR_4021 fires when the sidecar cannot reach the metrics collector within the startup probe window.",
+           "What causes ERR_4021?", "identifier"),
+    Needle("The affected batch is SKU-77device-Q3B, recalled after the humidity sensor tolerance was found out of spec.",
+           "Why was SKU-77device-Q3B recalled?", "identifier"),
+    Needle("Kafka consumer group orders-reconciler-v7 was pinned to broker set B after the rebalance storm.",
+           "Which broker set is orders-reconciler-v7 pinned to?", "identifier"),
+    Needle("Dr. Yevgenia Kowalczyk-Brandt signed off on the revised anticoagulation protocol in the cardiology unit.",
+           "Who signed off on the anticoagulation protocol? Kowalczyk-Brandt?", "identifier"),
+    Needle("Rolling back to image tag v2.14.3-hotfix.2 resolved the memory leak in the notification fanout.",
+           "What does image tag v2.14.3-hotfix.2 fix?", "identifier"),
+    Needle("Incident INC-0042317 was the root cause of the duplicate invoice run in the billing service.",
+           "What happened in INC-0042317?", "identifier"),
+    Needle("The compliance exception is tracked under policy clause 14.7(b)(iii) of the data residency agreement.",
+           "What does clause 14.7(b)(iii) cover?", "identifier"),
+    Needle("Feature flag enable_async_ledger_writes remains off in production pending the dual-write bake.",
+           "Is enable_async_ledger_writes on in production?", "identifier"),
+    Needle("CVE-2026-31337 affects the PDF rendering path and is mitigated by disabling embedded JavaScript.",
+           "How do we mitigate CVE-2026-31337?", "identifier"),
+    Needle("Customer account ACT-9931-KX was migrated to the dedicated tenant pool after the noisy-neighbour report.",
+           "Why was ACT-9931-KX moved to a dedicated pool?", "identifier"),
 ]
 
 
@@ -336,6 +370,12 @@ async def retrieve(
     per_run_recall: list[float] = []
     latencies: list[float] = []
     misses: list[str] = []
+    # Paraphrase and identifier needles exercise opposite channels. Averaging
+    # them hides exactly the effect this benchmark exists to measure, so keep
+    # per-kind tallies alongside the aggregate.
+    by_kind_hits: dict[str, int] = {}
+    by_kind_n: dict[str, int] = {}
+    by_kind_lat: dict[str, list[float]] = {}
 
     for run in range(repeats):
         hits = 0
@@ -344,18 +384,31 @@ async def retrieve(
             q.embedding = [float(x) for x in qvec]
             t0 = time.perf_counter()
             results = await ltm.search_hybrid(q, k=k)
-            latencies.append((time.perf_counter() - t0) * 1000)
+            dt = (time.perf_counter() - t0) * 1000
+            latencies.append(dt)
+            by_kind_lat.setdefault(needle.kind, []).append(dt)
             found = any(
                 (getattr(r.item, "content", "") or "").strip() == needle.text
                 for r in results
             )
             hits += found
+            by_kind_hits[needle.kind] = by_kind_hits.get(needle.kind, 0) + int(found)
+            by_kind_n[needle.kind] = by_kind_n.get(needle.kind, 0) + 1
             if not found and run == 0:
-                misses.append(needle.query)
+                misses.append(f"[{needle.kind}] {needle.query}")
         per_run_recall.append(hits / len(NEEDLES))
 
+    by_kind = {
+        kind: {
+            "recall": by_kind_hits[kind] / by_kind_n[kind],
+            "n_needles": by_kind_n[kind] // max(1, repeats),
+            "latency_p50_ms": _pct(by_kind_lat[kind], 0.50),
+        }
+        for kind in sorted(by_kind_n)
+    }
     return {
         "k": k, "repeats": repeats, "n_needles": len(NEEDLES),
+        "by_kind": by_kind,
         "recall_per_run": per_run_recall,
         "recall_mean": statistics.fmean(per_run_recall),
         "recall_min": min(per_run_recall), "recall_max": max(per_run_recall),
@@ -369,7 +422,8 @@ async def retrieve(
 # ── main ──────────────────────────────────────────────────────────────────
 
 async def run(args: argparse.Namespace) -> int:
-    ltm = PostgresLTM(dsn=args.dsn, pool_max_size=max(4, args.concurrency))
+    ltm = PostgresLTM(dsn=args.dsn, pool_max_size=max(4, args.concurrency),
+                      lexical_channel=not args.no_lexical)
     try:
         env = await capture_env(ltm)
         print(f"server   : {str(env['server_version'])[:38]}")
@@ -419,6 +473,9 @@ async def run(args: argparse.Namespace) -> int:
         print(f"           recall@{args.k} {r['recall_mean']:.1%} "
               f"(min {r['recall_min']:.0%} max {r['recall_max']:.0%})  "
               f"p50 {r['latency_p50_ms']:.1f}ms  p99 {r['latency_p99_ms']:.1f}ms")
+        for kind, cell in r["by_kind"].items():
+            print(f"           {kind:<11} recall {cell['recall']:.0%} "
+                  f"(n={cell['n_needles']})  p50 {cell['latency_p50_ms']:.0f}ms")
         if r["misses_first_run"]:
             print(f"           missed: {len(r['misses_first_run'])} — "
                   f"e.g. {r['misses_first_run'][0][:60]!r}")
@@ -426,6 +483,7 @@ async def run(args: argparse.Namespace) -> int:
         payload = {
             "n_records": args.n, "concurrency": args.concurrency, "seed": args.seed,
             "corpus": args.corpus,
+            "lexical_channel": not args.no_lexical,
             "environment": env,
             "embed": {"seconds": embed_s, "texts_per_s": args.n / embed_s,
                       "model": "BAAI/bge-m3", "dim": EMBED_DIM,
@@ -458,6 +516,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--concurrency", type=int, default=16)
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--k", type=int, default=10)
+    p.add_argument(
+        "--no-lexical", action="store_true",
+        help="Disable the pg_trgm sparse channel (dense-only retrieval).")
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument(

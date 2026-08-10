@@ -1,0 +1,73 @@
+{
+  "n_records": 50000,
+  "concurrency": 16,
+  "seed": 0,
+  "corpus": "real",
+  "lexical_channel": true,
+  "environment": {
+    "server_version": "PostgreSQL 16.10 (Homebrew) on aarch64-apple-darwin24.4.0, compiled by Apple clang version 17.0.0 (clang-1700.0.13.3), 64-bit",
+    "pgvector_version": "0.8.0",
+    "migrations": "001,002,003,004,005,006,007",
+    "hnsw_index": "CREATE INDEX memory_nodes_embedding_hnsw_idx ON public.memory_nodes USING hnsw (embedding halfvec_cosine_ops) WITH (m='32', ef_construction='200')",
+    "hnsw_ef_search_server_default": "40",
+    "hnsw_ef_search_used_by_store": 1000
+  },
+  "embed": {
+    "seconds": 1702.1021503749944,
+    "texts_per_s": 29.375440239579262,
+    "model": "BAAI/bge-m3",
+    "dim": 1024,
+    "max_seq_length": 512,
+    "batch_size": 16
+  },
+  "write": {
+    "seconds": 114.10672591699404,
+    "writes_per_s": 438.1862646411577,
+    "latency_p50_ms": 17.975832997763064,
+    "latency_p95_ms": 94.79837500111898,
+    "latency_p99_ms": 122.18037500133505
+  },
+  "end_to_end": {
+    "seconds": 1816.2088762919884,
+    "records_per_s": 27.529873161990647,
+    "embed_share_pct": 93.71731261715024
+  },
+  "embedding_coverage": {
+    "with_vector": 49989,
+    "total": 49989
+  },
+  "retrieval": {
+    "k": 10,
+    "repeats": 3,
+    "n_needles": 30,
+    "by_kind": {
+      "identifier": {
+        "recall": 1.0,
+        "n_needles": 10,
+        "latency_p50_ms": 2286.8376249971334
+      },
+      "paraphrase": {
+        "recall": 0.85,
+        "n_needles": 20,
+        "latency_p50_ms": 2343.825417003245
+      }
+    },
+    "recall_per_run": [
+      0.9,
+      0.9,
+      0.9
+    ],
+    "recall_mean": 0.9,
+    "recall_min": 0.9,
+    "recall_max": 0.9,
+    "latency_p50_ms": 2318.9694589964347,
+    "latency_p95_ms": 2467.6120829972206,
+    "latency_p99_ms": 2558.8079169974662,
+    "misses_first_run": [
+      "[paraphrase] What is the safe window to bounce authentication nodes?",
+      "[paraphrase] How are premium customer issues escalated?",
+      "[paraphrase] Who signs off on letting a service call the internet?"
+    ]
+  },
+  "finished_at": "2026-08-10T18:57:33.208728+00:00"
+}
