@@ -128,6 +128,21 @@ class RowResult:
     post_opt_stm_tokens: int = 0
     post_opt_mtm_tokens: int = 0
     post_opt_ltm_tokens: int = 0
+    # Context-budget accounting — the x-axis of the cost/accuracy ablation
+    # (docs/LOW_BUDGET_PLAN.md). Distinct from the ``pre_opt_*`` fields
+    # above, which come from the optimizer chain and stay 0 in direct mode.
+    # ``context_tokens`` is a tokenizer count of the assembled context;
+    # ``prompt_tokens_total`` is what the provider actually billed for the
+    # whole row (context + instructions + any extra calls).
+    context_chars: int = 0
+    context_tokens: int = 0
+    items_offered: int = 0
+    items_admitted: int = 0
+    items_dropped: int = 0
+    budget_bound_by: str = ""
+    prompt_tokens_total: int = 0
+    completion_tokens_total: int = 0
+
     retrieved_count: int = 0
     retrieval_ms: float = 0.0
     optimizer_ms: float = 0.0
@@ -236,6 +251,59 @@ class BaselineResults:
         vals = [r.optimizer_ms for r in self.rows if r.optimizer_ms]
         return statistics.fmean(vals) if vals else 0.0
 
+    # ── Context-budget metrics (docs/LOW_BUDGET_PLAN.md) ──────────────────
+    # These are the ablation's x-axis. Unlike ``avg_context_tokens_pre_opt``
+    # they are populated in direct mode, which is the only mode the headline
+    # runs use.
+
+    @property
+    def avg_context_tokens(self) -> float:
+        vals = [r.context_tokens for r in self.rows if r.context_tokens]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def context_tokens_p50(self) -> float:
+        vals = [float(r.context_tokens) for r in self.rows if r.context_tokens]
+        return _percentile(vals, 0.50) if vals else 0.0
+
+    @property
+    def context_tokens_p95(self) -> float:
+        vals = [float(r.context_tokens) for r in self.rows if r.context_tokens]
+        return _percentile(vals, 0.95) if vals else 0.0
+
+    @property
+    def avg_context_chars(self) -> float:
+        vals = [r.context_chars for r in self.rows if r.context_chars]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def measured_chars_per_token(self) -> float:
+        """Run-wide ratio. Reported so nobody has to assume 4.0 again."""
+        chars = sum(r.context_chars for r in self.rows)
+        toks = sum(r.context_tokens for r in self.rows)
+        return round(chars / toks, 3) if toks else 0.0
+
+    @property
+    def avg_prompt_tokens_total(self) -> float:
+        """Billed input tokens per row — context plus prompt scaffolding."""
+        vals = [r.prompt_tokens_total for r in self.rows if r.prompt_tokens_total]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def pct_rows_budget_bound(self) -> float:
+        """
+        Share of rows where the budget actually dropped a retrieved item.
+
+        0% means the budget never bound and the run is not a real point on
+        the ablation curve — the retriever simply never offered enough to
+        fill it. Check this before reading any accuracy delta as a budget
+        effect.
+        """
+        if not self.rows:
+            return 0.0
+        bound = sum(1 for r in self.rows if r.items_dropped > 0)
+        return 100.0 * bound / len(self.rows)
+
     @property
     def strategy_savings_total(self) -> dict[str, int]:
         """Sum of token deltas attributed to each strategy across all rows."""
@@ -262,10 +330,21 @@ class BaselineResults:
                     if sid in r.retrieved_session_ids
                 )
                 recall_vals.append(hit / len(r.expected_session_ids))
+            # Per-category context cost. This is the router's design input:
+            # the aggregate curve says where accuracy breaks, but only the
+            # per-category split says which questions are paying for it.
+            ctx_vals = [r.context_tokens for r in rows if r.context_tokens]
             out[question_type] = {
                 "n_questions": len(rows),
                 "accuracy": correct / len(rows) if rows else 0.0,
                 "recall": statistics.fmean(recall_vals) if recall_vals else 0.0,
+                "avg_context_tokens": (
+                    statistics.fmean(ctx_vals) if ctx_vals else 0.0
+                ),
+                "pct_budget_bound": (
+                    100.0 * sum(1 for r in rows if r.items_dropped > 0) / len(rows)
+                    if rows else 0.0
+                ),
             }
         return out
 
@@ -300,6 +379,15 @@ class BaselineResults:
                 ),
                 "avg_optimizer_ms": self.avg_optimizer_ms,
                 "strategy_savings_total": self.strategy_savings_total,
+                # Context budget — the ablation's x-axis. Populated in
+                # direct mode (the optimizer fields above are not).
+                "avg_context_tokens": self.avg_context_tokens,
+                "context_tokens_p50": self.context_tokens_p50,
+                "context_tokens_p95": self.context_tokens_p95,
+                "avg_context_chars": self.avg_context_chars,
+                "measured_chars_per_token": self.measured_chars_per_token,
+                "avg_prompt_tokens_total": self.avg_prompt_tokens_total,
+                "pct_rows_budget_bound": self.pct_rows_budget_bound,
                 "by_question_type": self.by_question_type,
             },
             "rows": [dataclasses.asdict(r) for r in self.rows],
@@ -678,6 +766,14 @@ async def _run_one(
         post_opt_stm_tokens=int(opt.get("post_stm", 0)),
         post_opt_mtm_tokens=int(opt.get("post_mtm", 0)),
         post_opt_ltm_tokens=int(opt.get("post_ltm", 0)),
+        context_chars=int(telem.get("context_chars", 0)),
+        context_tokens=int(telem.get("context_tokens", 0)),
+        items_offered=int(telem.get("items_offered", 0)),
+        items_admitted=int(telem.get("items_admitted", 0)),
+        items_dropped=int(telem.get("items_dropped", 0)),
+        budget_bound_by=str(telem.get("budget_bound_by", "") or ""),
+        prompt_tokens_total=int(telem.get("prompt_tokens_total", 0)),
+        completion_tokens_total=int(telem.get("completion_tokens_total", 0)),
         retrieved_count=retrieved_count_final,
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),

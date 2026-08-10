@@ -163,12 +163,14 @@ from evals.longmemeval.session_narrowing import (
     NarrowResult,
     narrow_to_top_session,
 )
+from evals.longmemeval.budget import BudgetStats, admit_lines, tokens_measured
 from evals.longmemeval.judge import LLMJudgeScorer
 from evals.longmemeval.question_type import QuestionType, classify
 from evals.longmemeval.telemetry import (
     current_counter,
     end_row_telemetry,
     start_row_telemetry,
+    unpriced_models,
 )
 
 log = logging.getLogger(__name__)
@@ -3199,6 +3201,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         answer_max_tokens: int = 128,
         top_k: int = 12,
         max_context_chars: int = 32000,
+        max_context_tokens: int = 0,
         reranker: CrossEncoderReranker | None = None,
         rerank_to: int = 0,
         preference_conditioning: bool = False,
@@ -3252,6 +3255,11 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._synthesis_fn = synthesis_fn
         self._synthesis_facts: list[Any] = []  # DerivedFacts from ingest-time aggregation
         self._max_context_chars = max_context_chars
+        # Token-native budget (0 = unbounded, chars alone govern). The chars
+        # knob is what every historical run used, so it stays the default axis;
+        # this one lets the ablation state budgets in the unit the provider
+        # actually bills in. When both are set, whichever binds first wins.
+        self._max_context_tokens = max_context_tokens
         # WS-7: when on, preference-type questions get a prompt that tells the
         # model to identify and APPLY a stated user preference from the
         # retrieved turns (recall is ~93%; the gap is application). Feature-
@@ -3288,6 +3296,9 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._reranker = reranker
         self._rerank_to = rerank_to
         self.last_telemetry: dict[str, Any] = {}
+        #: Set by the context assembler on every answered row; consumed by
+        #: answer_question to publish the budget axis of the ablation.
+        self.last_budget_stats: BudgetStats | None = None
 
     async def process_conversation(self, messages: Iterable[dict[str, Any]]) -> None:
         """Normal ingest, then (v3) build per-entity aggregate counts."""
@@ -3336,6 +3347,32 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         )
 
     async def answer_question(self, question: str) -> str:
+        """
+        Public entry point — wraps the direct pipeline in per-row telemetry.
+
+        The direct reasoner used to hand-build ``last_telemetry`` and never
+        open a :class:`TelemetryCounter`, so real provider token counts and
+        cost were dropped on the floor for the one reasoner every headline
+        run uses (only the decomposed path wrapped the counter). That is why
+        `metrics.avg_context_tokens_pre_opt` reads 0.0 in every direct run.
+        """
+        start_row_telemetry()
+        self.last_budget_stats = None
+        try:
+            return await self._answer_question_direct(question)
+        finally:
+            counter = end_row_telemetry()
+            merged: dict[str, Any] = dict(self.last_telemetry or {})
+            if counter is not None:
+                # Counter fields first, then the hand-built ones — the
+                # pipeline's own flags (answer_mode, prompt branches) are
+                # authoritative for keys both sides set.
+                merged = {**counter.snapshot(), **merged}
+            if self.last_budget_stats is not None:
+                merged.update(self.last_budget_stats.as_dict())
+            self.last_telemetry = merged
+
+    async def _answer_question_direct(self, question: str) -> str:
         retriever = getattr(self.session, "retriever", None)
         ctx: ContextBundle | None = None
         if retriever is not None:
@@ -3464,7 +3501,17 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 lines.append(f"[CURRENT FACT] {content}")
             else:
                 lines.append(f"[{role}] {content}" if role else content)
-        context = "\n".join(lines)[: self._max_context_chars]
+        # Budget enforcement: admit WHOLE lines under both the char and the
+        # token cap. The previous `"\n".join(lines)[:max_chars]` was a byte
+        # slice that cut the last turn mid-sentence — harmless at 64k, but it
+        # would corrupt the tail item at the low budgets the ablation walks
+        # down to, and score as "budget too small" for the wrong reason.
+        context, budget_stats = admit_lines(
+            lines,
+            max_chars=self._max_context_chars,
+            max_tokens=self._max_context_tokens,
+        )
+        self.last_budget_stats = budget_stats
         # v3 synthesis: on counting questions, inject ONLY the relevant
         # code-computed aggregate(s) (v3.1: relevance-filtered — v3.0 dumped all
         # ~40 and buried the answer), so the reader reads the count/total.
@@ -4992,6 +5039,7 @@ def make_adapter_factory(
     iterative_max_rounds: int = 2,
     direct_answer: bool = False,
     direct_max_context_chars: int = 32000,
+    direct_max_context_tokens: int = 0,
     preference_conditioning: bool = False,
     temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
     aggregation_v2: bool = False,
@@ -5139,6 +5187,7 @@ def make_adapter_factory(
             return _DirectAnswerAdapter(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
                 top_k=top_k, max_context_chars=direct_max_context_chars,
+                max_context_tokens=direct_max_context_tokens,
                 reranker=reranker,  # WS-4: precision pass in the winning path
                 rerank_to=rerank_to,  # keep best N after rerank (not top_k)
                 preference_conditioning=preference_conditioning,  # WS-7
@@ -5669,6 +5718,7 @@ async def main_async(args: argparse.Namespace) -> int:
         iterative_max_rounds=args.max_rounds,
         direct_answer=(args.reasoner == "direct"),
         direct_max_context_chars=args.max_context_chars,
+        direct_max_context_tokens=args.max_answer_prompt_tokens,
         preference_conditioning=args.pref_conditioning,
         temporal_conditioning=args.temporal_conditioning,
         aggregation_v2=args.aggregation_v2,
@@ -5789,8 +5839,100 @@ async def main_async(args: argparse.Namespace) -> int:
         target.write_text(json.dumps(full.to_dict(), indent=2, default=str))
         log.info("optimizer metrics → %s", target)
         _print_optimizer_summary(full)
+    if args.budget_report:
+        _write_budget_report(full, out_dir, args)
     await llm.aclose()
     return 0
+
+
+def _write_budget_report(results: Any, out_dir: Path, args: Any) -> None:
+    """
+    Dump the cost/accuracy ablation's x-axis (docs/LOW_BUDGET_PLAN.md).
+
+    One row per question plus a run-level summary, so a budget point can be
+    plotted without re-parsing the full baseline JSON. Also prints the two
+    sanity checks that decide whether the run is a usable ablation point:
+    whether the budget ever bound, and whether the reader was priced.
+    """
+    payload = results.to_dict()
+    m = payload["metrics"]
+    rows = [
+        {
+            "question_id": r["question_id"],
+            "question_type": r["question_type"],
+            "correct": r["correct"],
+            "context_chars": r["context_chars"],
+            "context_tokens": r["context_tokens"],
+            "items_offered": r["items_offered"],
+            "items_admitted": r["items_admitted"],
+            "items_dropped": r["items_dropped"],
+            "budget_bound_by": r["budget_bound_by"],
+            "prompt_tokens_total": r["prompt_tokens_total"],
+            "completion_tokens_total": r["completion_tokens_total"],
+            "cost_usd": r["cost_usd"],
+        }
+        for r in payload["rows"]
+    ]
+    unpriced = unpriced_models()
+    report = {
+        "config": {
+            "model": args.model,
+            "provider": args.provider,
+            "reasoner": args.reasoner,
+            "max_context_chars": args.max_context_chars,
+            "max_answer_prompt_tokens": args.max_answer_prompt_tokens,
+            "top_k": args.top_k,
+            "rerank_to": args.rerank_to if args.rerank else None,
+            "session_top_k": args.session_top_k,
+            "turns_per_session": args.turns_per_session,
+        },
+        "summary": {
+            "n_questions": m["n_questions"],
+            "accuracy": m["accuracy"],
+            "avg_context_tokens": m["avg_context_tokens"],
+            "context_tokens_p50": m["context_tokens_p50"],
+            "context_tokens_p95": m["context_tokens_p95"],
+            "avg_context_chars": m["avg_context_chars"],
+            "measured_chars_per_token": m["measured_chars_per_token"],
+            "avg_prompt_tokens_total": m["avg_prompt_tokens_total"],
+            "pct_rows_budget_bound": m["pct_rows_budget_bound"],
+            "total_cost_usd": m["total_cost_usd"],
+            "tokens_measured": tokens_measured(),
+            "unpriced_models": unpriced,
+        },
+        "by_question_type": m["by_question_type"],
+        "rows": rows,
+    }
+    target = out_dir / "budget_report.json"
+    target.write_text(json.dumps(report, indent=2, default=str))
+    log.info("budget report → %s", target)
+
+    s = report["summary"]
+    log.info(
+        "budget: avg %.0f ctx tok (p50 %.0f / p95 %.0f) | %.1f chars/tok | "
+        "%.0f%% of rows budget-bound | $%.4f",
+        s["avg_context_tokens"], s["context_tokens_p50"],
+        s["context_tokens_p95"], s["measured_chars_per_token"],
+        s["pct_rows_budget_bound"], s["total_cost_usd"],
+    )
+    if not s["tokens_measured"]:
+        log.warning(
+            "token counts are chars/3.9 ESTIMATES — tiktoken is not installed. "
+            "Install it before treating this run as an ablation point.",
+        )
+    if unpriced:
+        log.warning(
+            "no pricing entry for %s — cost is understated. Add it to "
+            "_DEFAULT_PRICING in evals/longmemeval/telemetry.py.",
+            ", ".join(unpriced),
+        )
+    if s["pct_rows_budget_bound"] < 1.0:
+        log.warning(
+            "the budget never bound on any row: the retriever offered less "
+            "than %d chars of context, so this is NOT a distinct point on "
+            "the ablation curve. Raise --top-k/--rerank-to or lower the budget.",
+            args.max_context_chars,
+        )
 
 
 def _print_optimizer_summary(results: Any) -> None:
@@ -6085,11 +6227,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Direct mode (--reasoner direct): cap on characters of "
             "retrieved conversation handed to the answerer (default "
-            "32000 ≈ 8k tokens). Multi-session aggregation needs many "
-            "sessions in context — raise to 48000-96000 on large-window "
-            "models. Too low silently drops answer-bearing turns even "
-            "when the session was retrieved (recall stays 1.0 but the "
-            "model says 'I don't have that information')."
+            "32000 ≈ 8.2k tokens at the measured 3.9 chars/token). "
+            "Multi-session aggregation needs many sessions in context — "
+            "raise to 48000-96000 on large-window models. Too low "
+            "silently drops answer-bearing turns even when the session "
+            "was retrieved (recall stays 1.0 but the model says 'I "
+            "don't have that information'). Enforced by admitting WHOLE "
+            "turns, so the last turn is never cut mid-sentence."
         ),
     )
     # ── Batching (Groq free-tier friendly) ─────────────────────────────────
@@ -6316,6 +6460,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Token ceiling for long-context mode. If the haystack "
             "exceeds this, retrieval falls back to top-K. Default "
             "100000 (fits a 128K-context model with response headroom)."
+        ),
+    )
+    p.add_argument(
+        "--max-answer-prompt-tokens", type=int, default=0,
+        help=(
+            "Direct mode: token-native context budget (0 = off, chars "
+            "alone govern). Counted with tiktoken o200k_base on the "
+            "assembled context. When both this and --max-context-chars "
+            "are set, whichever binds first wins. Use this for budget "
+            "ablations you want stated in the unit the provider bills."
+        ),
+    )
+    p.add_argument(
+        "--budget-report", action="store_true",
+        help=(
+            "Write budget_report.json to the output dir: per-row "
+            "question_type, context chars/tokens, items admitted vs "
+            "dropped, prompt/completion tokens and cost. This is the "
+            "x-axis for the cost-accuracy ablation (docs/LOW_BUDGET_PLAN.md)."
         ),
     )
     p.add_argument("--output", type=Path, default=Path("results"))

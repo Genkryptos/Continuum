@@ -35,10 +35,28 @@ import contextvars
 from dataclasses import dataclass, field
 from typing import Any
 
-# ─── gpt-4o-mini pricing (USD per token, as of 2026-05) ────────────────────
+# ─── Pricing (USD per token) ───────────────────────────────────────────────
+# Keys are bare model names; OpenRouter-style "vendor/model" ids are
+# normalised by _pricing_for before lookup.
+#
+# The reader models below carry the LongMemEval sweeps, and their absence
+# from this table is why every gpt-oss-120b run in results/ reports
+# cost ~= $0 (_cost_for returns 0.0 for unknown models). The cost-accuracy
+# work in docs/LOW_BUDGET_PLAN.md is a cost claim, so the reader has to be
+# priced or the headline has no source.
+#
+# RE-CHECK THESE before quoting a dollar figure in the paper: OpenRouter
+# rates move, and the two open-weight entries are the ones most likely to
+# have drifted. `make repro-budget` prints the table it used.
 _DEFAULT_PRICING = {
-    "gpt-4o-mini":     {"in": 0.15 / 1_000_000, "out": 0.60 / 1_000_000},
-    "gpt-4o":          {"in": 2.50 / 1_000_000, "out": 10.00 / 1_000_000},
+    # OpenAI (as of 2026-05)
+    "gpt-4o-mini":              {"in": 0.15 / 1_000_000, "out": 0.60 / 1_000_000},
+    "gpt-4o":                   {"in": 2.50 / 1_000_000, "out": 10.00 / 1_000_000},
+    # Open-weight readers via OpenRouter/DeepInfra (as of 2026-08)
+    "gpt-oss-120b":             {"in": 0.10 / 1_000_000, "out": 0.50 / 1_000_000},
+    "gpt-oss-20b":              {"in": 0.05 / 1_000_000, "out": 0.20 / 1_000_000},
+    # Judge model for rescore_with_judge
+    "llama-3.3-70b-instruct":   {"in": 0.12 / 1_000_000, "out": 0.30 / 1_000_000},
 }
 
 
@@ -135,10 +153,44 @@ def current_counter() -> TelemetryCounter | None:
     return _active_counter.get()
 
 
+#: Models seen with no pricing entry — reported once per run so a $0 cost
+#: is never mistaken for a free model.
+_UNPRICED_SEEN: set[str] = set()
+
+
+def _pricing_for(model: str) -> dict[str, float] | None:
+    """
+    Look up ``model``, tolerating provider-prefixed ids.
+
+    Providers name the same weights differently — ``gpt-oss-120b``,
+    ``openai/gpt-oss-120b``, ``accounts/fireworks/models/gpt-oss-120b``.
+    Try the full id, then the last path segment, then that segment with a
+    trailing ``:free``/``:nitro`` OpenRouter variant suffix removed.
+    """
+    name = (model or "").strip().lower()
+    if not name:
+        return None
+    candidates = [name, name.rsplit("/", 1)[-1]]
+    candidates.append(candidates[-1].split(":", 1)[0])
+    for cand in candidates:
+        table = _DEFAULT_PRICING.get(cand)
+        if table is not None:
+            return table
+    return None
+
+
+def unpriced_models() -> list[str]:
+    """Models charged at $0 because they had no pricing entry."""
+    return sorted(_UNPRICED_SEEN)
+
+
 def _cost_for(model: str, in_tok: int, out_tok: int) -> float:
-    table = _DEFAULT_PRICING.get(model.lower())
+    table = _pricing_for(model)
     if table is None:
-        # Unknown provider — leave cost at zero rather than guess wrong.
+        # Unknown provider — leave cost at zero rather than guess wrong,
+        # but remember it so the run can say so out loud.
+        if model:
+            _UNPRICED_SEEN.add(model)
         return 0.0
     return in_tok * table["in"] + out_tok * table["out"]
 
@@ -213,4 +265,5 @@ __all__ = [
     "end_row_telemetry",
     "record_llm_call",
     "start_row_telemetry",
+    "unpriced_models",
 ]
