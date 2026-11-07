@@ -57,6 +57,17 @@ _DEFAULT_PRICING = {
     "gpt-oss-20b":              {"in": 0.05 / 1_000_000, "out": 0.20 / 1_000_000},
     # Judge model for rescore_with_judge
     "llama-3.3-70b-instruct":   {"in": 0.12 / 1_000_000, "out": 0.30 / 1_000_000},
+    # Meta Model API (dev.meta.ai pay-as-you-go Standard, Oct 2026). These are
+    # reasoning models: the hidden reasoning block is billed as output, and it
+    # dominates — a muse row whose visible answer is 2 tokens bills ~840. So
+    # `out` here multiplies a number ~400x larger than the answer length, and
+    # pricing the answer instead of usage.completion_tokens understates a run
+    # by roughly that factor. Cached input is cheaper ($0.15/$0.20 per 1M) but
+    # is not modelled — treat these as the ceiling.
+    "muse-spark-1.1":           {"in": 1.25 / 1_000_000, "out": 4.25 / 1_000_000},
+    "muse-spark-1.2":           {"in": 1.25 / 1_000_000, "out": 4.25 / 1_000_000},
+    "muse-spark-1.3":           {"in": 1.25 / 1_000_000, "out": 4.25 / 1_000_000},
+    "muse-wonder-1.0":          {"in": 4.00 / 1_000_000, "out": 20.00 / 1_000_000},
 }
 
 
