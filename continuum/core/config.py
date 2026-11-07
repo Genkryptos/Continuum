@@ -526,7 +526,7 @@ class PolicyEngineConfig(BaseSettings):
         validation_alias=AliasChoices("enabled", "CONTINUUM_POLICY_ENABLED"),
         description=(
             "Master switch. When False (or no PolicyEngine is wired), the "
-            "Promoter falls back to the legacy Mem0 ADD/UPDATE/DELETE/NOOP "
+            "Promoter falls back to the legacy ADD/UPDATE/DELETE/NOOP "
             "path and Retriever skips policy-aware filtering."
         ),
     )
@@ -900,7 +900,7 @@ class PromoterConfig(BaseSettings):
         ),
     )
 
-    # ── Mem0 four-operation (ADD/UPDATE/DELETE/NOOP) knobs ───────────────────
+    # ── Four-operation (ADD/UPDATE/DELETE/NOOP) decider knobs ────────────────
 
     max_neighbors: int = Field(
         default=10,
@@ -942,6 +942,22 @@ class PromoterConfig(BaseSettings):
             "the candidate is definitely new → ADD without calling the LLM."
         ),
     )
+    scalar_supersession: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "scalar_supersession",
+            "CONTINUUM_PROMOTER_SCALAR_SUPERSESSION",
+        ),
+        description=(
+            "Enable the deterministic scalar-restatement short-circuit "
+            "(continuum.promotion.scalar_supersession): a fact restated with a "
+            "different number retires the old one without an LLM call. Off by "
+            "default: end to end on LongMemEval knowledge-update it retired "
+            "facts the reader still needed (52.6% -> 48.7% at a 0.5 cosine "
+            "floor). Turn it on only with a tuned "
+            "``scalar_supersession_min_cosine``."
+        ),
+    )
     scalar_supersession_min_cosine: float = Field(
         default=0.5,
         ge=0.0,
@@ -952,7 +968,8 @@ class PromoterConfig(BaseSettings):
         ),
         description=(
             "Cosine floor for the deterministic scalar-restatement "
-            "short-circuit (continuum.promotion.scalar_supersession). A "
+            "short-circuit (continuum.promotion.scalar_supersession), when "
+            "``scalar_supersession`` is on. A "
             "genuine restatement is near-identical to the fact it supersedes, "
             "so this can sit far above ``add_threshold``. Measured on "
             "LongMemEval knowledge-update: at 0.5 the rule fires 631 times "

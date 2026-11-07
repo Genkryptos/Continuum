@@ -14,7 +14,7 @@ guarantee enforced inside its hybrid-search SQL.
 Why this exists
 ---------------
 The eval rig (:mod:`evals.longmemeval.continuum_ltm_store`) needs a
-real LTM tier to drive the Mem0 promoter end-to-end without
+real LTM tier to drive the Continuum promoter end-to-end without
 provisioning Postgres. The Postgres LTM is the canonical
 implementation; this module is a faithful reduction of that
 behaviour to in-process dicts. Vector similarity and BM25 are

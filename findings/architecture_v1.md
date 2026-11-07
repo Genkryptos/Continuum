@@ -391,7 +391,7 @@ Every detector now measured on this data:
 |---|---:|
 | `attribute_extract` key collision | 0% |
 | `_UPDATE_MARKERS` regex | 3% |
-| **gpt-4o-mini `Mem0Promoter`** | **~6%** |
+| **gpt-4o-mini `ContinuumPromoter`** | **~6%** |
 | `scalar_supersession` | **51%** |
 
 The A/B therefore compared what happens to four facts out of ~930, and no
@@ -403,7 +403,7 @@ the plan reserved for this.
 **Consequence for sequencing.** P1 (presentation) assumes supersession is
 being detected; it mostly is not. Detection moves ahead of it:
 `scalar_supersession` is built, tested and measured, and wiring it into
-`Mem0Promoter` as a third deterministic short-circuit is now the first
+`ContinuumPromoter` as a third deterministic short-circuit is now the first
 accuracy-relevant step rather than a P2 refinement.
 
 **Cost:** arm A $3.78 (78 rows, ~$0.05/row — 2.5× the 5-row calibration, whose

@@ -10,7 +10,7 @@ litellm cost this project a full debugging session for no benefit:
 
 * **Three independent routing configs.** The answerer used ``--provider`` /
   ``--model``; :class:`FactExtractor` used ``CONTINUUM_FACT_MODEL``;
-  :class:`Mem0Promoter` used ``CONTINUUM_PROMOTER_LLM_MODEL``. Each defaulted to
+  :class:`ContinuumPromoter` used ``CONTINUUM_PROMOTER_LLM_MODEL``. Each defaulted to
   a bare ``gpt-4o-mini`` that resolves to *OpenAI*, not the OpenRouter account
   actually in use, so each failed separately and had to be found separately.
 * **Three different silent failure modes.** The extractor raised and was
@@ -21,7 +21,7 @@ litellm cost this project a full debugging session for no benefit:
   that silently overrode the prefixed setting.
 
 OpenRouter is OpenAI-compatible, so the stock ``openai`` SDK returns objects
-that :meth:`FactExtractor._content` and :meth:`Mem0Promoter._parse_tool_calls`
+that :meth:`FactExtractor._content` and :meth:`ContinuumPromoter._parse_tool_calls`
 already parse (both read ``resp.choices[0].message``). No adapter, no library
 surgery — just the injection point both classes already expose.
 
@@ -79,7 +79,7 @@ def make_completion_fn(
     max_retries: int = 5,
 ) -> Any:
     """
-    Build an async ``completion_fn`` for ``FactExtractor`` / ``Mem0Promoter``.
+    Build an async ``completion_fn`` for ``FactExtractor`` / ``ContinuumPromoter``.
 
     Both call it with keyword arguments and expect an OpenAI-shaped response.
     Returns the SDK object directly — the callers do their own parsing.

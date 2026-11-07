@@ -5946,7 +5946,7 @@ def _build_ltm_store_factory(
     if llm_available:
         try:
             from continuum.extraction.fact_extractor import FactExtractor
-            from continuum.promotion.mem0_promoter import Mem0Promoter
+            from continuum.promotion.continuum_promoter import ContinuumPromoter
             from evals.longmemeval.openrouter_completion import make_completion_fn
 
             # One completion fn, one model, for BOTH ingest components. This
@@ -5967,7 +5967,7 @@ def _build_ltm_store_factory(
             # compression, and the library's 1000-token default truncates the
             # JSON mid-string — which the extractor then swallows into "no
             # facts". Explicit here so no env var is needed to get a valid run.
-            promoter = Mem0Promoter(
+            promoter = ContinuumPromoter(
                 _PC(max_tokens=4096, timeout=120), completion_fn=ingest_fn
             )
             fact_extractor = FactExtractor(

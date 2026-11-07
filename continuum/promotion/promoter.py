@@ -12,7 +12,7 @@ Pipeline (per :meth:`promote`)
 3. Extract atomic facts from each block (``fact_extractor.extract_facts``).
 4. For every candidate fact:
    a. Retrieve top-K similar LTM facts (``ltm.search_hybrid``).
-   b. Decide ADD / UPDATE / DELETE / NOOP (``Mem0Promoter``; this also
+   b. Decide ADD / UPDATE / DELETE / NOOP (``ContinuumPromoter``; this also
       writes the ``memory_promotions`` audit log).
    c. Execute: ADD→``ltm.upsert``, UPDATE→``ltm.update``,
       DELETE→``ltm.invalidate(at=now)``, NOOP→skip.
@@ -122,7 +122,7 @@ class Promoter:
     fact_extractor:
         ``extract_facts(block, entities) -> list[Fact]``.
     decider:
-        :class:`~continuum.promotion.mem0_promoter.Mem0Promoter`-like —
+        :class:`~continuum.promotion.continuum_promoter.ContinuumPromoter`-like —
         ``decide_operations_batch([(fact, neighbors)]) -> list[Decision]``
         (also performs the memory_promotions audit).
 
@@ -169,7 +169,7 @@ class Promoter:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._prices = cost_per_1k or _PRICE_PER_1K
         # Policy-engine collaborators are entirely optional. The legacy
-        # Mem0 path runs unchanged unless *all* of policy_engine,
+        # The four-operation decider path runs unchanged unless *all* of policy_engine,
         # candidate_extractor, and storage_router are wired AND the
         # config has enabled=True.
         self._policy_engine = policy_engine
@@ -223,7 +223,7 @@ class Promoter:
     # ── pipeline ────────────────────────────────────────────────────────────
 
     async def _run(self, sc: PromotionScope, report: PromotionRunReport) -> None:
-        # Branch on policy engine availability. The legacy Mem0 path is the
+        # Branch on policy engine availability. The legacy decider path is the
         # default and ships unchanged for callers that don't wire a policy
         # engine.
         if self._policy_engine_active:

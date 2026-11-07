@@ -7,6 +7,22 @@ that the public API may still shift before 1.0.
 
 ## [Unreleased]
 
+### Added
+- **Deterministic scalar supersession, opt-in** (`scalar_supersession=True` /
+  `CONTINUUM_PROMOTER_SCALAR_SUPERSESSION=1`): a fact restated with a different
+  number ("tried three restaurants" -> "four") retires the old one without an
+  LLM call. Off by default: end to end on LongMemEval knowledge-update it
+  retired facts the reader still needed (52.6% -> 48.7%), so it waits on a
+  tuned threshold.
+
+### Changed
+- **`Mem0Promoter` is renamed `ContinuumPromoter`**, and its module
+  `continuum.promotion.mem0_promoter` is now
+  `continuum.promotion.continuum_promoter`. `from continuum.promotion import
+  Mem0Promoter` still works but warns; it will be removed in 3.0. Code that
+  imports the old module path must switch. The real Mem0 SDK stays in the
+  head-to-head benchmarks (`bench/mem0_compare.py`, `evals/locomo/`).
+
 ## [2.1.0] — 2026-11-08
 
 Fixes fresh installs of the MCP server: the `[mcp]` extra allowed any

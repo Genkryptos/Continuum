@@ -49,7 +49,7 @@ Note on simulation
 ------------------
 The contradiction-detection logic here is *rule-based* (matching
 on planted ``entity_attribute`` tags), where in a real Continuum
-deployment that detection comes from the LLM-driven Mem0Promoter
+deployment that detection comes from the LLM-driven ContinuumPromoter
 walking newly-extracted facts against existing LTM rows. We're
 benchmarking the **architecture** (does ``superseded_by`` solve the
 problem when detection works?), not the detection itself. The
@@ -362,7 +362,7 @@ class ContinuumSupersessionSystem(_MemorySystem):
 
     On ``add``, any existing non-superseded fact sharing the new fact's
     ``attribute_tag`` is marked ``superseded_by = new_fact.id`` —
-    mirroring what :class:`Mem0Promoter` does when its contradiction
+    mirroring what :class:`ContinuumPromoter` does when its contradiction
     detector fires in the real pipeline. ``top1`` then filters the
     embedding matrix to non-superseded rows before ranking.
     """
@@ -495,7 +495,7 @@ def _run(n_scenarios: int) -> list[_SystemResult]:
              "facts with superseded_by edges, filters to current "
              "(non-superseded) rows before ranking. Detection is "
              "rule-based here; in production it comes from the "
-             "Mem0Promoter's LLM contradiction check.",
+             "ContinuumPromoter's LLM contradiction check.",
         embedder=embedder,
     )
 

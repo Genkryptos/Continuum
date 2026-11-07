@@ -1,7 +1,7 @@
 """
 continuum.promotion.openrouter
 ==============================
-An OpenRouter-backed ``completion_fn`` for the Mem0 supersession decider.
+An OpenRouter-backed ``completion_fn`` for the supersession decider.
 
 The decider adjudicates whether a new fact ADDs, UPDATEs or DELETEs an existing
 one. It only reaches an LLM for the ambiguous similarity band — contradiction
@@ -10,7 +10,7 @@ cosine ≈0.6-0.8, too close to call deterministically and too far apart to trea
 as duplicates.
 
 OpenRouter's chat API is OpenAI-shaped, so returning the decoded JSON is exactly
-what :class:`~continuum.promotion.mem0_promoter.Mem0Promoter` expects to read
+what :class:`~continuum.promotion.continuum_promoter.ContinuumPromoter` expects to read
 ``choices[0].message.tool_calls`` from.
 
 Lives here rather than in ``continuum.chat`` so the MCP server can use it

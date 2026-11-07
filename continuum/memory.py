@@ -47,7 +47,7 @@ from continuum.core.types import (
 if TYPE_CHECKING:
     from continuum.core.config import ContinuumConfig
     from continuum.core.protocols import LTMProtocol, RetrieverProtocol
-    from continuum.promotion.mem0_promoter import CompletionFn
+    from continuum.promotion.continuum_promoter import CompletionFn
     from continuum.retrieval.embedding_query import EmbedderProtocol
 
 log = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class Memory:
         dense channel has vectors to match against — the read side alone is not
         enough (a stored item with no embedding is invisible to dense search).
 
-        *decider*, when given, routes each write through the Mem0
+        *decider*, when given, routes each write through the
         ADD/UPDATE/DELETE decision so a contradicting fact **supersedes** the one
         it replaces instead of piling up beside it. See
         :meth:`from_postgres` — it requires an LLM and is off by default."""
@@ -143,7 +143,7 @@ class Memory:
         before reading — that is when the connection pool opens.
 
         *supersession_completion_fn* enables true supersession: writes are routed
-        through the Mem0 ADD/UPDATE/DELETE decider so a contradicting fact
+        through the ADD/UPDATE/DELETE decider so a contradicting fact
         retires the one it replaces (which is what makes :meth:`current`
         meaningful). It is **off by default and requires an LLM**: contradiction
         pairs land in the decider's ambiguous similarity band — e.g.
@@ -183,12 +183,12 @@ class Memory:
         decider = None
         if supersession_completion_fn is not None:
             from continuum.core.config import PromoterConfig
-            from continuum.promotion.mem0_promoter import Mem0Promoter
+            from continuum.promotion.continuum_promoter import ContinuumPromoter
 
             # The model id must match the provider's namespace — PromoterConfig
             # defaults to "gpt-4o-mini", which OpenRouter rejects without the
             # "openai/" prefix.
-            decider = Mem0Promoter(
+            decider = ContinuumPromoter(
                 PromoterConfig(llm_model=supersession_model),
                 completion_fn=supersession_completion_fn,
             )
@@ -354,7 +354,7 @@ class Memory:
         await ltm.upsert(node)
 
     async def _decided_write(self, ltm: Any, node: MemoryItem, vec: list[float] | None) -> bool:
-        """Route the write through the Mem0 decider. Returns True if it handled
+        """Route the write through the supersession decider. Returns True if it handled
         the write, False to fall back to a plain upsert.
 
         Never drops the fact: any failure — decider error, an UPDATE/DELETE with

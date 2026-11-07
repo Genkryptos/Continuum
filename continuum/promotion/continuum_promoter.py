@@ -1,7 +1,7 @@
 """
-continuum/promotion/mem0_promoter.py
-====================================
-``Mem0Promoter`` — the Mem0-style four-operation promotion engine.
+continuum/promotion/continuum_promoter.py
+=========================================
+``ContinuumPromoter`` — the four-operation promotion engine.
 
 For each candidate :class:`~continuum.extraction.fact_extractor.Fact` and its
 nearest existing LTM neighbours, decide one of:
@@ -159,9 +159,9 @@ def _coerce_uuid(value: Any) -> uuid.UUID | None:
         return None
 
 
-class Mem0Promoter:
+class ContinuumPromoter:
     """
-    Mem0 four-operation promotion decider.
+    Four-operation (ADD/UPDATE/DELETE/NOOP) promotion decider.
 
     Parameters
     ----------
@@ -312,11 +312,19 @@ class Mem0Promoter:
         # call to catch it. Ordering here is safe by construction: *candidate*
         # is the incoming fact and *neighbors* are already-stored ones, so the
         # newer text is always the one on the left.
+        #
+        # Off unless ``scalar_supersession`` is set: end to end on LongMemEval
+        # knowledge-update it retired facts the reader still needed
+        # (52.6% -> 48.7%), so it is opt-in until its threshold is tuned.
         scalar_floor = max(
             self.config.add_threshold,
             getattr(self.config, "scalar_supersession_min_cosine", 0.0),
         )
-        if best is not None and max_c >= scalar_floor:
+        if (
+            getattr(self.config, "scalar_supersession", False)
+            and best is not None
+            and max_c >= scalar_floor
+        ):
             idx = find_superseded(candidate.text, [si.item.content or "" for si in neighbors])
             if idx is not None:
                 target = neighbors[idx]
@@ -363,7 +371,7 @@ class Mem0Promoter:
         except Exception as exc:
             # Degrade the whole chunk to NOOP — never invent ADD/DELETE on
             # error; promotion must not crash the Promoter.
-            log.exception("Mem0 LLM decision failed — NOOP for %d candidates", len(chunk))
+            log.exception("LLM promotion decision failed — NOOP for %d candidates", len(chunk))
             return [
                 Decision(
                     op="NOOP",
@@ -447,7 +455,7 @@ class Mem0Promoter:
             import litellm
         except ImportError as exc:  # pragma: no cover - via completion_fn
             raise ImportError(
-                "litellm is required for Mem0Promoter.\nInstall it with:  pip install litellm"
+                "litellm is required for ContinuumPromoter.\nInstall it with:  pip install litellm"
             ) from exc
         return await litellm.acompletion(
             model=self.config.llm_model,
@@ -612,7 +620,7 @@ def make_postgres_audit_sink(
 
 
 __all__ = [
-    "Mem0Promoter",
+    "ContinuumPromoter",
     "Decision",
     "MEMORY_OP_SCHEMA",
     "OPERATIONS",

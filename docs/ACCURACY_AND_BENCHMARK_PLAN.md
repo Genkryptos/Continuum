@@ -207,7 +207,7 @@ has a direct bearing on the paper.**
 
 `--use-ltm` does *not* exercise Continuum's bi-temporal supersession. The eval's
 LTM store (`evals/longmemeval/continuum_ltm_store.py`) runs
-`Mem0Promoter.decide_operations_batch` — an **ADD / UPDATE / DELETE / NOOP decision
+`ContinuumPromoter.decide_operations_batch` — an **ADD / UPDATE / DELETE / NOOP decision
 loop, i.e. Mem0 0.1.67's model** — and executes it as:
 
 | decision | executed as | effect |
@@ -237,7 +237,7 @@ supersession: the fact becomes unreachable rather than historical.
 is not "switch a feature on", it is a **controlled A/B of two designs inside one
 harness**, everything else held constant:
 
-- **arm A (today):** `Mem0Promoter` decisions → `update` / `invalidate`
+- **arm A (today):** `ContinuumPromoter` decisions → `update` / `invalidate`
 - **arm B (new):** bi-temporal supersession → set `valid_to` on the superseded
   fact, keep it retrievable via `as_of`, let `current()` decide what retrieval sees
 

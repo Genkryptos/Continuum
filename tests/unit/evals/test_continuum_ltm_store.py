@@ -4,7 +4,7 @@ tests/unit/evals/test_continuum_ltm_store.py
 Unit tests for :class:`evals.longmemeval.continuum_ltm_store.ContinuumLTMHaystackStore`
 and the supporting :class:`continuum.stores.in_memory.ltm.InMemoryLTM`.
 
-Each test is hermetic — stubbed FactExtractor and Mem0Promoter, no
+Each test is hermetic — stubbed FactExtractor and ContinuumPromoter, no
 embedder downloads, no network. The full STM → facts → LTM →
 supersession path is exercised on a tiny scripted input.
 """
@@ -25,7 +25,7 @@ from continuum.core.types import (
     SummaryBlock,
 )
 from continuum.extraction.fact_extractor import Fact
-from continuum.promotion.mem0_promoter import Decision
+from continuum.promotion.continuum_promoter import Decision
 from continuum.stores.in_memory.ltm import InMemoryLTM
 from evals.longmemeval.continuum_ltm_store import ContinuumLTMHaystackStore
 
@@ -661,7 +661,7 @@ async def test_concurrent_extraction_preserves_fact_order(concurrency: int) -> N
 
 def test_neighbours_are_rescored_to_true_cosine_not_rrf() -> None:
     """
-    ``Mem0Promoter`` short-circuits on ``scores.relevance`` treated as cosine:
+    ``ContinuumPromoter`` short-circuits on ``scores.relevance`` treated as cosine:
     ``< add_threshold`` (0.5) → ADD *without calling the LLM*. But
     ``search_hybrid`` puts RRF there — ~1/(60+rank) ≈ 0.016 — so every candidate
     fell under the bar and the promoter was never consulted. Measured in a real

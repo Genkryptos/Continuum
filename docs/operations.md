@@ -90,7 +90,7 @@ once `memory_nodes` exists.
 
 * Bump `database.pool_size=20-50`.
 * Add a transaction-mode pgBouncer.
-* Move extraction off the same process — the `Mem0Promoter` is
+* Move extraction off the same process — the `ContinuumPromoter` is
   designed to run as a background worker pool consuming the
   `promotion_queue` table.
 * Enable the reranker for retrieval (off by default to keep base
@@ -221,7 +221,7 @@ The schema benchmark hits 100 % given correct contradiction
 1. Check your LLM extractor's confidence threshold
    (`fact_extraction.min_confidence`). Too low → noisy facts;
    too high → contradictions missed.
-2. Check that `Mem0Promoter.contradiction_threshold` isn't too low —
+2. Check that `ContinuumPromoter.contradiction_threshold` isn't too low —
    below 0.85 it can mis-flag unrelated facts as contradictions.
 3. Inspect a sample of `superseded_by` edges manually. If they look
    wrong, the LLM contradiction prompt is the lever, not the schema.

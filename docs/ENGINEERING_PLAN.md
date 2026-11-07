@@ -73,7 +73,7 @@ the eval-only flag) on the BEAM converter set; no LongMemEval regression.
 ## Phase 3 — Consolidation quality (parity with Mem0's core strength)
 
 **Why.** Mem0's edge is its extract/merge/dedupe pipeline. Continuum has the scaffolding
-(`continuum/promotion/promoter.py`, `mem0_promoter.py`, `synthesis.py`) — the question is how
+(`continuum/promotion/promoter.py`, `continuum_promoter.py`, `synthesis.py`) — the question is how
 good the merge/dedup is.
 
 **Build.** Audit the promotion path; add/strengthen **near-duplicate detection** (embedding

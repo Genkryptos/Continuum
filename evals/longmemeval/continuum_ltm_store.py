@@ -28,7 +28,7 @@ retriever sees are the **current** facts only:
    * Run :class:`FactExtractor` (or a heuristic-only path when no LLM
      is available) to mint atomic ``Fact``\\s.
    * Upsert each fact into the LTM.
-   * Run :class:`Mem0Promoter.decide_operations_batch` over the new
+   * Run :class:`ContinuumPromoter.decide_operations_batch` over the new
      facts + their nearest live LTM neighbours.
    * Execute the resulting decisions: ``DELETE`` → ``ltm.invalidate``
      (supersession); ``UPDATE`` → ``ltm.update``; ``ADD`` is already
@@ -48,7 +48,7 @@ is populated.
 Heuristic fallback
 ------------------
 When no LLM provider key is in the environment (or the caller
-passes ``llm_available=False``), the LLM-driven :class:`Mem0Promoter`
+passes ``llm_available=False``), the LLM-driven :class:`ContinuumPromoter`
 is skipped. A deterministic supersession heuristic runs in its
 place: regex over "no longer / used to / now / instead of /
 changed to / moved to" markers emits ``DELETE(target=most-recent
@@ -74,7 +74,7 @@ from continuum.core.types import (
     SummaryBlock,
 )
 from continuum.extraction.fact_extractor import Fact
-from continuum.promotion.mem0_promoter import Decision
+from continuum.promotion.continuum_promoter import Decision
 from evals.longmemeval import ingest_cache as ic
 
 log = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ def _rescore_as_cosine(
     Replace each neighbour's ``scores.relevance`` with **true cosine** against
     the candidate.
 
-    ``Mem0Promoter`` documents ``ScoreBreakdown.relevance`` as cosine similarity
+    ``ContinuumPromoter`` documents ``ScoreBreakdown.relevance`` as cosine similarity
     and short-circuits on it: ``< add_threshold`` (0.5) → ADD without ever
     calling the LLM. But ``search_hybrid`` returns **RRF** scores there —
     rank-derived, ~1/(60+rank) ≈ 0.016 — so every candidate fell below 0.5 and
@@ -199,7 +199,7 @@ class ContinuumLTMHaystackStore:
         Used to embed extracted facts before LTM upsert so the
         in-mem LTM's cosine channel has something to rank.
     promoter:
-        :class:`continuum.promotion.mem0_promoter.Mem0Promoter` (or
+        :class:`continuum.promotion.continuum_promoter.ContinuumPromoter` (or
         any object with the same ``decide_operations_batch`` shape).
         Ignored when ``llm_available=False``.
     fact_extractor:
@@ -621,7 +621,7 @@ class ContinuumLTMHaystackStore:
     ) -> list[Any]:
         """Run promoter (LLM) or heuristic (deterministic). Decision-shaped objects."""
         if self._promoter_path == "llm" and self._promoter is not None:
-            # Run Mem0Promoter against each fact with its live LTM neighbours.
+            # Run ContinuumPromoter against each fact with its live LTM neighbours.
             inputs: list[tuple[Fact, list[ScoredItem]]] = []
             for fact, _ in facts_with_origin:
                 neighbours: list[ScoredItem] = []
@@ -641,7 +641,7 @@ class ContinuumLTMHaystackStore:
             try:
                 return await self._promoter.decide_operations_batch(inputs)
             except Exception:
-                log.exception("Mem0Promoter failed — falling back to heuristic")
+                log.exception("ContinuumPromoter failed — falling back to heuristic")
                 self._promoter_path = "heuristic"
         return self._heuristic_decisions(facts_with_origin)
 

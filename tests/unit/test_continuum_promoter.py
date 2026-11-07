@@ -1,7 +1,7 @@
 """
-tests/unit/test_mem0_promoter.py
-================================
-Unit tests for ``continuum.promotion.mem0_promoter.Mem0Promoter``.
+tests/unit/test_continuum_promoter.py
+=====================================
+Unit tests for ``continuum.promotion.continuum_promoter.ContinuumPromoter``.
 
 A fake litellm-shaped ``completion_fn`` (tool-calls) and a recording
 ``audit_sink`` are injected — no litellm, no DB, no network.
@@ -23,8 +23,8 @@ from continuum.core.types import MemoryItem, MemoryTier, ScoreBreakdown, ScoredI
 from continuum.extraction.fact_extractor import Fact
 from continuum.promotion import (
     MEMORY_OP_SCHEMA,
+    ContinuumPromoter,
     Decision,
-    Mem0Promoter,
     make_postgres_audit_sink,
 )
 
@@ -85,8 +85,8 @@ class RecordingSink:
         self.records.extend(records)
 
 
-def _promoter(fake: Any = None, sink: Any = None, **cfg: Any) -> Mem0Promoter:
-    p = Mem0Promoter(PromoterConfig(**cfg), completion_fn=fake, audit_sink=sink)
+def _promoter(fake: Any = None, sink: Any = None, **cfg: Any) -> ContinuumPromoter:
+    p = ContinuumPromoter(PromoterConfig(**cfg), completion_fn=fake, audit_sink=sink)
     p._backoff_initial = 0.0
     p._backoff_max = 0.0
     return p
@@ -436,10 +436,16 @@ KOREAN_NEW = (
 )
 
 
+def test_scalar_supersession_is_off_by_default():
+    """Opt-in only: by default a restated count falls through to the LLM."""
+    p = _promoter(FakeLLM([]))
+    assert p._short_circuit(_fact(KOREAN_NEW), [_si(KOREAN_OLD, 0.93)]) is None
+
+
 def test_scalar_restatement_supersedes_without_an_llm_call():
     """A restated count retires the prior fact deterministically."""
     fake = FakeLLM([])
-    p = _promoter(fake)
+    p = _promoter(fake, scalar_supersession=True)
     d = p._short_circuit(_fact(KOREAN_NEW), [_si(KOREAN_OLD, 0.93)])
     assert d is not None
     assert d.op == "DELETE"
@@ -457,7 +463,7 @@ def test_scalar_check_beats_the_near_duplicate_noop():
     check would swallow the update and leave the stale value in the store —
     silently, with no LLM call to catch it.
     """
-    p = _promoter(FakeLLM([]), noop_threshold=0.90)
+    p = _promoter(FakeLLM([]), noop_threshold=0.90, scalar_supersession=True)
     d = p._short_circuit(_fact(KOREAN_NEW), [_si(KOREAN_OLD, 0.99)])
     assert d is not None
     assert d.op == "DELETE", "scalar disagreement must outrank near-duplicate NOOP"
@@ -465,7 +471,7 @@ def test_scalar_check_beats_the_near_duplicate_noop():
 
 def test_genuine_near_duplicate_still_noops():
     """The NOOP path must survive: same text, same number → still a duplicate."""
-    p = _promoter(FakeLLM([]), noop_threshold=0.90)
+    p = _promoter(FakeLLM([]), noop_threshold=0.90, scalar_supersession=True)
     d = p._short_circuit(_fact(KOREAN_OLD), [_si(KOREAN_OLD, 0.99)])
     assert d is not None
     assert d.op == "NOOP"
@@ -476,7 +482,7 @@ def test_low_similarity_still_adds_rather_than_superseding():
     Below ``add_threshold`` the candidate is a new fact. A stray number match
     must never retire an unrelated memory.
     """
-    p = _promoter(FakeLLM([]), add_threshold=0.5)
+    p = _promoter(FakeLLM([]), add_threshold=0.5, scalar_supersession=True)
     d = p._short_circuit(
         _fact("I ran 5 miles this morning"), [_si("the meeting has 3 attendees", 0.10)]
     )
@@ -489,7 +495,7 @@ def test_no_scalar_disagreement_defers_to_the_llm():
     Similar text, no differing number → this rule abstains and the decision
     falls through to the LLM, which is the conservative default.
     """
-    p = _promoter(FakeLLM([]), add_threshold=0.5, noop_threshold=0.97)
+    p = _promoter(FakeLLM([]), add_threshold=0.5, noop_threshold=0.97, scalar_supersession=True)
     d = p._short_circuit(
         _fact("I moved to Boston last spring"), [_si("I moved to New York City last spring", 0.80)]
     )
@@ -499,7 +505,7 @@ def test_no_scalar_disagreement_defers_to_the_llm():
 def test_supersedes_the_matching_neighbour_not_merely_the_closest():
     """With several neighbours, the scalar-disagreeing one is retired."""
     other = uuid.UUID("00000000-0000-0000-0000-0000000000c2")
-    p = _promoter(FakeLLM([]))
+    p = _promoter(FakeLLM([]), scalar_supersession=True)
     d = p._short_circuit(
         _fact(KOREAN_NEW),
         [_si("my dog Rex is a beagle", 0.62, other), _si(KOREAN_OLD, 0.61)],

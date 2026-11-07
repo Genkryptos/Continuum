@@ -200,7 +200,7 @@ benchmark result and a product guarantee.
 > `continuum/promotion/scalar_supersession.py` is the deterministic path that
 > does work on this data: **same topic frame, restated, different scalar.** It
 > is a fast path, not a replacement — it removes the LLM from about half the
-> supersession decisions and defers the rest, exactly as `Mem0Promoter`'s
+> supersession decisions and defers the rest, exactly as `ContinuumPromoter`'s
 > existing cosine short-circuits do. Wiring it in as a third short-circuit is
 > the concrete P2 deliverable; the EAV columns remain valuable but serve the
 > tagged path, not this benchmark.
@@ -307,7 +307,7 @@ detection works. It does not, so detection goes first.
 | | phase | depends on | cost |
 |---|---|---|---|
 | ~~done~~ | ~~**P0** run A5 arms~~ | — | **$3.78, complete — see §12 of `findings/architecture_v1.md`** |
-| **now** | **P2a** wire `scalar_supersession` into `Mem0Promoter` as a third deterministic short-circuit | built + tested | S |
+| **now** | **P2a** wire `scalar_supersession` into `ContinuumPromoter` as a third deterministic short-circuit | built + tested | S |
 | then | **P0′** re-run the A/B with detection working | P2a | ~$0.30 (ingest cached) |
 | then | **P1** dates + rule + transition text | P0′ verdict | S–M |
 | then | **P3** ResolvedState in the product | P1 | M |

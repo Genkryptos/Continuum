@@ -5,7 +5,7 @@ A **deterministic** supersession rule for restated scalar facts.
 
 Why this exists
 ---------------
-``Mem0Promoter`` sends the contradiction decision to an LLM. It already
+``ContinuumPromoter`` sends the contradiction decision to an LLM. It already
 short-circuits the two easy cases without one — best-neighbour cosine below
 ``add_threshold`` is an ADD, above ``noop_threshold`` is a NOOP — but the case
 in the middle, *"this contradicts that"*, always costs a model call. That is
