@@ -61,6 +61,7 @@ from continuum.core.config import PromoterConfig
 from continuum.core.types import ScoredItem
 from continuum.extraction.fact_extractor import Fact
 from continuum.extraction.retraction import is_retraction
+from continuum.promotion.scalar_supersession import find_superseded
 
 log = logging.getLogger(__name__)
 
@@ -297,6 +298,44 @@ class Mem0Promoter:
                 short_circuited=True,
                 model=None,
             )
+        # Scalar restatement: the same topic frame, restated with a different
+        # number ("I've tried three Korean restaurants" → "…four"). Measured on
+        # LongMemEval-S knowledge-update, this catches 51% of the gold
+        # supersession pairs against ~6% for the LLM decision it replaces, at
+        # 3.1% on hard negatives — see
+        # :mod:`continuum.promotion.scalar_supersession`.
+        #
+        # This MUST precede the near-duplicate NOOP below. A restatement is
+        # textually near-identical to the fact it supersedes, so a cosine above
+        # ``noop_threshold`` would otherwise swallow the update as a duplicate
+        # and the store would keep the stale value — silently, and with no LLM
+        # call to catch it. Ordering here is safe by construction: *candidate*
+        # is the incoming fact and *neighbors* are already-stored ones, so the
+        # newer text is always the one on the left.
+        scalar_floor = max(
+            self.config.add_threshold,
+            getattr(self.config, "scalar_supersession_min_cosine", 0.0),
+        )
+        if best is not None and max_c >= scalar_floor:
+            idx = find_superseded(
+                candidate.text, [si.item.content or "" for si in neighbors]
+            )
+            if idx is not None:
+                target = neighbors[idx]
+                return Decision(
+                    op="DELETE",
+                    target_id=_coerce_uuid(target.item.id),
+                    rationale=(
+                        f"Scalar restatement of {target.item.id}: same topic "
+                        f"frame, different value → supersede the prior fact "
+                        f"(deterministic, no LLM)."
+                    ),
+                    candidate_text=candidate.text,
+                    short_circuited=True,
+                    model=None,
+                    metadata={"scalar_supersession": True},
+                )
+
         if max_c > self.config.noop_threshold and best is not None:
             tid = _coerce_uuid(best.item.id)
             return Decision(

@@ -114,6 +114,21 @@ class InMemoryLTM:
         if node_id is None or node_id not in self._rows:
             return
         row = self._rows[node_id]
+
+        # Bi-temporal range: honour valid_from / valid_to when the patch
+        # carries them, mirroring Postgres' ``_UPDATABLE`` allowlist. Without
+        # this, closing a fact's valid-time (``{"valid_to": ...}``) is a silent
+        # no-op here while it works on Postgres — a parity gap that makes
+        # supersession look inert on the in-memory backend.
+        valid_range = row.valid_range
+        if "valid_from" in patch or "valid_to" in patch:
+            base_from = valid_range.valid_from if valid_range else row.created_at
+            base_to = valid_range.valid_to if valid_range else None
+            valid_range = BiTemporalRange(
+                valid_from=patch.get("valid_from", base_from),
+                valid_to=patch.get("valid_to", base_to),
+            )
+
         # Apply patch onto a fresh MemoryItem so dataclass invariants
         # stay intact. Only known fields are honoured; unknown keys
         # are ignored (Postgres silently does the same via JSONB merge).
@@ -128,7 +143,7 @@ class InMemoryLTM:
             agent_id=row.agent_id,
             user_id=row.user_id,
             embedding=patch.get("embedding", row.embedding),
-            valid_range=row.valid_range,
+            valid_range=valid_range,
             related_ids=list(row.related_ids),
             **_optional_metadata(row, override=patch.get("metadata")),
         )

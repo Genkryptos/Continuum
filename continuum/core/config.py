@@ -345,46 +345,46 @@ class FactExtractionConfig(BaseSettings):
 
     model: str = Field(
         default="gpt-4o-mini",
-        validation_alias=AliasChoices("model", "CONTINUUM_FACT_MODEL"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_MODEL", "model"),
         description="litellm model id (smallest capable; gpt-4o-mini default).",
     )
     temperature: float = Field(
         default=0.0,
         ge=0.0,
         le=2.0,
-        validation_alias=AliasChoices("temperature", "CONTINUUM_FACT_TEMPERATURE"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_TEMPERATURE", "temperature"),
         description="0.0 keeps fact extraction deterministic.",
     )
     max_tokens: int = Field(
         default=1000,
         ge=1,
         le=8192,
-        validation_alias=AliasChoices("max_tokens", "CONTINUUM_FACT_MAX_TOKENS"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_MAX_TOKENS", "max_tokens"),
         description="Hard cap on completion tokens (cost control).",
     )
     timeout: int = Field(
         default=30,
         ge=1,
-        validation_alias=AliasChoices("timeout", "CONTINUUM_FACT_TIMEOUT"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_TIMEOUT", "timeout"),
         description="Per-attempt LLM call timeout, in seconds.",
     )
     min_confidence: float = Field(
         default=0.6,
         ge=0.0,
         le=1.0,
-        validation_alias=AliasChoices("min_confidence", "CONTINUUM_FACT_MIN_CONF"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_MIN_CONF", "min_confidence"),
         description="Drop facts the model is less than this sure of.",
     )
     min_fact_len: int = Field(
         default=10,
         ge=1,
-        validation_alias=AliasChoices("min_fact_len", "CONTINUUM_FACT_MIN_LEN"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_MIN_LEN", "min_fact_len"),
         description="Reject trivially short 'facts' (chars).",
     )
     max_fact_len: int = Field(
         default=500,
         ge=1,
-        validation_alias=AliasChoices("max_fact_len", "CONTINUUM_FACT_MAX_LEN"),
+        validation_alias=AliasChoices("CONTINUUM_FACT_MAX_LEN", "max_fact_len"),
         description=(
             "Reject over-long facts — a long fact is almost never atomic, "
             "so the cap doubles as an atomicity guard."
@@ -942,6 +942,26 @@ class PromoterConfig(BaseSettings):
             "the candidate is definitely new → ADD without calling the LLM."
         ),
     )
+    scalar_supersession_min_cosine: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices(
+            "scalar_supersession_min_cosine",
+            "CONTINUUM_PROMOTER_SCALAR_MIN_COSINE",
+        ),
+        description=(
+            "Cosine floor for the deterministic scalar-restatement "
+            "short-circuit (continuum.promotion.scalar_supersession). A "
+            "genuine restatement is near-identical to the fact it supersedes, "
+            "so this can sit far above ``add_threshold``. Measured on "
+            "LongMemEval knowledge-update: at 0.5 the rule fires 631 times "
+            "across 78 rows and retires facts the reader still needs "
+            "(accuracy 52.6% -> 48.7%), so the default is a floor to tune "
+            "upward, not a recommendation."
+        ),
+    )
+
     noop_threshold: float = Field(
         default=0.97,
         ge=0.0,
