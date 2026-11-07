@@ -44,10 +44,7 @@ _SOURCE_MIX = {
 def _dataset() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for qtype, n in _SOURCE_MIX.items():
-        rows.extend(
-            {"question_id": f"{qtype}-{i:03d}", "question_type": qtype}
-            for i in range(n)
-        )
+        rows.extend({"question_id": f"{qtype}-{i:03d}", "question_type": qtype} for i in range(n))
     return rows
 
 
@@ -120,7 +117,9 @@ def test_committed_sample_matches_the_generator() -> None:
 
     rows = json.loads(dataset_path.read_text())
     regenerated, _ = build_sample(
-        rows, size=payload["total"], seed=payload["seed"],
+        rows,
+        size=payload["total"],
+        seed=payload["seed"],
     )
     assert regenerated == payload["question_ids"]
 
@@ -133,27 +132,45 @@ def _point(tmp: Path, chars: int, acc: float, tokens: float, bound: float) -> Po
     d.mkdir(parents=True, exist_ok=True)
     by_type = {
         "multi-session": {
-            "n_questions": 67, "accuracy": acc, "recall": 0.98,
-            "avg_context_tokens": tokens, "pct_budget_bound": bound,
+            "n_questions": 67,
+            "accuracy": acc,
+            "recall": 0.98,
+            "avg_context_tokens": tokens,
+            "pct_budget_bound": bound,
         },
     }
-    (d / "judged.json").write_text(json.dumps({
-        "metrics": {
-            "n_questions": 250, "accuracy": acc, "total_cost_usd": 0.5,
-            "by_question_type": by_type,
-        },
-    }))
-    (d / "budget_report.json").write_text(json.dumps({
-        "config": {"max_context_chars": chars},
-        "summary": {
-            "n_questions": 250, "accuracy": acc,
-            "avg_context_tokens": tokens, "context_tokens_p95": tokens * 1.4,
-            "measured_chars_per_token": 4.1, "pct_rows_budget_bound": bound,
-            "total_cost_usd": 0.5, "tokens_measured": True,
-            "unpriced_models": [],
-        },
-        "by_question_type": by_type, "rows": [],
-    }))
+    (d / "judged.json").write_text(
+        json.dumps(
+            {
+                "metrics": {
+                    "n_questions": 250,
+                    "accuracy": acc,
+                    "total_cost_usd": 0.5,
+                    "by_question_type": by_type,
+                },
+            }
+        )
+    )
+    (d / "budget_report.json").write_text(
+        json.dumps(
+            {
+                "config": {"max_context_chars": chars},
+                "summary": {
+                    "n_questions": 250,
+                    "accuracy": acc,
+                    "avg_context_tokens": tokens,
+                    "context_tokens_p95": tokens * 1.4,
+                    "measured_chars_per_token": 4.1,
+                    "pct_rows_budget_bound": bound,
+                    "total_cost_usd": 0.5,
+                    "tokens_measured": True,
+                    "unpriced_models": [],
+                },
+                "by_question_type": by_type,
+                "rows": [],
+            }
+        )
+    )
     return Point(d)
 
 
@@ -186,7 +203,8 @@ def test_non_binding_budget_never_counts_as_holding(tmp_path: Path) -> None:
 
 
 def test_render_reports_no_holding_point_without_crashing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A negative result must still render — it is the finding either way."""
     points = [
@@ -200,7 +218,8 @@ def test_render_reports_no_holding_point_without_crashing(
 
 
 def test_render_names_the_cheapest_holding_point(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     points = [
         _point(tmp_path, 64000, 0.764, 15600, 100.0),

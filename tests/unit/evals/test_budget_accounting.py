@@ -65,8 +65,7 @@ def test_old_byte_slice_would_have_cut_mid_turn() -> None:
     lines = _turns()
     old = "\n".join(lines)[:400]
     assert old.split("\n")[-1] not in lines, (
-        "fixture no longer demonstrates the mid-turn cut — pick a budget "
-        "that lands inside a line"
+        "fixture no longer demonstrates the mid-turn cut — pick a budget that lands inside a line"
     )
     new, _ = admit_lines(lines, max_chars=400)
     assert new.split("\n")[-1] in lines

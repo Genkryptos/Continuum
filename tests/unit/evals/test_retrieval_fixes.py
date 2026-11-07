@@ -8,6 +8,7 @@ the fix. So the tests here build adapters with the real
 ``make_adapter_factory`` and assert on the prompt the reader receives,
 not on an intermediate bundle.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,8 +67,11 @@ class _CaptureLLM:
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=10_000, stm_reserved=10_000, mtm_reserved=0,
-        ltm_reserved=0, response_reserved=0,
+        total=10_000,
+        stm_reserved=10_000,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
 
 
@@ -105,7 +109,9 @@ async def _prompt_for(question: str, *, qtype: str, **factory_kwargs: Any) -> st
     }
     kwargs.update(factory_kwargs)
     factory = make_adapter_factory(
-        llm, _ScriptedEmbedder({c: s for c, _sid, _d, s in _TURNS}), **kwargs,
+        llm,
+        _ScriptedEmbedder({c: s for c, _sid, _d, s in _TURNS}),
+        **kwargs,
     )
     adapter = factory()
     await adapter.process_conversation(_messages())
@@ -128,8 +134,12 @@ async def test_pinned_path_presents_turns_in_date_order_not_haystack_order() -> 
 
 async def test_pinned_path_fuses_inside_the_session_aware_retriever() -> None:
     factory = make_adapter_factory(
-        _CaptureLLM(), _ScriptedEmbedder({}), session_aware_retrieval=True,
-        retriever_kind="hybrid", direct_answer=True, chrono_sort=True,
+        _CaptureLLM(),
+        _ScriptedEmbedder({}),
+        session_aware_retrieval=True,
+        retriever_kind="hybrid",
+        direct_answer=True,
+        chrono_sort=True,
     )
     retriever = factory().session.retriever
     # Not wrapped: a HybridRetriever would re-sort the selection by fused rank.
@@ -139,8 +149,11 @@ async def test_pinned_path_fuses_inside_the_session_aware_retriever() -> None:
 
 def test_plain_hybrid_child_does_not_feed_chronological_order_to_rrf() -> None:
     factory = make_adapter_factory(
-        _CaptureLLM(), _ScriptedEmbedder({}), retriever_kind="hybrid",
-        direct_answer=True, chrono_sort=True,
+        _CaptureLLM(),
+        _ScriptedEmbedder({}),
+        retriever_kind="hybrid",
+        direct_answer=True,
+        chrono_sort=True,
     )
     adapter = factory()
     hybrid = adapter.session.retriever
@@ -162,9 +175,14 @@ def test_chrono_key_orders_by_date_then_turn_position() -> None:
 
 
 _FLOOR_SCORES = {
-    "a0": 0.99, "a1": 0.98, "a2": 0.97, "a3": 0.96,
-    "b0": 0.40, "b1": 0.10,
-    "c0": 0.30, "c1": 0.05,
+    "a0": 0.99,
+    "a1": 0.98,
+    "a2": 0.97,
+    "a3": 0.96,
+    "b0": 0.40,
+    "b1": 0.10,
+    "c0": 0.30,
+    "c1": 0.05,
 }
 
 
@@ -173,9 +191,14 @@ def _floor_bundle(turn_rerank: str, max_items: int = 4, lexical: bool = False):
     for name in _FLOOR_SCORES:
         store.items.append(MemoryItem(id=name, content=name, metadata={"session_id": name[0]}))
     r = SessionAwareSemanticRetriever(
-        store=store, embedder=_ScriptedEmbedder(_FLOOR_SCORES), top_k=max_items,
-        session_top_k=3, turns_per_session=1, max_items=max_items,
-        turn_rerank=turn_rerank, lexical=lexical,
+        store=store,
+        embedder=_ScriptedEmbedder(_FLOOR_SCORES),
+        top_k=max_items,
+        session_top_k=3,
+        turns_per_session=1,
+        max_items=max_items,
+        turn_rerank=turn_rerank,
+        lexical=lexical,
         score_weights={"relevance": 1.0, "importance": 0.0, "recency": 0.0, "confidence": 0.0},
     )
     r._refresh_index()
@@ -215,9 +238,14 @@ def test_scorer_weights_are_honoured_under_session_aware_retrieval() -> None:
 
     def top(weights: dict[str, float]) -> str:
         r = SessionAwareSemanticRetriever(
-            store=store, embedder=_ScriptedEmbedder({"old": 0.9, "new": 0.6}),
-            top_k=1, session_top_k=1, turns_per_session=1, max_items=1,
-            score_weights=weights, tau_hours=168.0,
+            store=store,
+            embedder=_ScriptedEmbedder({"old": 0.9, "new": 0.6}),
+            top_k=1,
+            session_top_k=1,
+            turns_per_session=1,
+            max_items=1,
+            score_weights=weights,
+            tau_hours=168.0,
         )
         r._refresh_index()
         return r._bundle_topk(Query(text="QUERY"), _budget()).items[0].content
@@ -235,8 +263,13 @@ def test_lexical_fusion_admits_a_rare_token_match_cosine_misses() -> None:
 
     def picked(lexical: bool) -> list[str]:
         r = SessionAwareSemanticRetriever(
-            store=store, embedder=_ScriptedEmbedder(scores), top_k=2,
-            session_top_k=2, turns_per_session=1, max_items=2, lexical=lexical,
+            store=store,
+            embedder=_ScriptedEmbedder(scores),
+            top_k=2,
+            session_top_k=2,
+            turns_per_session=1,
+            max_items=2,
+            lexical=lexical,
         )
         r._refresh_index()
         return [it.content for it in r._bundle_topk(Query(text="Roscioli"), _budget()).items]
@@ -246,7 +279,11 @@ def test_lexical_fusion_admits_a_rare_token_match_cosine_misses() -> None:
 
 
 def test_bm25_score_all_covers_every_item_in_order() -> None:
-    items = [MemoryItem(content="apple pie"), MemoryItem(content="banana"), MemoryItem(content="apple")]
+    items = [
+        MemoryItem(content="apple pie"),
+        MemoryItem(content="banana"),
+        MemoryItem(content="apple"),
+    ]
     scores = BM25Index(items).score_all("apple")
     assert len(scores) == 3
     assert scores[1] == 0.0 and scores[0] > 0 and scores[2] > 0
@@ -257,7 +294,8 @@ def test_bm25_score_all_covers_every_item_in_order() -> None:
 
 async def test_windowed_count_question_gets_dated_aggregate_prompt() -> None:
     prompt = await _prompt_for(
-        "How many bike repairs did I do in April?", qtype="multi-session",
+        "How many bike repairs did I do in April?",
+        qtype="multi-session",
     )
     assert "combine information" in prompt
     assert "[2023-04-10" in prompt  # turns are date-stamped
@@ -266,14 +304,16 @@ async def test_windowed_count_question_gets_dated_aggregate_prompt() -> None:
 
 async def test_date_delta_question_still_gets_temporal_prompt() -> None:
     prompt = await _prompt_for(
-        "How many days ago did I fix the bike?", qtype="temporal-reasoning",
+        "How many days ago did I fix the bike?",
+        qtype="temporal-reasoning",
     )
     assert "compute the difference" in prompt
 
 
 async def test_prior_value_ku_question_is_not_told_latest_wins() -> None:
     prompt = await _prompt_for(
-        "Where did I initially keep the bike?", qtype="knowledge-update",
+        "Where did I initially keep the bike?",
+        qtype="knowledge-update",
     )
     assert "EARLIER state" in prompt
     assert "never answer with a value the user has since changed" not in prompt
@@ -287,7 +327,8 @@ async def test_current_value_ku_question_keeps_latest_wins() -> None:
 async def test_preference_question_is_not_pulled_into_aggregate_prompt() -> None:
     prompt = await _prompt_for(
         "Can you list some bike accessories I might like?",
-        qtype="single-session-preference", preference_conditioning=True,
+        qtype="single-session-preference",
+        preference_conditioning=True,
     )
     assert "preference this user has stated" in prompt
 
@@ -350,10 +391,19 @@ def test_quota_budget_reports_the_real_cap() -> None:
 
 
 def test_versions_block_derives_non_comparable_from_deviations() -> None:
-    args = _parse_args([
-        "--provider", "meta", "--top-k", "24", "--reasoner", "direct",
-        "--retriever", "hybrid", "--session-aware-retrieval",
-    ])
+    args = _parse_args(
+        [
+            "--provider",
+            "meta",
+            "--top-k",
+            "24",
+            "--reasoner",
+            "direct",
+            "--retriever",
+            "hybrid",
+            "--session-aware-retrieval",
+        ]
+    )
     llm = argparse.Namespace(model="llama")
     block = _versions_block(args, "muse-wonder-1.0", llm, _ScriptedEmbedder({}))
     assert block["non_comparable"] is True
@@ -368,7 +418,8 @@ def test_versions_block_derives_non_comparable_from_deviations() -> None:
 async def test_factual_question_with_preference_wording_keeps_factual_prompt() -> None:
     # "for my" is a preference wording term; the dataset label says otherwise.
     prompt = await _prompt_for(
-        "What did I buy for my bike?", qtype="single-session-user",
+        "What did I buy for my bike?",
+        qtype="single-session-user",
         preference_conditioning=True,
     )
     assert "preference this user has stated" not in prompt
@@ -387,16 +438,23 @@ def test_preference_wording_applies_only_without_a_label() -> None:
 def _role_bundle(question: str, user_first: bool) -> list[str]:
     turns = {
         # Assistant replies outscore the user turn that carries the answer.
-        "a-reply-1": ("assistant", 0.95), "a-reply-2": ("assistant", 0.93),
-        "u-evidence": ("user", 0.60), "u-other": ("user", 0.20),
+        "a-reply-1": ("assistant", 0.95),
+        "a-reply-2": ("assistant", 0.93),
+        "u-evidence": ("user", 0.60),
+        "u-other": ("user", 0.20),
     }
     store = FlatHaystackStore()
     for text, (role, _s) in turns.items():
         store.items.append(MemoryItem(content=text, metadata={"session_id": "s", "role": role}))
     r = SessionAwareSemanticRetriever(
-        store=store, embedder=_ScriptedEmbedder({t: s for t, (_r, s) in turns.items()}),
-        top_k=2, session_top_k=1, turns_per_session=2, max_items=2,
-        turn_rerank="floor", user_first=user_first,
+        store=store,
+        embedder=_ScriptedEmbedder({t: s for t, (_r, s) in turns.items()}),
+        top_k=2,
+        session_top_k=1,
+        turns_per_session=2,
+        max_items=2,
+        turn_rerank="floor",
+        user_first=user_first,
     )
     r._refresh_index()
     return [it.content for it in r._bundle_topk(Query(text=question), _budget()).items]

@@ -9,6 +9,7 @@ follow from that — a global turn re-rank, and ``chrono_sort`` actually
 taking effect on this code path — plus the ``max_items`` floor that keeps
 the cosine arm of the hybrid from being starved relative to BM25.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -43,16 +44,28 @@ class _ScriptedEmbedder:
 # Three sessions, four turns each. Session A holds the three strongest
 # turns overall — the shape a quota of 2-per-session cannot serve.
 _SCORES = {
-    "a0": 0.99, "a1": 0.95, "a2": 0.93, "a3": 0.10,
-    "b0": 0.90, "b1": 0.20, "b2": 0.15, "b3": 0.05,
-    "c0": 0.50, "c1": 0.12, "c2": 0.08, "c3": 0.02,
+    "a0": 0.99,
+    "a1": 0.95,
+    "a2": 0.93,
+    "a3": 0.10,
+    "b0": 0.90,
+    "b1": 0.20,
+    "b2": 0.15,
+    "b3": 0.05,
+    "c0": 0.50,
+    "c1": 0.12,
+    "c2": 0.08,
+    "c3": 0.02,
 }
 
 
 def _budget() -> TokenBudget:
     return TokenBudget(
-        total=10_000, stm_reserved=10_000, mtm_reserved=0,
-        ltm_reserved=0, response_reserved=0,
+        total=10_000,
+        stm_reserved=10_000,
+        mtm_reserved=0,
+        ltm_reserved=0,
+        response_reserved=0,
     )
 
 
@@ -99,8 +112,11 @@ def test_quota_caps_evidence_that_clusters_in_one_session() -> None:
 def test_global_rerank_admits_the_strongest_turns_overall() -> None:
     """Same two sessions, same budget of 4 — but ranked across them."""
     _r, b = _bundle(
-        session_top_k=2, turns_per_session=2, max_items=4,
-        top_k=4, turn_rerank="global",
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=4,
+        top_k=4,
+        turn_rerank="global",
     )
     assert _contents(b) == ["a0", "a1", "a2", "b0"]
 
@@ -108,8 +124,11 @@ def test_global_rerank_admits_the_strongest_turns_overall() -> None:
 def test_global_rerank_still_respects_session_top_k() -> None:
     """Session C is outside the top two, so none of its turns appear."""
     _r, b = _bundle(
-        session_top_k=2, turns_per_session=2, max_items=12,
-        top_k=12, turn_rerank="global",
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=12,
+        top_k=12,
+        turn_rerank="global",
     )
     assert not any(c.startswith("c") for c in _contents(b))
 
@@ -122,17 +141,24 @@ def test_chrono_sort_restores_timeline_order(rerank: str) -> None:
     ``--session-aware-retrieval`` — the pinned configuration.
     """
     _r, plain = _bundle(
-        session_top_k=2, turns_per_session=2, max_items=4,
-        top_k=4, turn_rerank=rerank,
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=4,
+        top_k=4,
+        turn_rerank=rerank,
     )
     _r2, chrono = _bundle(
-        session_top_k=2, turns_per_session=2, max_items=4,
-        top_k=4, turn_rerank=rerank, chrono_sort=True,
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=4,
+        top_k=4,
+        turn_rerank=rerank,
+        chrono_sort=True,
     )
     order = list(_SCORES)
     picked = _contents(chrono)
     assert sorted(picked) == sorted(_contents(plain))  # same selection
-    assert picked == sorted(picked, key=order.index)   # chronological
+    assert picked == sorted(picked, key=order.index)  # chronological
 
 
 def test_max_items_never_falls_below_top_k() -> None:
@@ -142,15 +168,22 @@ def test_max_items_never_falls_below_top_k() -> None:
     which quietly shrinks the budget instead of widening it.
     """
     r, _b = _bundle(
-        session_top_k=4, turns_per_session=2, max_items=4, top_k=12,
+        session_top_k=4,
+        turns_per_session=2,
+        max_items=4,
+        top_k=12,
     )
     assert r.max_items == 12
 
 
 def test_debug_info_records_the_arm() -> None:
     _r, b = _bundle(
-        session_top_k=2, turns_per_session=2, max_items=4,
-        top_k=4, turn_rerank="global", chrono_sort=True,
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=4,
+        top_k=4,
+        turn_rerank="global",
+        chrono_sort=True,
     )
     assert b.debug_info["turn_rerank"] == "global"
     assert b.debug_info["chrono_sort"] is True
@@ -159,9 +192,14 @@ def test_debug_info_records_the_arm() -> None:
 
 def test_retrieve_entrypoint_agrees_with_bundle() -> None:
     r = SessionAwareSemanticRetriever(
-        store=_store(), embedder=_ScriptedEmbedder(_SCORES),
-        session_top_k=2, turns_per_session=2, max_items=4,
-        top_k=4, turn_rerank="global", mode="topk",
+        store=_store(),
+        embedder=_ScriptedEmbedder(_SCORES),
+        session_top_k=2,
+        turns_per_session=2,
+        max_items=4,
+        top_k=4,
+        turn_rerank="global",
+        mode="topk",
     )
     got = asyncio.run(r.retrieve(Query(text="QUERY"), _budget()))
     assert [i.content for i in got.items] == ["a0", "a1", "a2", "b0"]

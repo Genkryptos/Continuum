@@ -6,6 +6,7 @@ it exists so that "supersession failed here" can be asserted rather than
 guessed, and a false positive would make it worse than nothing. The tests
 therefore weight abstention cases at least as heavily as firing ones.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -19,12 +20,11 @@ from evals.longmemeval.evidence import (
 
 
 def _turn(date: str, content: str, *, index: int = 0, sid: str = "s1") -> GoldTurn:
-    return GoldTurn(
-        session_id=sid, date=date, role="user", content=content, index=index
-    )
+    return GoldTurn(session_id=sid, date=date, role="user", content=content, index=index)
 
 
 # ── gold_turns_from_raw ─────────────────────────────────────────────────────
+
 
 def _raw(**over):
     base = {
@@ -74,14 +74,17 @@ def test_string_answer_session_id_is_accepted():
 
 
 def test_row_with_no_flagged_turns():
-    raw = _raw(haystack_sessions=[
-        [{"role": "user", "content": "noise"}],
-        [{"role": "user", "content": "nothing flagged"}],
-    ])
+    raw = _raw(
+        haystack_sessions=[
+            [{"role": "user", "content": "noise"}],
+            [{"role": "user", "content": "nothing flagged"}],
+        ]
+    )
     assert gold_turns_from_raw(raw) == []
 
 
 # ── gold_turn_recall ────────────────────────────────────────────────────────
+
 
 def test_recall_counts_turns_not_sessions():
     """The failure session recall cannot see: two gold turns, one retrieved."""
@@ -106,8 +109,7 @@ def test_recall_matches_a_span_of_the_turn():
     turn = "I graduated with a degree in Business Administration which has helped"
     gold = [_turn("2023/01/01", turn)]
     # Retrieval surfaced a longer item that contains the turn.
-    assert gold_turn_recall(gold, [f"prefix... {turn} ...suffix"])[
-        "gold_turn_recall"] == 1.0
+    assert gold_turn_recall(gold, [f"prefix... {turn} ...suffix"])["gold_turn_recall"] == 1.0
 
 
 def test_no_gold_turns_reports_zero_count_not_zero_recall_over_nothing():
@@ -124,23 +126,27 @@ def test_empty_retrieval_misses_everything():
 # ── supersession_verdict ────────────────────────────────────────────────────
 
 KOREAN = [
-    _turn("2023/08/11", "have you tried any good Korean restaurants? "
-                        "I've tried three different ones recently"),
-    _turn("2023/09/30", "have you tried any good Korean restaurants? "
-                        "I've tried four different ones so far", index=1),
+    _turn(
+        "2023/08/11",
+        "have you tried any good Korean restaurants? I've tried three different ones recently",
+    ),
+    _turn(
+        "2023/09/30",
+        "have you tried any good Korean restaurants? I've tried four different ones so far",
+        index=1,
+    ),
 ]
 
 
 def test_stale_when_answer_takes_the_superseded_number():
-    assert supersession_verdict(
-        KOREAN, "You've tried **three** Korean restaurants.", "four"
-    ) == "stale"
+    assert (
+        supersession_verdict(KOREAN, "You've tried **three** Korean restaurants.", "four")
+        == "stale"
+    )
 
 
 def test_fresh_when_answer_takes_the_current_number():
-    assert supersession_verdict(
-        KOREAN, "You've tried four Korean restaurants.", "four"
-    ) == "fresh"
+    assert supersession_verdict(KOREAN, "You've tried four Korean restaurants.", "four") == "fresh"
 
 
 def test_number_words_and_digits_are_the_same_value():
@@ -152,9 +158,9 @@ def test_grouped_thousands_are_compared_as_values():
         _turn("2023/01/01", "I was pre-approved for $350,000 with Wells Fargo"),
         _turn("2023/06/01", "I was pre-approved for $400,000 instead", index=1),
     ]
-    assert supersession_verdict(
-        gold, "You were pre-approved for **$350,000**.", "$400,000"
-    ) == "stale"
+    assert (
+        supersession_verdict(gold, "You were pre-approved for **$350,000**.", "$400,000") == "stale"
+    )
 
 
 def test_clock_times_are_compared_as_values():
@@ -162,9 +168,7 @@ def test_clock_times_are_compared_as_values():
         _turn("2023/01/01", "I wake up around 8:30 am on Saturdays"),
         _turn("2023/06/01", "I now wake up around 7:30 am on Saturdays", index=1),
     ]
-    assert supersession_verdict(
-        gold, "You wake up around 8:30 am.", "7:30 am"
-    ) == "stale"
+    assert supersession_verdict(gold, "You wake up around 8:30 am.", "7:30 am") == "stale"
 
 
 def test_lexical_path_handles_non_numeric_supersession():
@@ -172,12 +176,14 @@ def test_lexical_path_handles_non_numeric_supersession():
         _turn("2023/01/01", "the painting hangs above the living room sofa"),
         _turn("2023/06/01", "I moved the painting into the bedroom", index=1),
     ]
-    assert supersession_verdict(
-        gold, "It is displayed above your living room sofa.", "in my bedroom"
-    ) == "stale"
+    assert (
+        supersession_verdict(gold, "It is displayed above your living room sofa.", "in my bedroom")
+        == "stale"
+    )
 
 
 # ── abstention: the cases that protect precision ────────────────────────────
+
 
 def test_abstains_on_a_single_gold_turn():
     assert supersession_verdict([KOREAN[0]], "three", "three") is None
@@ -214,9 +220,7 @@ def test_answer_carrying_both_values_is_fresh_not_stale():
     "You used to have three, now four" is a correct answer. Requiring the
     absence of the current value is what stops it being called stale.
     """
-    assert supersession_verdict(
-        KOREAN, "You had tried three, and now four.", "four"
-    ) == "fresh"
+    assert supersession_verdict(KOREAN, "You had tried three, and now four.", "four") == "fresh"
 
 
 def test_numeric_extractor_wins_over_lexical_when_both_could_fire():

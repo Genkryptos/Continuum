@@ -374,9 +374,11 @@ async def test_inmemory_update_without_valid_keys_preserves_range() -> None:
     """A content-only patch must leave the bi-temporal range alone."""
     ltm = InMemoryLTM()
     a = await ltm.upsert(MemoryItem(content="old", tier=MemoryTier.LTM))
-    before = [r async for r in ltm.iter_live()][0].valid_range
+    (before_row,) = [r async for r in ltm.iter_live()]
+    before = before_row.valid_range
     await ltm.update(a, {"content": "new"})
-    after = [r async for r in ltm.iter_live()][0].valid_range
+    (after_row,) = [r async for r in ltm.iter_live()]
+    after = after_row.valid_range
     assert (before.valid_from, before.valid_to) == (after.valid_from, after.valid_to)
 
 
@@ -561,8 +563,13 @@ async def test_ingest_cache_replays_without_calling_the_llm(tmp_path) -> None:
             text = (block.text or "").lower()
             fact_text = "User lives in Paris" if "paris" in text else "User lived in Berlin"
             return [
-                Fact(text=fact_text, confidence=0.9, entities_mentioned=[],
-                     source_block_id=block.id, category="personal")
+                Fact(
+                    text=fact_text,
+                    confidence=0.9,
+                    entities_mentioned=[],
+                    source_block_id=block.id,
+                    category="personal",
+                )
             ]
 
     async def run(mode: str):
@@ -675,8 +682,8 @@ def test_neighbours_are_rescored_to_true_cosine_not_rrf() -> None:
 
     qvec = [1.0, 0.0, 0.0]
     neighbours = [
-        si("identical direction", [1.0, 0.0, 0.0], 0.0164),   # cosine 1.0
-        si("orthogonal", [0.0, 1.0, 0.0], 0.0161),            # cosine 0.0
+        si("identical direction", [1.0, 0.0, 0.0], 0.0164),  # cosine 1.0
+        si("orthogonal", [0.0, 1.0, 0.0], 0.0161),  # cosine 0.0
     ]
     assert all(n.scores.relevance < 0.5 for n in neighbours), "precondition: RRF is tiny"
 
@@ -778,8 +785,11 @@ async def test_ingest_cache_refuses_rows_it_cannot_replay(tmp_path) -> None:
         ltm = InMemoryLTM()
         # Pre-existing row — NOT produced by this ingest.
         stale_id = await ltm.upsert(
-            MemoryItem(content="User lives in Berlin", tier=MemoryTier.LTM,
-                       metadata={"kind": "fact", "source": "ltm_fact"})
+            MemoryItem(
+                content="User lives in Berlin",
+                tier=MemoryTier.LTM,
+                metadata={"kind": "fact", "source": "ltm_fact"},
+            )
         )
         store = ContinuumLTMHaystackStore(
             ltm=ltm,
@@ -854,9 +864,7 @@ async def test_bitemporal_update_supersedes_instead_of_overwriting() -> None:
     store = ContinuumLTMHaystackStore(
         ltm=ltm,
         embedder=_NullEmbedder(),
-        promoter=_CannedPromoter(
-            [Decision(op="UPDATE", target_id=old_id, rationale="job change")]
-        ),
+        promoter=_CannedPromoter([Decision(op="UPDATE", target_id=old_id, rationale="job change")]),
         fact_extractor=_CannedFactExtractor([_fact("User works at Globex")]),
         llm_available=True,
         ltm_backend_label="in_memory",
@@ -901,11 +909,15 @@ async def test_replay_facts_only_reuses_facts_but_reruns_decisions(tmp_path) -> 
         async def extract_facts(self, block, entities):
             self.calls.append(block)
             text = (block.text or "").lower()
-            return [Fact(
-                text="User lives in Paris" if "paris" in text else "User lived in Berlin",
-                confidence=0.9, entities_mentioned=[],
-                source_block_id=block.id, category="personal",
-            )]
+            return [
+                Fact(
+                    text="User lives in Paris" if "paris" in text else "User lived in Berlin",
+                    confidence=0.9,
+                    entities_mentioned=[],
+                    source_block_id=block.id,
+                    category="personal",
+                )
+            ]
 
     class _Promoter:
         """Counts how often it is consulted; always ADDs."""
@@ -915,8 +927,7 @@ async def test_replay_facts_only_reuses_facts_but_reruns_decisions(tmp_path) -> 
 
         async def decide_operations_batch(self, items):
             self.calls += 1
-            return [Decision(op="ADD", target_id=None, rationale="new")
-                    for _ in items]
+            return [Decision(op="ADD", target_id=None, rationale="new") for _ in items]
 
     async def run(*, replay_facts_only: bool):
         extractor, promoter = _Extractor(), _Promoter()
@@ -986,29 +997,41 @@ async def test_replay_preserves_session_grouping(tmp_path) -> None:
                         if row.content == "User lived in Berlin":
                             target = row.id
                             break
-                out.append(Decision(
-                    op="DELETE" if target else "ADD",
-                    target_id=target, rationale="later supersedes earlier",
-                ))
+                out.append(
+                    Decision(
+                        op="DELETE" if target else "ADD",
+                        target_id=target,
+                        rationale="later supersedes earlier",
+                    )
+                )
             return out
 
     class _OnePerSession:
         async def extract_facts(self, block, entities):
             text = (block.text or "").lower()
-            return [Fact(
-                text="User lives in Paris" if "paris" in text else "User lived in Berlin",
-                confidence=0.9, entities_mentioned=[],
-                source_block_id=block.id, category="personal",
-            )]
+            return [
+                Fact(
+                    text="User lives in Paris" if "paris" in text else "User lived in Berlin",
+                    confidence=0.9,
+                    entities_mentioned=[],
+                    source_block_id=block.id,
+                    category="personal",
+                )
+            ]
 
     async def run(*, replay_facts_only: bool):
         ltm = InMemoryLTM()
         promoter = _SupersedeBerlin(ltm)
         store = ContinuumLTMHaystackStore(
-            ltm=ltm, embedder=_NullEmbedder(), promoter=promoter,
-            fact_extractor=_OnePerSession(), llm_available=True,
-            ltm_backend_label="in_memory", cache=cache,
-            cache_fingerprint="fp-session", replay_facts_only=replay_facts_only,
+            ltm=ltm,
+            embedder=_NullEmbedder(),
+            promoter=promoter,
+            fact_extractor=_OnePerSession(),
+            llm_available=True,
+            ltm_backend_label="in_memory",
+            cache=cache,
+            cache_fingerprint="fp-session",
+            replay_facts_only=replay_facts_only,
         )
         await store.append(_turn("s1", "user", "I lived in Berlin."))
         await store.append(_turn("s2", "user", "I moved to Paris."))

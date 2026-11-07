@@ -63,6 +63,7 @@ paying for one more model call.
 
 Reproduce with ``evals/audit/scalar_supersession_coverage.py``.
 """
+
 from __future__ import annotations
 
 import re
@@ -81,24 +82,85 @@ _URLISH = re.compile(
 _NUMERIC = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?::\d{2})?(?:\.\d+)?")
 
 _NUMBER_WORDS = {
-    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
-    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
-    "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14",
-    "fifteen": "15", "sixteen": "16", "seventeen": "17", "eighteen": "18",
-    "nineteen": "19", "twenty": "20",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "thirteen": "13",
+    "fourteen": "14",
+    "fifteen": "15",
+    "sixteen": "16",
+    "seventeen": "17",
+    "eighteen": "18",
+    "nineteen": "19",
+    "twenty": "20",
 }
 
 #: Function words carry no topic identity. Small on purpose: the rule compares
 #: *overlap*, so a word shared by both texts helps rather than hurts, and one
 #: shared by neither is irrelevant.
-_STOPWORDS = frozenset({
-    "that", "this", "with", "have", "been", "from", "they", "them", "there",
-    "their", "would", "could", "should", "about", "into", "your", "mine",
-    "what", "when", "where", "which", "will", "also", "just", "really",
-    "very", "much", "many", "thing", "things", "time", "times", "going",
-    "know", "think", "like", "want", "need", "make", "made", "take", "took",
-    "over", "back", "down", "here", "than", "then", "most", "some",
-})
+_STOPWORDS = frozenset(
+    {
+        "that",
+        "this",
+        "with",
+        "have",
+        "been",
+        "from",
+        "they",
+        "them",
+        "there",
+        "their",
+        "would",
+        "could",
+        "should",
+        "about",
+        "into",
+        "your",
+        "mine",
+        "what",
+        "when",
+        "where",
+        "which",
+        "will",
+        "also",
+        "just",
+        "really",
+        "very",
+        "much",
+        "many",
+        "thing",
+        "things",
+        "time",
+        "times",
+        "going",
+        "know",
+        "think",
+        "like",
+        "want",
+        "need",
+        "make",
+        "made",
+        "take",
+        "took",
+        "over",
+        "back",
+        "down",
+        "here",
+        "than",
+        "then",
+        "most",
+        "some",
+    }
+)
 
 #: Minimum content-word Jaccard for two texts to count as the same frame.
 #: Swept over 0.10-0.40 on the LongMemEval knowledge-update gold pairs: 0.10
@@ -126,10 +188,7 @@ def scalar_values(text: str) -> set[str]:
 
 
 def _content_words(text: str) -> set[str]:
-    return {
-        w for w in re.findall(r"[a-z]{4,}", str(text or "").lower())
-        if w not in _STOPWORDS
-    }
+    return {w for w in re.findall(r"[a-z]{4,}", str(text or "").lower()) if w not in _STOPWORDS}
 
 
 def frame_overlap(a: str, b: str) -> float:
@@ -140,9 +199,7 @@ def frame_overlap(a: str, b: str) -> float:
     return len(left & right) / len(left | right)
 
 
-def supersedes(
-    candidate: str, existing: str, *, min_overlap: float = DEFAULT_MIN_OVERLAP
-) -> bool:
+def supersedes(candidate: str, existing: str, *, min_overlap: float = DEFAULT_MIN_OVERLAP) -> bool:
     """True when *candidate* restates *existing* with a different scalar.
 
     Symmetric by construction — it detects that two texts disagree, not which

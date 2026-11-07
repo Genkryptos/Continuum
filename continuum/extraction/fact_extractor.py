@@ -176,14 +176,12 @@ class FactExtractor:
             # truncated — claiming so sends the reader after the wrong fix.
             approx_tokens = len(content) / 4.0  # ~4 chars/token, good enough
             truncated = (
-                not content.rstrip().endswith("}")
-                and approx_tokens >= 0.8 * self.config.max_tokens
+                not content.rstrip().endswith("}") and approx_tokens >= 0.8 * self.config.max_tokens
             )
             log.error(
                 "fact extraction %s for block %s (%d input chars, %d chars "
                 "≈%d tokens returned, max_tokens=%d) — returning no facts. %s",
-                "TRUNCATED — hit max_tokens" if truncated
-                else "returned MALFORMED JSON",
+                "TRUNCATED — hit max_tokens" if truncated else "returned MALFORMED JSON",
                 block.id,
                 len(block.text or ""),
                 len(content),
@@ -192,8 +190,8 @@ class FactExtractor:
                 "Raise the token budget or shrink the block via MTM compression."
                 if truncated
                 else f"Well inside the token budget, so this is the model "
-                     f"emitting invalid JSON — try a model stronger at strict "
-                     f"JSON rather than a bigger budget. Parse error: {exc}",
+                f"emitting invalid JSON — try a model stronger at strict "
+                f"JSON rather than a bigger budget. Parse error: {exc}",
             )
             return []
         except Exception:

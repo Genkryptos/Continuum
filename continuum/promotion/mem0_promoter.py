@@ -317,9 +317,7 @@ class Mem0Promoter:
             getattr(self.config, "scalar_supersession_min_cosine", 0.0),
         )
         if best is not None and max_c >= scalar_floor:
-            idx = find_superseded(
-                candidate.text, [si.item.content or "" for si in neighbors]
-            )
+            idx = find_superseded(candidate.text, [si.item.content or "" for si in neighbors])
             if idx is not None:
                 target = neighbors[idx]
                 return Decision(

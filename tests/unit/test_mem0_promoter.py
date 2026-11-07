@@ -426,10 +426,14 @@ class TestPostgresAuditSink:
 # Scalar-restatement short-circuit (continuum.promotion.scalar_supersession)
 # ---------------------------------------------------------------------------
 
-KOREAN_OLD = ("have you tried any good Korean restaurants in your city "
-              "lately? I've tried three different ones recently")
-KOREAN_NEW = ("have you tried any good Korean restaurants in your city "
-              "lately? I've tried four different ones so far")
+KOREAN_OLD = (
+    "have you tried any good Korean restaurants in your city "
+    "lately? I've tried three different ones recently"
+)
+KOREAN_NEW = (
+    "have you tried any good Korean restaurants in your city "
+    "lately? I've tried four different ones so far"
+)
 
 
 def test_scalar_restatement_supersedes_without_an_llm_call():
@@ -473,8 +477,9 @@ def test_low_similarity_still_adds_rather_than_superseding():
     must never retire an unrelated memory.
     """
     p = _promoter(FakeLLM([]), add_threshold=0.5)
-    d = p._short_circuit(_fact("I ran 5 miles this morning"),
-                         [_si("the meeting has 3 attendees", 0.10)])
+    d = p._short_circuit(
+        _fact("I ran 5 miles this morning"), [_si("the meeting has 3 attendees", 0.10)]
+    )
     assert d is not None
     assert d.op == "ADD"
 
@@ -485,8 +490,9 @@ def test_no_scalar_disagreement_defers_to_the_llm():
     falls through to the LLM, which is the conservative default.
     """
     p = _promoter(FakeLLM([]), add_threshold=0.5, noop_threshold=0.97)
-    d = p._short_circuit(_fact("I moved to Boston last spring"),
-                         [_si("I moved to New York City last spring", 0.80)])
+    d = p._short_circuit(
+        _fact("I moved to Boston last spring"), [_si("I moved to New York City last spring", 0.80)]
+    )
     assert d is None, "no verdict → let the LLM decide"
 
 
