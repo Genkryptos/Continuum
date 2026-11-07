@@ -277,10 +277,11 @@ class EmbeddingService:
             ) from exc
 
         log.info("loading embedding model %s on %s", self.config.model_name, device)
-        # SentenceTransformer is untyped (mypy sees Any); pin to Encoder so
-        # the declared return type is honoured under --strict no-any-return.
-        encoder: Encoder = SentenceTransformer(self.config.model_name, device=device)
-        return encoder
+        # The upstream signature churns across majors (untyped before 6, a
+        # dozen ``encode`` overloads mypy cannot match to a Protocol from 6 on),
+        # while the one call site -- ``encode(batch, batch_size=...)`` -- works
+        # on all of them. Cast to Encoder rather than chase its overloads.
+        return cast(Encoder, SentenceTransformer(self.config.model_name, device=device))
 
     async def _get_encoder(self) -> Encoder:
         """Lazily build (once) and return the encoder."""

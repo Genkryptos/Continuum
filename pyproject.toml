@@ -107,7 +107,9 @@ code = [
 ]
 # MCP server — expose memory as tools to any MCP client (continuum-mcp)
 mcp = [
-    "mcp>=1.0.0",
+    # mcp 2 renamed FastMCP to MCPServer and changed other APIs; the server
+    # is written against v1 and raises ModuleNotFoundError on import under 2.x.
+    "mcp>=1.0.0,<2",
 ]
 # Everything at once (for full local dev)
 all = [
