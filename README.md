@@ -200,6 +200,13 @@ claude mcp add continuum -e CONTINUUM_DB_DSN="$CONTINUUM_DB_DSN" -- continuum-mc
 Embeddings run locally on `bge-m3` — no API key is needed for memory itself.
 Full transport, backend, and client-config reference: [docs/mcp.md](docs/mcp.md).
 
+The server is built on the **MCP Python SDK 2.x** (`mcp>=2,<3`, which the
+`[mcp]` extra installs). An environment pinned to `mcp<2` won't start it: v2
+removed `mcp.server.fastmcp`. Upgrade with
+`pip install -U "continuum-mcp[mcp]"`. If you embed the server yourself,
+`build_server()` no longer takes `host`/`port`. Pass them to
+`run(transport="streamable-http", host=..., port=...)` instead.
+
 > Supersession + bi-temporal history are strongest on the Postgres path (below);
 > `Memory.in_memory()` is the zero-setup path for demos and tests. Honest scope
 > and known limits: [docs/limitations.md](docs/limitations.md).
