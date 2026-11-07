@@ -33,12 +33,33 @@ between runs); the LongMemEval number is honest but carries reader variance.
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % |
 | **LongMemEval-S** (500 Q, judged, gpt-oss-120b) | **~74 %** (73.6 – 75.6 % across repeated runs) | 60.8 % (v1.0) · 34.4 % (May ceiling) |
 | ↳ same-setup per-category (control run) | multi-session 62 % · temporal 75 % · KU 64 % · assistant 96 % · user 91 % | — |
+| ↳ turn-selection fixes (Nov 2026, **not yet released**, non-comparable config — see below) | **85.8 %** gpt-oss-120b · **87.8 %** with 17 token-capped answers re-run · **90.8 %** muse-wonder-1.0 reader | ~74 % (row above) |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % (tied — recency signal absent) |
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) |
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
 
-> **Honest headline — read this.** On LongMemEval-S the judged number is **~74 %**
+> **Nov 2026 — turn-selection fixes: 85.8 % at gpt-oss-120b (not yet comparable).**
+> Failure forensics showed the remaining misses weren't the reader. They were
+> turns lost *inside* sessions that had been retrieved. Fixing turn selection
+> lifted gold-turn recall to **97.4 %** and the judged score (500 Q,
+> llama-3.3-70b judge) to:
+> - **85.8 %** (429/500) at `gpt-oss-120b`, up from ~74 %;
+> - **87.8 %** after re-running the 17 answers that came back empty because the
+>   reader's hidden reasoning used the whole 2048-token answer cap (**87.2 %** on
+>   a manual row-by-row regrade);
+> - **90.8 %** with `muse-wonder-1.0` as the reader. Retrieval is identical, so
+>   that gap is the reader.
+>
+> These are **not yet comparable** to the ~74 % or to published results: they ran
+> at top-k 48 with LTM off (not the published config), from an uncommitted
+> worktree, and the 87.8 % file mixes 2048- and 8192-token answer caps. The code
+> is in [PR #7](https://github.com/Genkryptos/Continuum/pull/7), not in a release
+> yet. Run artifacts:
+> [`findings/longmemeval/audit_fixes_2026-11/`](https://github.com/Genkryptos/Continuum/tree/experiment/lexical-channel-gating/findings/longmemeval/audit_fixes_2026-11).
+
+> **Honest headline — read this.** On LongMemEval-S the judged number for the
+> released code is **~74 %**
 > (73.6 – 75.6 % across repeated same-setup runs). `gpt-oss-120b` has ~±3–5 pp
 > per-category run-to-run variance, so **a single run is not a stable estimate**:
 > the **76.4 %** in earlier v2.0 notes was a favorable draw, and read-side
