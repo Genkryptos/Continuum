@@ -307,7 +307,7 @@ build: ## Build wheel + sdist into dist/ — hatchling
 
 build-verify: build ## Build, then verify a clean install in a fresh venv
 	@set -e; \
-	WHEEL="$$(ls dist/continuum_memory-*.whl | tail -1)"; \
+	WHEEL="$$(ls dist/continuum_mcp-*.whl | tail -1)"; \
 	TMP_VENV="$$(mktemp -d)/continuum_pip_verify"; \
 	echo "=== clean-venv install of $$WHEEL into $$TMP_VENV ==="; \
 	$(BENCH_PYTHON) -m venv "$$TMP_VENV"; \
