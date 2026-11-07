@@ -142,7 +142,7 @@ Cross-encoder reranker (off by default).
 
 ### `promoter` (`CONTINUUM_PROMOTER_*`)
 
-`Mem0Promoter` config.
+`ContinuumPromoter` config.
 
 | Field | Default | Notes |
 |---|---|---|

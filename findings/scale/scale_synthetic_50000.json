@@ -1,0 +1,66 @@
+{
+  "n_records": 50000,
+  "concurrency": 16,
+  "seed": 0,
+  "environment": {
+    "server_version": "PostgreSQL 16.10 (Homebrew) on aarch64-apple-darwin24.4.0, compiled by Apple clang version 17.0.0 (clang-1700.0.13.3), 64-bit",
+    "pgvector_version": "0.8.0",
+    "migrations": "001,002,003,004,005,006,007",
+    "hnsw_index": "CREATE INDEX memory_nodes_embedding_hnsw_idx ON public.memory_nodes USING hnsw (embedding halfvec_cosine_ops) WITH (m='32', ef_construction='200')",
+    "hnsw_ef_search_server_default": "40",
+    "hnsw_ef_search_used_by_store": 1000
+  },
+  "embed": {
+    "seconds": 179.36588404099894,
+    "texts_per_s": 278.7598113617367,
+    "model": "BAAI/bge-m3",
+    "dim": 1024
+  },
+  "write": {
+    "seconds": 65.34932291699988,
+    "writes_per_s": 765.1188683852923,
+    "latency_p50_ms": 14.12499999969441,
+    "latency_p95_ms": 46.87837500023306,
+    "latency_p99_ms": 60.25908299852745
+  },
+  "end_to_end": {
+    "seconds": 244.71520695799882,
+    "records_per_s": 204.3191374232074,
+    "embed_share_pct": 73.29576542081588
+  },
+  "embedding_coverage": {
+    "with_vector": 50000,
+    "total": 50000
+  },
+  "retrieval": {
+    "k": 10,
+    "repeats": 3,
+    "n_needles": 20,
+    "recall_per_run": [
+      0.4,
+      0.4,
+      0.4
+    ],
+    "recall_mean": 0.4000000000000001,
+    "recall_min": 0.4,
+    "recall_max": 0.4,
+    "latency_p50_ms": 52.77195800044865,
+    "latency_p95_ms": 305.3289590006898,
+    "latency_p99_ms": 325.61579100001836,
+    "misses_first_run": [
+      "Where is invoice data kept, and does it leave Europe?",
+      "What is the safe window to bounce authentication nodes?",
+      "Who can access emergency database credentials?",
+      "How many delivery attempts before a callback is abandoned?",
+      "Which two batch jobs must never overlap?",
+      "Which percentile governs our published response time targets?",
+      "What explains intermittent caching test failures before a release?",
+      "How long do we keep logs now, and why did it change?",
+      "How are premium customer issues escalated?",
+      "What rate limit does the payments vendor enforce?",
+      "How stale is analytics data mid-day?",
+      "Who signs off on letting a service call the internet?"
+    ]
+  },
+  "finished_at": "2026-08-08T23:46:48.364899+00:00"
+}

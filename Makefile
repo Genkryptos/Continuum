@@ -20,7 +20,8 @@
         db-up db-down db-logs db-reset db-clear db-migrate db-migrate-dry check-env check-env-ping run run-full run-mem \
         mcp-install mcp-smoke mcp-eval mcp-bench scale-test mcp-serve mcp-serve-http mcp-claude \
         backfill rerank-ab recall-at-scale soak repro-longmemeval repro-everything bench-ingest bench-retrieval bench-supersession \
-        bench-bitemporal bench-locomo bench-all bench-gate demo-chat build build-verify
+        budget-sample budget-ablation budget-curve \
+        bench-bitemporal bench-supersession-banking bench-bitemporal-banking bench-bitemporal-banking-500 bench-banking bench-head-to-head bench-locomo bench-all bench-gate demo-chat build build-verify
 
 # ── Toolchain ─────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,20 @@ clean: ## Remove caches, coverage artefacts, and build output
 	find . -type d -name "*.egg-info" -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -f .coverage coverage.xml
 
+# ── Cost/accuracy budget ablation (docs/LOW_BUDGET_PLAN.md) ─────────────────
+
+budget-sample: ## Build the frozen category-proportional 250-row ablation subset
+	@$(BENCH_PYTHON) scripts/build_budget_sample.py
+
+budget-ablation: ## Phase 1: the 5-point cost/accuracy curve (64k/32k/16k/8k/4k chars, n=250, ~3.5h, ~$1.15). Resumable.
+	@test -f samples/budget_strat_250.json || $(MAKE) budget-sample
+	@bash scripts/run_budget_ablation.sh
+
+budget-curve: ## Re-render the curve from whatever budget points already exist
+	@$(BENCH_PYTHON) findings/charts/budget_curve.py results/budget_*/ \
+		--csv findings/charts/budget_curve.csv \
+		--png findings/charts/budget_curve.png
+
 # ── Reproducibility — LongMemEval findings (Prompt 42) ───────────────────────
 
 repro-longmemeval: ## Reproduce the LongMemEval-S headline numbers from findings/longmemeval_2026-05.md
@@ -252,6 +267,17 @@ bench-supersession: ## Run the supersession-correctness benchmark (Continuum's k
 bench-bitemporal: ## Run the bi-temporal "as of date Y" benchmark (Continuum-only feature)
 	@$(BENCH_PYTHON) -m bench.bi_temporal --scenarios 20
 
+bench-supersession-banking: ## Banking-domain supersession benchmark (address/OTP/nominee/plan — same machinery, banking corpus)
+	@$(BENCH_PYTHON) -m bench.supersession_banking --scenarios 50
+
+bench-bitemporal-banking: ## Banking-domain bi-temporal "as of" benchmark (statement/audit/dispute dates + backdated corrections)
+	@$(BENCH_PYTHON) -m bench.bi_temporal_banking --scenarios 20
+
+bench-bitemporal-banking-500: ## Large tense-level run: 500 banking bi-temporal questions (375 point-in-time + 125 backdated corrections)
+	@$(BENCH_PYTHON) -m bench.bi_temporal_banking --scenarios 500
+
+bench-banking: bench-supersession-banking bench-bitemporal-banking ## Run both banking-domain correctness benchmarks
+
 bench-locomo: ## Run the LOCOMO benchmark — Continuum vs Mem0 head-to-head (needs OPENROUTER_API_KEY + GROQ_API_KEY; downloads dataset if absent)
 	@test -f evals/locomo/data/locomo10.json || ( \
 		echo "downloading LOCOMO dataset…" && mkdir -p evals/locomo/data && \
@@ -262,7 +288,7 @@ bench-locomo: ## Run the LOCOMO benchmark — Continuum vs Mem0 head-to-head (ne
 		--judge-provider groq --judge-model llama-3.3-70b-versatile \
 		--output results/locomo_v1
 
-bench-all: bench-ingest bench-retrieval bench-supersession bench-bitemporal ## Run every Phase-3B memory-operation benchmark in sequence
+bench-all: bench-ingest bench-retrieval bench-supersession bench-bitemporal bench-banking ## Run every Phase-3B memory-operation benchmark in sequence (incl. banking domain transfer)
 
 bench-gate: ## Verify the latest bench-all run against the README's contract thresholds
 	@$(BENCH_PYTHON) scripts/check_bench_regressions.py
@@ -307,3 +333,6 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+
+bench-head-to-head: ## True head-to-head on identical sampled scenarios: Continuum vs naive baselines vs real Mem0 SDK (needs OPENROUTER_API_KEY)
+	@$(BENCH_PYTHON) -m bench.head_to_head_banking --pit 20 --retro 20 --ss 25

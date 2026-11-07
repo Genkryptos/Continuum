@@ -102,6 +102,20 @@ class BM25Index:
     def is_empty(self) -> bool:
         return self._bm25 is None or not self._items
 
+    def score_all(self, query_text: str) -> list[float]:
+        """Raw BM25 score of every indexed item, in index order.
+
+        For callers that fuse over the whole corpus rather than a top-``k``
+        cut. Empty corpus or a query with no tokens → all zeros.
+        """
+        if self.is_empty:
+            return [0.0 for _ in self._items]
+        q_tokens = tokenize(query_text)
+        if not q_tokens:
+            return [0.0 for _ in self._items]
+        assert self._bm25 is not None  # narrowed by is_empty above
+        return [float(s) for s in self._bm25.get_scores(q_tokens)]
+
     def query(self, query_text: str, k: int) -> list[ScoredItem]:
         """Top-``k`` items by BM25 against ``query_text``."""
         if self.is_empty or k <= 0:

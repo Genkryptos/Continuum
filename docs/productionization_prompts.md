@@ -18,11 +18,17 @@ WHAT IT IS
 Persistent memory for AI agents: ingest conversation turns → extract facts →
 bi-temporal SUPERSESSION (handle updates/retractions, keep history queryable
 "as of date X") → hybrid retrieval. Bi-temporal supersession is the
-differentiator (Mem0 ~49% / Zep ~63.8% / Continuum ~75.6% on LongMemEval-S).
+differentiator — it is measured deterministically at 100%, with no reader in
+the loop, which no LongMemEval delta can match for reproducibility.
+LongMemEval-S is ~74% (73.6–75.6% across runs, gpt-oss-120b reader); reader-
+matched, that is ~6pp above Mem0-S and ~15pp below Hindsight. See
+`docs/report.md` §6.
 
 HONEST BENCHMARK STATE (do not inflate)
-- Best config: reflect (preference+KU) + vote-3 = ~75.6% LongMemEval-S judged
-  (llama-3.3-70b judge), gpt-oss-120b reader. Same-setup baseline is 73.8%.
+- LongMemEval-S is **~74%** (73.6-75.6% across runs; llama-3.3-70b judge,
+  gpt-oss-120b reader). The same-setup baseline is 73.8%, so reflect+vote-3 is
+  **within noise of the control, not a "best config"** -- an earlier 75.6% draw
+  was favourable, not reproducible. Quote ~74% with the range, never 75.6%.
 - Preference +20pp is the clean per-category win. ~5k tokens/query.
 - RESEARCH LEVERS THAT ARE NET-NEGATIVE AND MUST NOT BE IN THE PRODUCT API:
   synthesis/router (counting), distill, temporal codemath. They stay opt-in
@@ -148,8 +154,10 @@ TASK
 1. README.md — rewrite the top:
    - One-paragraph thesis (memory for agents; bi-temporal supersession is the
      wedge).
-   - The three numbers, honestly: LongMemEval-S ~75.6% (architecture-native,
-     gpt-oss-120b, reflect+vote-3), ~5k tokens/query, supersession benchmark.
+   - The three numbers, honestly: LongMemEval-S ~74% (73.6-75.6% across runs,
+     gpt-oss-120b), ~4,900 context tokens/query (measured, not estimated --
+     findings/budget_curve_2026-08.md), and the deterministic supersession
+     benchmark at 100%. The last one is the only one with no variance band.
    - 5-minute QUICKSTART using the Memory facade:
        from continuum import Memory
        mem = Memory(in_memory=True)

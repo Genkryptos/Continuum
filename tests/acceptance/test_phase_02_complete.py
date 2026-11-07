@@ -19,7 +19,7 @@ Checks
    merge correctly.
 5. Fact extraction: ``FactExtractor`` distils atomic facts from a
    ``SummaryBlock`` (LLM via injected ``completion_fn``).
-6. ``Promoter`` orchestrates real MTM→LTM promotion with ``Mem0Promoter``
+6. ``Promoter`` orchestrates real MTM→LTM promotion with ``ContinuumPromoter``
    decisions and a Postgres audit sink — ``memory_promotions`` is populated.
 7. ``TriggerManager``: new-entity and block-accumulation triggers fire.
 8. ``Retriever`` pipeline assembles STM + MTM + LTM into a ``ContextBundle``.
@@ -81,7 +81,7 @@ from continuum.extraction import (  # noqa: E402
     LLMEntityExtractor,
 )
 from continuum.promotion import (  # noqa: E402
-    Mem0Promoter,
+    ContinuumPromoter,
     Promoter,
     TriggerManager,
     make_postgres_audit_sink,
@@ -370,7 +370,7 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     assert facts[0].source_block_id == block.id
     assert facts[0].text == "Alice works at Acme Corp"
 
-    # ── 6. Promoter end-to-end with Mem0 + Postgres audit sink ───────────────
+    # ── 6. Promoter end-to-end with ContinuumPromoter + Postgres audit sink ───────────────
     mtm = PostgresMTM(dsn=postgres_db)
     # Seed 2 unprocessed MTM blocks.
     seeded_block_ids: list[uuid.UUID] = []
@@ -385,14 +385,14 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
         )
         seeded_block_ids.append(bid)
 
-    async def mem0_cf(**_kw: Any) -> Any:
+    async def decider_cf(**_kw: Any) -> Any:
         # One ADD tool-call per candidate (parallel function calling).
         return _tool_response([{"operation": "ADD", "rationale": "novel fact"} for _ in range(2)])
 
     audit_sink = make_postgres_audit_sink(dsn=postgres_db)
-    decider = Mem0Promoter(
+    decider = ContinuumPromoter(
         PromoterConfig(confidence_threshold=0.6, add_threshold=0.5),
-        completion_fn=mem0_cf,
+        completion_fn=decider_cf,
         audit_sink=audit_sink,
     )
 
@@ -420,7 +420,7 @@ async def test_ltm_and_promotion_complete(postgres_db: str) -> None:
     )
     promotions_after = _scalar(postgres_db, "SELECT count(*) FROM memory_promotions")
     assert ltm_after - ltm_before == 2
-    # Audit log: 2 Mem0 ADD rows + 2 mark_processed NOOP rows = +4.
+    # Audit log: 2 decider ADD rows + 2 mark_processed NOOP rows = +4.
     assert promotions_after - promotions_before >= 4
     # Audit log captures every decision (short-circuited *and* LLM).
     add_rows = _scalar(

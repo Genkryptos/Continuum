@@ -16,7 +16,7 @@ are clear, the rest of the framework follows.
 ```
    ┌──────────┐   summarisation    ┌──────────┐    extraction     ┌──────────┐
    │   STM    │ ─────────────────► │   MTM    │ ─────────────────►│   LTM    │
-   │  (raw    │  (Mem0Promoter     │ (summary │  (FactExtractor   │  (facts, │
+   │  (raw    │  (ContinuumPromoter     │ (summary │  (FactExtractor   │  (facts, │
    │  turns)  │   when STM full)   │  blocks) │   over MTM blocks)│  entities│
    └──────────┘                    └──────────┘                   │  with    │
                                                                   │  superseded_by) │
@@ -72,7 +72,7 @@ path stays under the foreground latency budget. The
    trigger condition fires
         │   (e.g. "STM has 4K tokens, promote oldest chunk")
         ▼
-   Mem0Promoter walks the chunk
+   ContinuumPromoter walks the chunk
         │   1. summarize chunk into a SummaryBlock → write to MTM
         │   2. extract entities + facts from summary → write to LTM
         │   3. for each new fact: detect contradictions against existing

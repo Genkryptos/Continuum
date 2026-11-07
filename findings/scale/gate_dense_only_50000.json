@@ -1,0 +1,33 @@
+{
+  "k": 10,
+  "repeats": 3,
+  "n_needles": 30,
+  "by_kind": {
+    "identifier": {
+      "recall": 1.0,
+      "n_needles": 10,
+      "latency_p50_ms": 43.01987499638926
+    },
+    "paraphrase": {
+      "recall": 0.85,
+      "n_needles": 20,
+      "latency_p50_ms": 43.25970799982315
+    }
+  },
+  "recall_per_run": [
+    0.9,
+    0.9,
+    0.9
+  ],
+  "recall_mean": 0.9,
+  "recall_min": 0.9,
+  "recall_max": 0.9,
+  "latency_p50_ms": 43.22241699992446,
+  "latency_p95_ms": 45.219291001558304,
+  "latency_p99_ms": 132.59908399777487,
+  "misses_first_run": [
+    "[paraphrase] What is the safe window to bounce authentication nodes?",
+    "[paraphrase] How are premium customer issues escalated?",
+    "[paraphrase] Who signs off on letting a service call the internet?"
+  ]
+}

@@ -54,6 +54,13 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+from evals.longmemeval.answer_post import is_idk
+from evals.longmemeval.evidence import (
+    GoldTurn,
+    gold_turn_recall,
+    supersession_verdict,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -95,6 +102,13 @@ class EvalRow:
     #: The question's reference date ("now") — temporal-reasoning needs it to
     #: answer "how many weeks ago / since" questions. Empty when unknown.
     question_date: str = ""
+    #: The individual turns LongMemEval flags ``has_answer``. Session ids say
+    #: *which conversation* holds the answer; these say *which turns*, which is
+    #: the granularity the failures live at — see
+    #: :mod:`evals.longmemeval.evidence`. Empty for rows loaded from a source
+    #: that does not carry the flag; every metric derived from it degrades to
+    #: "not measured" rather than to a wrong number.
+    gold_turns: list[GoldTurn] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -118,6 +132,31 @@ class RowResult:
     error: str | None = None  # populated on adapter exceptions
     question_type: str = "unknown"
 
+    # ── turn-level evidence (evals.longmemeval.evidence) ───────────────────
+    # ``partial_recall`` above is session-level and reads 1.000 on
+    # knowledge-update while that category scores 64%. These measure the
+    # granularity the failures actually live at. All default to the
+    # "not measured" shape (0 / None) so a loader that cannot supply gold
+    # turns produces absent metrics rather than misleading ones.
+    gold_turn_count: int = 0
+    retrieved_gold_turn_count: int = 0
+    gold_turn_recall: float = 0.0
+    missing_gold_turns: list[str] = dataclasses.field(default_factory=list)
+    #: ``"stale"`` when the answer took a value only the *superseded* gold
+    #: turn carries, ``"fresh"`` when it took the current one, ``None`` when
+    #: the gold pair cannot decide. See :func:`evidence.supersession_verdict`.
+    supersession_verdict: str | None = None
+    #: The reader declined rather than answering — ``is_idk`` on the final
+    #: answer. Orthogonal to ``failure_category``, deliberately: the category
+    #: says why the row was wrong (and keeps naming the retrieval miss when
+    #: there was one), while this says what the reader *did*. A model that
+    #: abstains and one that answers wrongly both score 0, and on the
+    #: answerer ladder (PREREGISTRATION.md §4.3) those are opposite
+    #: findings — the prompt sanctions "I don't know", so a stronger model
+    #: obeying it literally loses to a weaker one that guesses. Collapsing
+    #: them would read as accuracy falling while model strength rises.
+    abstained: bool = False
+
     # Optional optimizer telemetry (populated only when the adapter
     # exposes ``last_optimizer_stats``). All counts are tokens.
     pre_opt_total_tokens: int = 0
@@ -128,6 +167,21 @@ class RowResult:
     post_opt_stm_tokens: int = 0
     post_opt_mtm_tokens: int = 0
     post_opt_ltm_tokens: int = 0
+    # Context-budget accounting — the x-axis of the cost/accuracy ablation
+    # (docs/LOW_BUDGET_PLAN.md). Distinct from the ``pre_opt_*`` fields
+    # above, which come from the optimizer chain and stay 0 in direct mode.
+    # ``context_tokens`` is a tokenizer count of the assembled context;
+    # ``prompt_tokens_total`` is what the provider actually billed for the
+    # whole row (context + instructions + any extra calls).
+    context_chars: int = 0
+    context_tokens: int = 0
+    items_offered: int = 0
+    items_admitted: int = 0
+    items_dropped: int = 0
+    budget_bound_by: str = ""
+    prompt_tokens_total: int = 0
+    completion_tokens_total: int = 0
+
     retrieved_count: int = 0
     retrieval_ms: float = 0.0
     optimizer_ms: float = 0.0
@@ -146,6 +200,14 @@ class RowResult:
     #: it ran, falling back to substring otherwise.
     substring_correct: bool = False
     judge_correct: bool | None = None
+    #: Which stage of the scoring ladder decided this row, when the caller's
+    #: ``row_scorer`` reports it (``"exact"``, ``"normalized"``, ``"numeric"``,
+    #: ``"unit"``, ``"rule_semantic"``, ``"llm"``, ``"wrong"``, ``"skipped"``).
+    #: ``HybridScorer`` short-circuits on a deterministic hit, so the LLM
+    #: judge only ever sees rows the ladder called wrong — it can overturn
+    #: wrong→correct but never catches a deterministic false positive. This
+    #: breakdown is the only way to see that asymmetry in a result file.
+    score_method: str | None = None
 
 
 @dataclasses.dataclass
@@ -157,6 +219,10 @@ class BaselineResults:
     rows: list[RowResult]
     started_at: str
     finished_at: str
+    # Provenance for admissibility (evals/PREREGISTRATION.md §3.3): code sha,
+    # answerer, judge, judge-prompt hash, flags. ``None`` when the caller
+    # supplied none — such a result is inadmissible by §2.1.
+    versions: dict[str, Any] | None = None
 
     @property
     def accuracy(self) -> float:
@@ -184,6 +250,102 @@ class BaselineResults:
         return sum(1 for r in self.rows if r.judge_correct is not None)
 
     @property
+    def abstained_count(self) -> int:
+        """Rows where the reader declined to answer."""
+        return sum(1 for r in self.rows if r.abstained)
+
+    @property
+    def abstention_rate(self) -> float:
+        """Share of all rows the reader declined."""
+        if not self.rows:
+            return 0.0
+        return self.abstained_count / len(self.rows)
+
+    @property
+    def score_method_breakdown(self) -> dict[str, dict[str, int]]:
+        """
+        ``{method: {"n": int, "correct": int}}`` over rows whose scorer
+        reported a stage. Empty when the scorer does not report one.
+
+        Read it to answer "what actually decided this run?". A run where
+        the ``llm`` stage decides most rows is an LLM-judged run whatever
+        the field holding the number is called.
+        """
+        out: dict[str, dict[str, int]] = {}
+        for r in self.rows:
+            if r.score_method is None:
+                continue
+            bucket = out.setdefault(r.score_method, {"n": 0, "correct": 0})
+            bucket["n"] += 1
+            bucket["correct"] += 1 if r.correct else 0
+        return dict(sorted(out.items(), key=lambda kv: -kv[1]["n"]))
+
+    @property
+    def primary_metric_source(self) -> str:
+        """
+        Which mechanism produced the primary ``accuracy``.
+
+        ``"llm_judge"`` when a dedicated judge was wired via ``judge=``;
+        ``"scoring_ladder+llm"`` when the injected ``row_scorer`` resolved
+        any row through its LLM stage (the number is judged even though
+        ``judged_accuracy`` is ``None``); ``"scoring_ladder"`` when it was
+        decided deterministically throughout; ``"substring"`` for the
+        default reference scorer.
+        """
+        if self.judged_row_count:
+            return "llm_judge"
+        methods = self.score_method_breakdown
+        if not methods:
+            return "substring"
+        return "scoring_ladder+llm" if "llm" in methods else "scoring_ladder"
+
+    @property
+    def abstained_correct_count(self) -> int:
+        """
+        Abstentions the scorer **accepted**.
+
+        LongMemEval ships its own negative rows, where the gold answer *is*
+        that the user never mentioned the thing. Declining those is the
+        right answer, so folding them into a single abstention count
+        reports a correct behaviour as though it were a failure mode.
+        """
+        return sum(1 for r in self.rows if r.abstained and r.correct)
+
+    @property
+    def abstained_wrong_count(self) -> int:
+        """Abstentions on rows that had a real answer to give."""
+        return sum(1 for r in self.rows if r.abstained and not r.correct)
+
+    @property
+    def n_evidence_complete(self) -> int:
+        """Rows whose gold turns all reached the reader."""
+        return sum(
+            1 for r in self.rows
+            if r.gold_turn_count and r.gold_turn_recall >= 1.0
+        )
+
+    @property
+    def abstention_rate_with_evidence(self) -> float | None:
+        """
+        Abstention rate over rows where **every gold turn was in context**.
+
+        This is the one that isolates reader behaviour. The plain
+        ``abstention_rate`` mixes two populations: rows where declining was
+        correct because retrieval dropped the answer-bearing turn, and rows
+        where the answer was present and the reader declined anyway. Only
+        the second is a property of the model, so only the second is
+        comparable across the §4.3 ladder's rungs. ``None`` when no row
+        carried gold turns (a loader that cannot supply them).
+        """
+        eligible = [
+            r for r in self.rows
+            if r.gold_turn_count and r.gold_turn_recall >= 1.0
+        ]
+        if not eligible:
+            return None
+        return sum(1 for r in eligible if r.abstained) / len(eligible)
+
+    @property
     def avg_tokens(self) -> float:
         if not self.rows:
             return 0.0
@@ -203,6 +365,18 @@ class BaselineResults:
                 if sid in r.retrieved_session_ids
             )
             per_row.append(hit / len(r.expected_session_ids))
+        return statistics.fmean(per_row) if per_row else 0.0
+
+    @property
+    def gold_turn_recall(self) -> float:
+        """
+        Average fraction of answer-bearing *turns* that reached the reader.
+
+        Averaged only over rows that have gold turns — 21 of the 500
+        LongMemEval-S rows carry none, and counting them as 0.0 would
+        understate the metric by 4 points for no reason.
+        """
+        per_row = [r.gold_turn_recall for r in self.rows if r.gold_turn_count]
         return statistics.fmean(per_row) if per_row else 0.0
 
     @property
@@ -236,6 +410,59 @@ class BaselineResults:
         vals = [r.optimizer_ms for r in self.rows if r.optimizer_ms]
         return statistics.fmean(vals) if vals else 0.0
 
+    # ── Context-budget metrics (docs/LOW_BUDGET_PLAN.md) ──────────────────
+    # These are the ablation's x-axis. Unlike ``avg_context_tokens_pre_opt``
+    # they are populated in direct mode, which is the only mode the headline
+    # runs use.
+
+    @property
+    def avg_context_tokens(self) -> float:
+        vals = [r.context_tokens for r in self.rows if r.context_tokens]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def context_tokens_p50(self) -> float:
+        vals = [float(r.context_tokens) for r in self.rows if r.context_tokens]
+        return _percentile(vals, 0.50) if vals else 0.0
+
+    @property
+    def context_tokens_p95(self) -> float:
+        vals = [float(r.context_tokens) for r in self.rows if r.context_tokens]
+        return _percentile(vals, 0.95) if vals else 0.0
+
+    @property
+    def avg_context_chars(self) -> float:
+        vals = [r.context_chars for r in self.rows if r.context_chars]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def measured_chars_per_token(self) -> float:
+        """Run-wide ratio. Reported so nobody has to assume 4.0 again."""
+        chars = sum(r.context_chars for r in self.rows)
+        toks = sum(r.context_tokens for r in self.rows)
+        return round(chars / toks, 3) if toks else 0.0
+
+    @property
+    def avg_prompt_tokens_total(self) -> float:
+        """Billed input tokens per row — context plus prompt scaffolding."""
+        vals = [r.prompt_tokens_total for r in self.rows if r.prompt_tokens_total]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def pct_rows_budget_bound(self) -> float:
+        """
+        Share of rows where the budget actually dropped a retrieved item.
+
+        0% means the budget never bound and the run is not a real point on
+        the ablation curve — the retriever simply never offered enough to
+        fill it. Check this before reading any accuracy delta as a budget
+        effect.
+        """
+        if not self.rows:
+            return 0.0
+        bound = sum(1 for r in self.rows if r.items_dropped > 0)
+        return 100.0 * bound / len(self.rows)
+
     @property
     def strategy_savings_total(self) -> dict[str, int]:
         """Sum of token deltas attributed to each strategy across all rows."""
@@ -262,10 +489,58 @@ class BaselineResults:
                     if sid in r.retrieved_session_ids
                 )
                 recall_vals.append(hit / len(r.expected_session_ids))
+            # Per-category context cost. This is the router's design input:
+            # the aggregate curve says where accuracy breaks, but only the
+            # per-category split says which questions are paying for it.
+            ctx_vals = [r.context_tokens for r in rows if r.context_tokens]
+            # Turn-level evidence, averaged over the rows that have gold
+            # turns. Reported beside ``recall`` because the pair is the
+            # diagnostic: session recall 1.00 with turn recall 1.00 and a
+            # wrong answer is a reader failure; session recall 1.00 with
+            # turn recall < 1.00 is still a retrieval failure.
+            turn_vals = [
+                r.gold_turn_recall for r in rows if r.gold_turn_count
+            ]
+            # Per-category abstention. §4.1 already forbids an aggregate
+            # accuracy without this breakdown; the same argument applies
+            # here, since the categories differ in how much inference the
+            # label needs beyond what the gold turn literally says.
+            evidenced = [
+                r for r in rows
+                if r.gold_turn_count and r.gold_turn_recall >= 1.0
+            ]
+            stale = sum(1 for r in rows if r.supersession_verdict == "stale")
+            fresh = sum(1 for r in rows if r.supersession_verdict == "fresh")
             out[question_type] = {
                 "n_questions": len(rows),
                 "accuracy": correct / len(rows) if rows else 0.0,
                 "recall": statistics.fmean(recall_vals) if recall_vals else 0.0,
+                "gold_turn_recall": (
+                    statistics.fmean(turn_vals) if turn_vals else 0.0
+                ),
+                "n_gold_turn_measured": len(turn_vals),
+                "abstained": sum(1 for r in rows if r.abstained),
+                "abstained_wrong": sum(
+                    1 for r in rows if r.abstained and not r.correct
+                ),
+                "abstention_rate": (
+                    sum(1 for r in rows if r.abstained) / len(rows)
+                    if rows else 0.0
+                ),
+                "abstention_rate_with_evidence": (
+                    sum(1 for r in evidenced if r.abstained) / len(evidenced)
+                    if evidenced else 0.0
+                ),
+                "n_evidence_complete": len(evidenced),
+                "stale_answers": stale,
+                "fresh_answers": fresh,
+                "avg_context_tokens": (
+                    statistics.fmean(ctx_vals) if ctx_vals else 0.0
+                ),
+                "pct_budget_bound": (
+                    100.0 * sum(1 for r in rows if r.items_dropped > 0) / len(rows)
+                    if rows else 0.0
+                ),
             }
         return out
 
@@ -286,10 +561,39 @@ class BaselineResults:
                 "judged_row_count": self.judged_row_count,
                 "avg_tokens": self.avg_tokens,
                 "recall": self.recall,
+                # Session recall's blind spots, measured. See
+                # :mod:`evals.longmemeval.evidence`.
+                "gold_turn_recall": self.gold_turn_recall,
+                "n_gold_turn_measured": sum(
+                    1 for r in self.rows if r.gold_turn_count
+                ),
+                # Abstention is reported beside accuracy, not folded into
+                # it. Two readers at the same accuracy are not equivalent if
+                # one got there by declining and the other by guessing wrong,
+                # and the ladder compares exactly that.
+                "abstained_count": self.abstained_count,
+                # Split, because declining is correct on LongMemEval's own
+                # negative rows and a failure everywhere else.
+                "abstained_wrong_count": self.abstained_wrong_count,
+                "abstained_correct_count": self.abstained_correct_count,
+                "abstention_rate": self.abstention_rate,
+                "abstention_rate_with_evidence": (
+                    self.abstention_rate_with_evidence
+                ),
+                "n_evidence_complete": self.n_evidence_complete,
+                "stale_answers": sum(
+                    1 for r in self.rows if r.supersession_verdict == "stale"
+                ),
+                "fresh_answers": sum(
+                    1 for r in self.rows if r.supersession_verdict == "fresh"
+                ),
                 "latency_p50_ms": self.latency_p50,
                 "latency_p95_ms": self.latency_p95,
                 "total_cost_usd": self.total_cost_usd,
                 "failure_breakdown": _failure_breakdown(self.rows),
+                # What decided the primary number above.
+                "primary_metric_source": self.primary_metric_source,
+                "score_method_breakdown": self.score_method_breakdown,
                 # Optimizer telemetry — zeroes when the optimizer is off.
                 "avg_context_tokens_pre_opt": self.avg_context_tokens_pre,
                 "avg_context_tokens_post_opt": self.avg_context_tokens_post,
@@ -300,8 +604,18 @@ class BaselineResults:
                 ),
                 "avg_optimizer_ms": self.avg_optimizer_ms,
                 "strategy_savings_total": self.strategy_savings_total,
+                # Context budget — the ablation's x-axis. Populated in
+                # direct mode (the optimizer fields above are not).
+                "avg_context_tokens": self.avg_context_tokens,
+                "context_tokens_p50": self.context_tokens_p50,
+                "context_tokens_p95": self.context_tokens_p95,
+                "avg_context_chars": self.avg_context_chars,
+                "measured_chars_per_token": self.measured_chars_per_token,
+                "avg_prompt_tokens_total": self.avg_prompt_tokens_total,
+                "pct_rows_budget_bound": self.pct_rows_budget_bound,
                 "by_question_type": self.by_question_type,
             },
+            "versions": self.versions,
             "rows": [dataclasses.asdict(r) for r in self.rows],
         }
 
@@ -414,6 +728,17 @@ _PRICE_PER_1K_OUT: dict[str, float] = {
     "openai/gpt-oss-120b": 0.00045,
     "meta-llama/llama-3.3-70b-instruct": 0.00040,
     "meta-llama/llama-3.1-8b-instruct": 0.00006,
+    # Meta Model API (dev.meta.ai pay-as-you-go Standard, Oct 2026), per 1K
+    # output tokens. Both muse families are reasoning models and the hidden
+    # reasoning block is billed as output, so these multiply the *full*
+    # `usage.completion_tokens` — which is why a muse row costs far more than
+    # its visible answer length suggests. Input is not priced here (this table
+    # is output-only): add $0.00125/1K for spark and $0.00400/1K for wonder on
+    # the prompt side when reconciling against the credit grant.
+    "muse-spark-1.3": 0.00425,
+    "muse-spark-1.2": 0.00425,
+    "muse-spark-1.1": 0.00425,
+    "muse-wonder-1.0": 0.02000,
 }
 
 
@@ -439,6 +764,7 @@ async def run_baseline(
     token_counter: Callable[[str], int] | None = None,
     trace_writer: Any | None = None,
     run_id: str | None = None,
+    versions: dict[str, Any] | None = None,
 ) -> BaselineResults:
     """
     Drive the baseline evaluation. Pure-async; never raises into the
@@ -480,6 +806,9 @@ async def run_baseline(
         Override the cost table.
     now / token_counter:
         Injectable for deterministic tests.
+    versions:
+        Provenance block written verbatim into the result JSON
+        (``evals/PREREGISTRATION.md`` §3.3).
     """
     scorer = scorer or default_scorer
     prices = price_per_1k_out or _PRICE_PER_1K_OUT
@@ -533,6 +862,7 @@ async def run_baseline(
         rows=rows,
         started_at=started.isoformat(),
         finished_at=finished.isoformat(),
+        versions=versions,
     )
 
     _persist(results, out_root, clock, output_file=output_file)
@@ -587,10 +917,20 @@ async def _run_one(
     # `substring_correct` is the reference (default_scorer or whatever the
     # caller injected as ``scorer``/``row_scorer``). The optional ``judge``
     # is the primary metric when wired up: its verdict becomes ``correct``.
+    score_method: str | None = None
     if row_scorer is not None:
-        substring_correct = bool(answer) and bool(
-            await _maybe_await(row_scorer(row, answer))
-        )
+        # A row_scorer may return the bare verdict, or ``(verdict, method)``
+        # naming the ladder stage that decided it. The second form is what
+        # makes an accuracy figure legible: without it a number produced by
+        # an LLM judge is indistinguishable from one produced by substring
+        # matching, which is how a fully judged run came to be reported as
+        # "no judge wired".
+        scored = await _maybe_await(row_scorer(row, answer))
+        if isinstance(scored, tuple):
+            verdict, score_method = scored[0], str(scored[1])
+        else:
+            verdict = scored
+        substring_correct = bool(answer) and bool(verdict)
     else:
         substring_correct = bool(answer) and scorer(answer, row.expected_answer)
 
@@ -610,9 +950,24 @@ async def _run_one(
         expected=row.answer_session_ids,
         retrieved=retrieved,
     )
+    # Turn-level evidence. Session recall says the right conversation was
+    # retrieved; these say whether the answer-bearing *turns* survived, and
+    # whether an answer that had both values took the retired one.
+    turn_diag = gold_turn_recall(
+        row.gold_turns, _extract_retrieved_contents(adapter)
+    )
+    verdict = supersession_verdict(
+        row.gold_turns, answer, row.expected_answer
+    )
+    # Computed before classification so the classifier can use it, and
+    # recorded whether or not the row was wrong — an abstention the judge
+    # then *rescued* (a hedged answer the rubric accepted) is still an
+    # abstention for ladder purposes.
+    abstained = bool(is_idk(str(answer)))
     failure_category = (
         None if correct
         else _classify_failure(
+            abstained=abstained,
             answer=answer, error=error,
             retrieved=retrieved, expected=row.answer_session_ids,
             question_type=row.question_type,
@@ -620,6 +975,11 @@ async def _run_one(
                 getattr(adapter, "last_decomposition_stats", None) or {}
             ),
             expected_answer=row.expected_answer,
+            supersession_verdict=verdict,
+            gold_turn_recall=(
+                turn_diag["gold_turn_recall"] if turn_diag["gold_turn_count"]
+                else None
+            ),
         )
     )
     # Optional optimizer telemetry — the adapter publishes this dict on
@@ -669,6 +1029,12 @@ async def _run_one(
         ],
         partial_recall=recall_diag["partial_recall"],
         missing_expected_session_ids=recall_diag["missing_expected_session_ids"],
+        gold_turn_count=turn_diag["gold_turn_count"],
+        retrieved_gold_turn_count=turn_diag["retrieved_gold_turn_count"],
+        gold_turn_recall=turn_diag["gold_turn_recall"],
+        missing_gold_turns=turn_diag["missing_gold_turns"],
+        supersession_verdict=verdict,
+        abstained=abstained,
         error=error,
         pre_opt_total_tokens=int(opt.get("pre_total", 0)),
         post_opt_total_tokens=int(opt.get("post_total", 0)),
@@ -678,6 +1044,14 @@ async def _run_one(
         post_opt_stm_tokens=int(opt.get("post_stm", 0)),
         post_opt_mtm_tokens=int(opt.get("post_mtm", 0)),
         post_opt_ltm_tokens=int(opt.get("post_ltm", 0)),
+        context_chars=int(telem.get("context_chars", 0)),
+        context_tokens=int(telem.get("context_tokens", 0)),
+        items_offered=int(telem.get("items_offered", 0)),
+        items_admitted=int(telem.get("items_admitted", 0)),
+        items_dropped=int(telem.get("items_dropped", 0)),
+        budget_bound_by=str(telem.get("budget_bound_by", "") or ""),
+        prompt_tokens_total=int(telem.get("prompt_tokens_total", 0)),
+        completion_tokens_total=int(telem.get("completion_tokens_total", 0)),
         retrieved_count=retrieved_count_final,
         retrieval_ms=float(opt.get("retrieval_ms", 0.0)),
         optimizer_ms=float(opt.get("optimizer_ms", 0.0)),
@@ -694,6 +1068,7 @@ async def _run_one(
         telemetry=dict(telem),
         substring_correct=substring_correct,
         judge_correct=judge_correct,
+        score_method=score_method,
     )
 
 
@@ -724,11 +1099,14 @@ def _classify_failure(
     *,
     answer: str,
     error: str | None,
+    abstained: bool = False,
     retrieved: Sequence[str],
     expected: Sequence[str],
     question_type: str = "",
     decomposition_stats: dict[str, Any] | None = None,
     expected_answer: str = "",
+    supersession_verdict: str | None = None,
+    gold_turn_recall: float | None = None,
 ) -> str:
     """
     Map a wrong answer into a precise diagnostic bucket.
@@ -740,6 +1118,14 @@ def _classify_failure(
     * ``missing_fact`` — none of the expected sessions were retrieved.
       (Retrieval is the bottleneck here; nothing else could have
       worked.)
+    * ``stale_fact`` — the answer carries a value only the *superseded*
+      gold turn holds. Decided from the gold pair itself
+      (:func:`evidence.supersession_verdict`), not from marker words.
+    * ``missing_gold_turn`` — the right session was retrieved but an
+      answer-bearing *turn* inside it did not reach the reader. This is
+      the half of ``wrong_span`` that is still a retrieval failure, and
+      separating it is the whole point: ``wrong_span`` was 130 of the
+      control run's 131 errors and told us nothing.
     * ``wrong_route`` — adapter chose a route that disagrees with the
       LongMemEval category. The answer might still be plausible but
       it came from the wrong reasoning head.
@@ -749,12 +1135,26 @@ def _classify_failure(
       span was returned instead of an aggregation.
     * ``missing_temporal_computation`` — temporal question, but the
       answer looks like a bare date rather than a computed duration.
-    * ``stale_fact`` — knowledge-update question where the chosen span
-      mentions any of the standard update markers (changed, used to,
-      previously) — i.e., probably the wrong half of the update pair.
-    * ``wrong_span`` — right session was retrieved, right route, but
-      the picked span doesn't match the gold.
+    * ``abstained`` — the reader declined ("I don't know") with every
+      gold turn in front of it. Carved out of ``wrong_span`` for the same
+      reason ``missing_gold_turn`` was: the two have opposite fixes. A
+      wrong span means the reader misread present evidence; an abstention
+      means it judged the evidence insufficient, which is sometimes
+      correct — the label can need an inference the gold turn does not
+      state. Deliberately ranked *below* the retrieval buckets: when the
+      gold turn never arrived, declining is the right move and the
+      retrieval miss is the finding, so that row stays
+      ``missing_gold_turn``.
+    * ``wrong_span`` — right session retrieved, every gold turn present,
+      right route, and the answer is still wrong: the evidence was in
+      front of the reader.
     * ``wrong_retrieval`` — catch-all when none of the above fire.
+
+    ``stale_fact`` previously keyed off marker words ("used to",
+    "previously") appearing in the matched claim. That test read **0 on
+    every run ever recorded**, including 28 knowledge-update failures of
+    which 14 are provably stale answers. It is now decided from the gold
+    evidence and the marker-word path is gone.
     """
     if error or answer.startswith("[error:"):
         return "llm_error"
@@ -816,18 +1216,35 @@ def _classify_failure(
     if qtype == "temporal-reasoning" and _BARE_DATE_RE.match(answer_clean):
         return "missing_temporal_computation"
 
-    # 5) Knowledge-update where the chosen span looks like the stale
-    # half of the update pair.
-    if qtype == "knowledge-update":
-        stale_markers = (
-            "used to", "previously", "before",
-            "formerly", "old name", "changed from",
-        )
-        matched_text = str(matched_claim.get("text", "")).lower()
-        if any(m in matched_text for m in stale_markers):
-            return "stale_fact"
+    # 5) An answer-bearing turn never reached the reader, even though its
+    # session was retrieved. Still a retrieval failure, and invisible to
+    # session-level recall, which scores a session as recalled when *any*
+    # of its turns survives.
+    #
+    # This is checked BEFORE ``stale_fact`` deliberately. If the superseding
+    # turn never arrived, an answer carrying the old value is the only answer
+    # the reader could have given — blaming supersession there would charge
+    # the resolution layer for a retrieval miss. ``stale_fact`` is reserved
+    # for the case that indicts resolution: both values present, retired one
+    # chosen.
+    if gold_turn_recall is not None and gold_turn_recall < 1.0:
+        return "missing_gold_turn"
 
-    # 6) Right session retrieved but wrong span chosen.
+    # 6) The answer took the superseded value with the current one also in
+    # context. Decided from the gold pair (an earlier turn and a later one
+    # that disagree, with the expected answer confirming the later), so it
+    # fires on any category — the control run has one in temporal-reasoning
+    # as well as 14 in knowledge-update.
+    if supersession_verdict == "stale":
+        return "stale_fact"
+
+    # 7) The reader had the evidence and declined anyway. Reached only
+    # after the retrieval buckets above, so an abstention caused by a
+    # retrieval miss is still reported as that miss.
+    if abstained and any(sid in retrieved for sid in expected):
+        return "abstained"
+
+    # 8) Right session retrieved, gold turns present, answer still wrong.
     if any(sid in retrieved for sid in expected):
         return "wrong_span"
 
@@ -859,7 +1276,9 @@ def _failure_breakdown(rows: list[RowResult]) -> dict[str, int]:
         "wrong_route": 0,
         "wrong_role": 0,
         "wrong_span": 0,
+        "abstained": 0,
         "stale_fact": 0,
+        "missing_gold_turn": 0,
         "missing_aggregation": 0,
         "missing_temporal_computation": 0,
         "wrong_retrieval": 0,
@@ -868,6 +1287,28 @@ def _failure_breakdown(rows: list[RowResult]) -> dict[str, int]:
     for r in rows:
         if r.failure_category:
             out[r.failure_category] = out.get(r.failure_category, 0) + 1
+    return out
+
+
+def _extract_retrieved_contents(adapter: Any) -> list[str]:
+    """
+    Text of every item the last retrieval surfaced.
+
+    Same hook as :func:`_extract_retrieved_session_ids` — ``adapter.last_ctx``
+    — read for content rather than session ids, so that
+    :func:`evidence.gold_turn_recall` can ask whether the answer-bearing
+    *turns* reached the reader. Adapters without the hook return ``[]``,
+    which reports gold-turn recall as 0 with a non-zero ``gold_turn_count``;
+    callers distinguish that from "no gold turns" via the count.
+    """
+    ctx = getattr(adapter, "last_ctx", None)
+    if ctx is None:
+        return []
+    out: list[str] = []
+    for it in getattr(ctx, "items", []) or []:
+        content = getattr(it, "content", None)
+        if content:
+            out.append(str(content))
     return out
 
 
@@ -940,6 +1381,12 @@ def _persist(
             "expected_session_ids",
             "retrieved_session_ids",
             "partial_recall",
+            # These two together are the triage: abstained=1 with
+            # gold_turn_recall=1.000 is the reader declining on evidence it
+            # had; abstained=1 with a lower recall is a retrieval miss the
+            # reader handled correctly.
+            "abstained",
+            "gold_turn_recall",
             "missing_expected_session_ids",
             "error",
             "latency_ms",
@@ -953,6 +1400,8 @@ def _persist(
                 ";".join(r.expected_session_ids),
                 ";".join(r.retrieved_session_ids),
                 f"{r.partial_recall:.3f}",
+                "1" if r.abstained else "0",
+                f"{r.gold_turn_recall:.3f}" if r.gold_turn_count else "",
                 ";".join(r.missing_expected_session_ids),
                 r.error or "",
                 f"{r.latency_ms:.1f}",
@@ -966,12 +1415,49 @@ def _print_summary(results: BaselineResults) -> None:
     print(f"  answerer:        {results.answerer}")
     print(f"  questions:       {len(results.rows)}")
     judged = results.judged_accuracy
+    source = results.primary_metric_source
     if judged is not None:
         print(f"  judged_accuracy: {judged:.1%}  (primary — LLM judge)")
         print(f"  substring_acc:   {results.substring_accuracy:.1%}  (reference only)")
     else:
-        print(f"  substring_acc:   {results.substring_accuracy:.1%}  (primary — no judge wired)")
+        # Name the mechanism rather than asserting a judge was absent: an
+        # injected row_scorer can resolve rows through its own LLM stage,
+        # in which case this number is judged and saying otherwise is
+        # simply false.
+        print(
+            f"  accuracy:        {results.substring_accuracy:.1%}  "
+            f"(primary — {source})"
+        )
+    methods = results.score_method_breakdown
+    if methods:
+        print("  decided by:")
+        for method, counts in methods.items():
+            print(
+                f"    {method:<24} n={counts['n']:<4} "
+                f"correct={counts['correct']}"
+            )
     print(f"  recall:          {results.recall:.1%}")
+    # Printed directly under accuracy because it is the number that says
+    # whether the accuracy above is comparable to another reader's.
+    ab_ev = results.abstention_rate_with_evidence
+    if ab_ev is None:
+        print(
+            f"  abstained:       {results.abstention_rate:.1%} "
+            f"({results.abstained_count}/{len(results.rows)})"
+        )
+    else:
+        print(
+            f"  abstained:       {results.abstention_rate:.1%} "
+            f"({results.abstained_count}/{len(results.rows)})  "
+            f"— {ab_ev:.1%} with full evidence "
+            f"({results.n_evidence_complete} rows)"
+        )
+    if results.abstained_count:
+        print(
+            f"    of which {results.abstained_wrong_count} wrong, "
+            f"{results.abstained_correct_count} correct "
+            f"(the dataset's own negative rows)"
+        )
     print(f"  avg tokens:      {results.avg_tokens:.0f}")
     print(f"  latency p50/p95: {results.latency_p50:.0f}ms / {results.latency_p95:.0f}ms")
     print(f"  total cost:      ${results.total_cost_usd:.2f}")
@@ -983,7 +1469,8 @@ def _print_summary(results: BaselineResults) -> None:
                 f"    {question_type:<24} "
                 f"n={int(metrics['n_questions']):<3} "
                 f"acc={metrics['accuracy']:.1%} "
-                f"recall={metrics['recall']:.1%}"
+                f"recall={metrics['recall']:.1%} "
+                f"abstain={metrics['abstention_rate']:.1%}"
             )
     breakdown = _failure_breakdown(results.rows)
     print("  failure types:")

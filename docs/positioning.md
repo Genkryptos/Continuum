@@ -19,11 +19,14 @@ the dividing line** on accuracy:
 | **Zep** | **bi-temporal knowledge graph** (fact validity windows) | **temporal reasoning** | **~63.8%** |
 | **Letta** (ex-MemGPT) | literal "memory OS": context=RAM, archival=disk, self-managed | long-running agents | — |
 | **Cognee** | KG + ETL pipelines | structured/graph domains | — |
-| **Continuum** | tiered STM/MTM/LTM + supersession + bi-temporal + policy engine | *(see wedge)* | **60.8%** (gpt-oss-120b)** |
+| **Continuum** | tiered STM/MTM/LTM + supersession + bi-temporal + policy engine | *(see wedge)* | **~74%** (gpt-oss-120b)** |
 
 \* Vendor/blog numbers on GPT-4o; directional, not apples-to-apples.
-\*\* Continuum's 60.8% is a different model + an LLM judge — not directly
-comparable to Zep's 63.8%-on-GPT-4o. Treated as "same arena," not "we win."
+\*\* Continuum's ~74% (73.6–75.6% across runs) is a different model + an LLM
+judge — not directly comparable to Zep's 63.8%-on-GPT-4o. Treated as "same
+arena," not "we win." **This table is market landscape, not a performance
+claim.** For the only comparison that is reader-matched — Hindsight ~89% /
+Continuum ~74% / Mem0-S 67.6%, all on gpt-oss-120b — see `docs/report.md` §6.
 
 **Two lessons from the market:**
 1. **Accuracy ≠ adoption.** Mem0 leads the market while scoring *lowest* —
@@ -83,7 +86,7 @@ A lane each competitor only half-occupies:
 2. **One framework adapter + a 3-line SDK (adoption → the real gap).**
    Continuum ships **zero** framework adapters (no LangChain/LangGraph/
    AutoGen/LlamaIndex) and is library-only. This is almost certainly why a
-   60.8% system has less traction than a 49% one. A `ContinuumMemory`
+   more accurate system has less traction than a less accurate one. A `ContinuumMemory`
    drop-in for LangGraph + a `add()/search()` SDK is the adoption unlock.
 
 3. **Make the measurement the marketing (credibility).**

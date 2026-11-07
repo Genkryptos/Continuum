@@ -86,7 +86,7 @@ to a real Continuum component:
 |---|---|
 | `DemoMemory.stm`             | `continuum.stores.stm.InMemorySTM` / `PostgresSTM` |
 | `DemoMemory.ltm` with `_Fact` | `continuum.stores.postgres.PostgresLTM` rows (migration 004 schema) |
-| `_apply_supersession` | the `superseded_by` FK column + `Mem0Promoter` contradiction detection |
+| `_apply_supersession` | the `superseded_by` FK column + `ContinuumPromoter` contradiction detection |
 | `extract_facts` (rule-based) | `continuum.extraction.FactExtractor` + `LLMEntityExtractor` (LLM-driven) |
 | `retrieve` (substring) | `continuum.retrieval.STMSemanticRetriever` (cosine + composite scorer) |
 | `_canned_responder` / `_openai_responder` | the `responder` callback on `ContinuumSession` |

@@ -187,7 +187,7 @@ async def test_no_data_loss_on_unadjudicated_noop() -> None:
     # "this is a duplicate" — honouring it would discard the fact. Falls back.
     class _NoopDecider:
         async def decide_operation(self, fact: Any, neighbors: Any) -> Any:
-            from continuum.promotion.mem0_promoter import Decision
+            from continuum.promotion.continuum_promoter import Decision
 
             return Decision(op="NOOP", target_id=None, rationale="no llm", short_circuited=False)
 

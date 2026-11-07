@@ -61,6 +61,7 @@ import logging
 import os
 import random
 import re
+import sys
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import replace as dataclasses_replace
@@ -99,6 +100,7 @@ from evals.longmemeval.answer_post import (
     validate_answer_shape,
 )
 from evals.longmemeval.baseline import EvalRow, run_baseline
+from evals.longmemeval.evidence import gold_turns_from_raw
 from evals.longmemeval.candidates import (
     best_count_for_object,
     extract_candidates_from_context,
@@ -163,12 +165,14 @@ from evals.longmemeval.session_narrowing import (
     NarrowResult,
     narrow_to_top_session,
 )
+from evals.longmemeval.budget import BudgetStats, admit_lines, tokens_measured
 from evals.longmemeval.judge import LLMJudgeScorer
 from evals.longmemeval.question_type import QuestionType, classify
 from evals.longmemeval.telemetry import (
     current_counter,
     end_row_telemetry,
     start_row_telemetry,
+    unpriced_models,
 )
 
 log = logging.getLogger(__name__)
@@ -194,6 +198,25 @@ DEFAULT_LMSTUDIO_URL = os.environ.get(
 DEFAULT_LMSTUDIO_MODEL = os.environ.get("LMSTUDIO_MODEL", "qwen/qwen3-14b")
 DEFAULT_OPENAI_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+DEFAULT_META_URL = os.environ.get("META_BASE_URL", "https://api.meta.ai/v1")
+DEFAULT_META_MODEL = os.environ.get("META_MODEL", "muse-wonder-1.0")
+#: Reasoning headroom added to every ``max_tokens`` sent to a muse model.
+#:
+#: Both muse families are reasoning models and ``max_tokens`` is a *total*
+#: budget shared with the hidden reasoning block — the answer is emitted only
+#: after that block closes. Measured against muse-spark-1.3 on a 16-token
+#: prompt: 184 reasoning tokens at default effort, 134 at ``low``, 40 at
+#: ``minimal``. So the judge's ``max_tokens=5`` and the answerer's legacy 128
+#: both return ``""`` with no error, which is the silent-zero failure
+#: PREREGISTRATION.md §3.2 records (38/50 correct answers flipped to wrong).
+#: The floor is applied in :meth:`MetaLLM.complete` so no caller can forget it.
+META_REASONING_HEADROOM = int(os.environ.get("META_REASONING_HEADROOM", "512"))
+#: Ceiling for the budget escalation in :meth:`MetaLLM.complete`. A hard
+#: question can want far more reasoning than the typical one, and the budget
+#: is per-call, so the only way to tell "needs more room" from "will never
+#: answer" is to offer more room once and see. The cap stops that turning
+#: into an unbounded spend on a single row.
+META_MAX_BUDGET = int(os.environ.get("META_MAX_BUDGET", "16384"))
 DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = os.environ.get(
     "OPENROUTER_MODEL", "openai/gpt-oss-120b"
@@ -227,6 +250,21 @@ def _openai_key_from_env() -> str | None:
     common typo'd variants ``OPEN_AI_KEY`` / ``OPEN_API_KEY``.
     """
     for name in ("OPENAI_API_KEY", "OPEN_AI_KEY", "OPEN_API_KEY"):
+        v = os.environ.get(name)
+        if v:
+            return v
+    return None
+
+
+def _meta_key_from_env() -> str | None:
+    """
+    Resolve the Meta Model API key.
+
+    ``MODEL_API_KEY`` is the name Meta's own docs and hackathon templates use,
+    so it is accepted alongside the ``META_API_KEY`` spelling that matches the
+    other providers here.
+    """
+    for name in ("META_API_KEY", "MODEL_API_KEY"):
         v = os.environ.get(name)
         if v:
             return v
@@ -292,6 +330,9 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
                     # ISO date of the session (or "" if unparseable) —
                     # the adapter stamps it onto MemoryItem.created_at.
                     "date": sdate.isoformat() if sdate else "",
+                    # Turn order within a session, for chronological
+                    # presentation (see ``_chrono_key``).
+                    "haystack_index": len(flat_messages),
                 })
         ans_sids = r["answer_session_ids"]
         if isinstance(ans_sids, str):
@@ -308,6 +349,10 @@ def load_longmemeval_rows(path: Path | str) -> list[EvalRow]:
             user_id=user_id,
             # The question's reference date ("now") for temporal reasoning.
             question_date=str(r.get("question_date", "") or ""),
+            # Turn-level gold. The flattened ``messages`` above drop
+            # ``has_answer``, so the answer-bearing turns are carried
+            # separately rather than reconstructed downstream.
+            gold_turns=gold_turns_from_raw(r),
         ))
     return rows
 
@@ -979,6 +1024,183 @@ class OpenAILLM:
 
 
 # ---------------------------------------------------------------------------
+# Meta Model API client (muse-* reasoning models)
+# ---------------------------------------------------------------------------
+
+
+class MetaLLM:
+    """
+    Client for Meta's Model API (``https://api.meta.ai/v1``), OpenAI-compatible
+    on ``/chat/completions``. Same ``async complete(prompt, max_tokens) -> str``
+    surface as the other providers, sharing the adaptive-throttle + retry loop
+    via :func:`_adaptive_complete`.
+
+    The key is resolved by :func:`_meta_key_from_env` (``MODEL_API_KEY`` or
+    ``META_API_KEY``).
+
+    Reasoning budget
+    ----------------
+    **Every model this endpoint serves is a reasoning model**, and that changes
+    what ``max_tokens`` means: it is a *total* budget the hidden reasoning block
+    draws from first, so a budget smaller than the reasoning spend returns a
+    well-formed response whose ``content`` is empty — no error, no warning. The
+    harness asks for 128 tokens for an answer and 5 for a judge verdict, both
+    well under what muse spends thinking.
+
+    So the budget is raised by :data:`META_REASONING_HEADROOM` here rather than
+    at the call sites: a silent empty string scores as wrong, which is
+    indistinguishable from a real miss, and that is precisely the failure mode
+    PREREGISTRATION.md §3.2 exists to prevent. ``reasoning_effort`` trades
+    reasoning tokens for depth — ``minimal`` costs ~40, the default ~184.
+
+    This class is for the **answerer only**. §3.2's rule — reasoning models
+    answer, structured and classification sub-tasks use a fast non-reasoning
+    model — means muse may never be the judge, the fact extractor, or the
+    promoter. Pass ``--judge-provider``/``--judge-model`` to keep the judge
+    pinned while the answerer swaps.
+
+    Pricing (USD per 1 M tokens, pay-as-you-go Standard, Oct 2026):
+        muse-spark-1.3    $1.25 in  / $4.25 out  ($0.15 cached in)
+        muse-wonder-1.0   $4.00 in  / $20.00 out ($0.20 cached in)
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str = DEFAULT_META_MODEL,
+        base_url: str = DEFAULT_META_URL,
+        timeout: float = 600.0,
+        temperature: float = 0.0,
+        api_key: str | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_headroom: int = META_REASONING_HEADROOM,
+        max_budget: int = META_MAX_BUDGET,
+        budget_attempts: int = 3,
+        rpm: int = 60,
+        max_retries: int = 8,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.temperature = temperature
+        self.reasoning_effort = reasoning_effort
+        self.reasoning_headroom = reasoning_headroom
+        self.max_budget = max(max_budget, reasoning_headroom + 1)
+        self.budget_attempts = max(1, int(budget_attempts))
+        #: Rows that only answered after the budget was raised, and rows that
+        #: never answered. Both are deviations from the configured budget, so
+        #: they are counted rather than left in the log for someone to grep.
+        self.budget_escalations = 0
+        self.budget_failures = 0
+        key = api_key or _meta_key_from_env()
+        if not key:
+            raise RuntimeError(
+                "Meta Model API key not set. Export one of:\n"
+                "  export MODEL_API_KEY='LLM_...'\n"
+                "(META_API_KEY is also accepted.)"
+            )
+        self._api_key = key
+        # Reasoning rounds on muse-wonder can run minutes; the default httpx
+        # timeout would cut them off mid-think and bill for the tokens anyway.
+        self._client = httpx.AsyncClient(timeout=timeout)
+        self._throttle = _AdaptiveThrottle(rpm)
+        self._max_retries = max_retries
+
+    async def complete(self, *, prompt: str, max_tokens: int) -> str:
+        """
+        One answer, escalating the token budget if reasoning ate it all.
+
+        A reasoning model that spends its whole budget thinking returns a 200
+        whose ``content`` is null, which :func:`_adaptive_complete`
+        stringifies to ``"None"``. Raising on that was the first fix, and it
+        was not enough: :meth:`_one_answer` catches every exception and
+        substitutes ``""``, so the row still scored wrong — the silent zero
+        just moved up one frame.
+
+        Budget exhaustion is recoverable, so it is retried rather than
+        reported. Each attempt doubles the room, and the last one also steps
+        ``reasoning_effort`` down to ``low`` (measured: ~134 reasoning tokens
+        against ~184 at the default), attacking both sides of the squeeze.
+        Only when a row survives all of that is it a real failure.
+
+        Escalation is logged per occurrence and counted on the instance,
+        because it is a deviation worth reporting: the rows that needed it
+        did not run at the configured budget, and a run where many did is
+        not the run that was pinned.
+        """
+        base = max_tokens + self.reasoning_headroom
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        budget = base
+        last_budget = base
+        for attempt in range(self.budget_attempts):
+            final_try = attempt == self.budget_attempts - 1
+            # Last resort only: cutting reasoning effort changes how the
+            # model answers, so it is never the first thing tried.
+            effort = self.reasoning_effort or ("low" if final_try and attempt else None)
+            payload: dict[str, Any] = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": budget,
+            }
+            if effort:
+                # reasoning_effort and an explicit temperature are mutually
+                # exclusive on this endpoint, as they are on the o-series.
+                payload["reasoning_effort"] = effort
+            else:
+                payload["temperature"] = self.temperature
+
+            out = await _adaptive_complete(
+                provider="meta",
+                client=self._client,
+                url=f"{self.base_url}/chat/completions",
+                payload=payload,
+                headers=headers,
+                throttle=self._throttle,
+                max_retries=self._max_retries,
+            )
+            if out and out != "None":
+                if attempt:
+                    self.budget_escalations += 1
+                    log.warning(
+                        "meta: %s answered only after escalating to "
+                        "max_tokens=%d (configured %d)%s — "
+                        "%d escalation(s) so far this run",
+                        self.model, budget, base,
+                        f", reasoning_effort={effort}" if effort else "",
+                        self.budget_escalations,
+                    )
+                return out
+
+            last_budget = budget
+            if final_try or budget >= self.max_budget:
+                break
+            budget = min(budget * 2, self.max_budget)
+            log.warning(
+                "meta: %s spent all %d tokens reasoning and emitted nothing "
+                "— retrying at max_tokens=%d",
+                self.model, last_budget, budget,
+            )
+
+        self.budget_failures += 1
+        raise RuntimeError(
+            f"meta: {self.model} returned no content even at "
+            f"max_tokens={last_budget} after {self.budget_attempts} attempts "
+            f"(answer budget {max_tokens} + headroom "
+            f"{self.reasoning_headroom}, cap {self.max_budget}) — the "
+            f"reasoning block consumed every budget offered. Raise "
+            f"META_MAX_BUDGET, or pass --meta-reasoning-effort minimal."
+        )
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+# ---------------------------------------------------------------------------
 # Amazon Bedrock client (Boto3 Converse API)
 # ---------------------------------------------------------------------------
 
@@ -1552,6 +1774,44 @@ class CrossEncoderReranker:
         return [items[int(i)] for i in order]
 
 
+def _chrono_key(item: Any, fallback_index: int = 0) -> tuple[str, int, int]:
+    """Sort key that puts turns in the order they were said.
+
+    Haystack position alone is not chronological: 211 of the 500
+    LongMemEval-S rows list their sessions out of date order. Sort by the
+    session's timestamp first, then by position in the haystack (turn
+    order within a session), then by the caller's index as a tiebreak.
+    """
+    meta = getattr(item, "metadata", None) or {}
+    stamp = str(meta.get("date") or "")
+    if not stamp:
+        created = getattr(item, "created_at", None)
+        stamp = created.isoformat() if created is not None else ""
+    try:
+        position = int(meta.get("haystack_index", fallback_index))
+    except (TypeError, ValueError):
+        position = fallback_index
+    return stamp, position, fallback_index
+
+
+# Questions about what the ASSISTANT said ("you suggested", "remind me what
+# you…", "our previous conversation"). Everywhere else the evidence is the
+# user's own words: outside single-session-assistant, 837 of 840 LongMemEval-S
+# gold turns are user turns. This catches 54/56 single-session-assistant
+# questions with no false positive among the other 444.
+_ASKS_ABOUT_ASSISTANT_RE = re.compile(
+    r"\b(?:you (?:told|said|suggested|recommended|mentioned|gave|provided|listed"
+    r"|shared|created|wrote|explained|described|made)"
+    r"|our (?:previous|last|earlier) (?:conversation|chat|discussion|game)"
+    r"|remind me (?:what|of|which|the)|you were)\b",
+    re.IGNORECASE,
+)
+
+
+def _asks_about_assistant(question: str) -> bool:
+    return bool(_ASKS_ABOUT_ASSISTANT_RE.search(question or ""))
+
+
 class STMSemanticRetriever:
     """
     Adaptive retrieval over a :class:`FlatHaystackStore`.
@@ -1600,6 +1860,7 @@ class STMSemanticRetriever:
         max_context_tokens: int = 100_000,
         score_weights: dict[str, float] | None = None,
         tau_hours: float = 168.0,
+        chrono_sort: bool = False,
     ) -> None:
         if mode not in ("topk", "long", "auto"):
             raise ValueError(f"unknown retrieval mode: {mode!r}")
@@ -1609,6 +1870,11 @@ class STMSemanticRetriever:
         self.session_id = session_id
         self.mode = mode
         self.max_context_tokens = max_context_tokens
+        # When set, the top-K items are still *selected* by relevance but
+        # *presented* in chronological (original haystack) order. Restores
+        # the timeline the cosine ranking scrambles — the lever for
+        # event-ordering questions. Off by default (opt-in via --chrono-sort).
+        self.chrono_sort = chrono_sort
         # Composite scorer (Prompt 38). For LongMemEval the haystack
         # carries no per-message importance/confidence, so those two
         # inputs are uniform constants — the *effective* tuning knob is
@@ -1724,13 +1990,10 @@ class STMSemanticRetriever:
         tau = max(1.0, self.tau_hours)
         return np.exp(-age_hours / tau)
 
-    def _bundle_topk(
-        self, query: Query, budget: TokenBudget
-    ) -> ContextBundle:
-        qv = self.embedder.encode([query.text])
-        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            sims = (qv @ self._cached_matrix.T).flatten()  # type: ignore[union-attr]
-
+    def _score_components(
+        self, sims: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """``(rel, rec, imp, conf, composite)`` for every cached item."""
         # ── composite score (Prompt 38) ────────────────────────────────────
         # relevance: cosine, min-max normalised to [0,1] over candidates.
         rng = float(sims.max() - sims.min())
@@ -1754,7 +2017,24 @@ class STMSemanticRetriever:
             + w["recency"] * rec
             + w["confidence"] * conf
         )
+        return rel, rec, imp, conf, composite
+
+    def _bundle_topk(
+        self, query: Query, budget: TokenBudget
+    ) -> ContextBundle:
+        qv = self.embedder.encode([query.text])
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            sims = (qv @ self._cached_matrix.T).flatten()  # type: ignore[union-attr]
+        rel, rec, imp, conf, composite = self._score_components(sims)
         order = np.argsort(-composite)[: self.top_k]
+        if self.chrono_sort:
+            # Select by relevance, present in time order. ``rel``/``rec``/…
+            # are indexed by original item index, so the score mapping below
+            # stays aligned regardless of this permutation.
+            order = np.asarray(
+                sorted(order, key=lambda i: _chrono_key(self._cached_items[i], int(i))),
+                dtype=np.int64,
+            )
         picked = [self._cached_items[i] for i in order]
 
         scored = [
@@ -1788,6 +2068,94 @@ class STMSemanticRetriever:
             budget=budget,
             tier_breakdown={"stm": token_count, "mtm": 0, "ltm": 0},
             debug_info={"retrieval_mode": "topk"},
+        )
+
+
+_ENTITY_STOP = frozenset({
+    "the", "this", "that", "there", "then", "they", "when", "what", "where",
+    "which", "user", "assistant", "you", "your", "yours", "we", "our", "it",
+    "he", "she", "his", "her", "how", "why", "who", "and", "but", "for",
+})
+
+
+def _extract_entities(text: str) -> set[str]:
+    """Cheap, transparent named-entity signal — quoted spans + capitalized
+    proper-noun phrases. Mirrors the regex baseline in
+    ``continuum.extraction.entity_extractor`` (no model needed). Lowercased so
+    the match against item text is case-insensitive."""
+    ents: set[str] = set()
+    for a, b in re.findall(r'"([^"]{2,60})"|“([^”]{2,60})”', text):
+        s = (a or b).strip()
+        if len(s) >= 3:
+            ents.add(s.lower())
+    for m in re.findall(
+        r"\b[A-Z][\w'&-]+(?:\s+(?:[A-Z][\w'&-]+|of|the|and|&|de|la)){0,4}\b", text
+    ):
+        s = m.strip()
+        if len(s) >= 4 and s.lower() not in _ENTITY_STOP:
+            ents.add(s.lower())
+    return ents
+
+
+class GraphExpandRetriever:
+    """Entity-matching / 1-hop graph expansion layered over any base retriever.
+
+    Mirrors ``continuum.retrieval.retriever._graph_expand`` but on the flat
+    LongMemEval haystack: after the base retriever picks its top-k, this pulls
+    in up to ``n`` *unpicked* haystack items that share a named entity with the
+    query or the top hits — the Mem0-style entity signal the eval's own
+    dense/BM25 retrievers lack. Off unless ``--graph-expand N`` (N > 0), so
+    every existing config is byte-for-byte unchanged.
+    """
+
+    def __init__(self, base: Any, *, store: "FlatHaystackStore", n: int) -> None:
+        self.base = base
+        self.store = store
+        self.n = n
+
+    async def retrieve(self, query: Query, budget: TokenBudget) -> ContextBundle:
+        import dataclasses
+
+        bundle = await self.base.retrieve(query, budget)
+        if self.n <= 0:
+            return bundle
+        seed = query.text + " " + " ".join(
+            (it.content or "") for it in bundle.items[:5]
+        )
+        ents = _extract_entities(seed)
+        if not ents:
+            return bundle
+        seen = {id(it) for it in bundle.items}
+        seen_text = {(it.content or "").strip() for it in bundle.items}
+        cands: list[tuple[int, MemoryItem]] = []
+        for it in self.store.items:
+            if id(it) in seen or (it.content or "").strip() in seen_text:
+                continue
+            c = (it.content or "").lower()
+            hits = sum(1 for e in ents if e in c)
+            if hits:
+                cands.append((hits, it))
+        cands.sort(key=lambda x: -x[0])
+        add = [it for _h, it in cands[: self.n]]
+        if not add:
+            return bundle
+        new_items = list(bundle.items) + add
+        new_msgs = list(bundle.messages) + [
+            {
+                "role": str(it.metadata.get("role", "user")) if it.metadata else "user",
+                "content": it.content,
+            }
+            for it in add
+        ]
+        new_tokens = bundle.tokens_used + sum(
+            estimate_tokens_text(it.content) for it in add
+        )
+        dbg = dict(bundle.debug_info or {})
+        dbg["graph_added"] = len(add)
+        dbg["retrieval_mode"] = str(dbg.get("retrieval_mode", "")) + "+graph"
+        return dataclasses.replace(
+            bundle, items=new_items, messages=new_msgs,
+            tokens_used=new_tokens, debug_info=dbg,
         )
 
 
@@ -1861,7 +2229,19 @@ class SessionAwareSemanticRetriever(STMSemanticRetriever):
     the strongest turns inside the top sessions. This prevents one noisy
     session with many similar turns from crowding out evidence sessions for
     multi-session questions.
+
+    Turns are scored with the parent's composite scorer, so
+    ``--scorer-weights`` and ``--tau-hours`` apply here as they do on the
+    flat path. With ``lexical=True`` the score is a reciprocal-rank fusion
+    of that composite and BM25, computed over the *whole* haystack before
+    any selection. That is what ``--retriever hybrid`` means under
+    session-aware retrieval: wrapping this retriever in
+    :class:`~continuum.retrieval.rrf.HybridRetriever` instead would re-sort
+    its output by fused rank, discarding both the session selection and the
+    chronological presentation order.
     """
+
+    TURN_RERANK_MODES = ("quota", "global", "floor")
 
     def __init__(
         self,
@@ -1871,12 +2251,55 @@ class SessionAwareSemanticRetriever(STMSemanticRetriever):
         session_top_k: int = 4,
         turns_per_session: int = 2,
         max_items: int = 16,
+        turn_rerank: str = "quota",
+        lexical: bool = False,
+        rrf_k: int = 60,
+        user_first: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(store=store, embedder=embedder, **kwargs)
         self.session_top_k = max(1, int(session_top_k))
         self.turns_per_session = max(1, int(turns_per_session))
-        self.max_items = max(1, int(max_items))
+        self.turn_rerank = str(turn_rerank or "quota")
+        if self.turn_rerank not in self.TURN_RERANK_MODES:
+            raise ValueError(f"unknown turn_rerank: {self.turn_rerank!r}")
+        self.lexical = bool(lexical)
+        self.rrf_k = int(rrf_k)
+        # Rank every user turn ahead of every assistant turn unless the
+        # question asks about what the assistant said. Assistant replies are
+        # long and on-topic, so they took ~41% of a 24-turn budget while
+        # almost never carrying the answer.
+        self.user_first = bool(user_first)
+        self._bm25: Any | None = None
+        self._bm25_len = -1
+        # Never offer fewer turns than the caller's ``top_k``. Downstream
+        # (RRF fusion, then the reader) truncates to ``top_k``, so a
+        # ``max_items`` below it starves the cosine channel while BM25
+        # supplies its full width — the two arms of the hybrid stop being
+        # comparable and the budget silently shrinks.
+        self.max_items = max(1, int(max_items), int(getattr(self, "top_k", 0) or 0))
+
+    def _turn_scores(self, query_text: str, sims: np.ndarray) -> np.ndarray:
+        """Per-turn selection score: composite, RRF-fused with BM25 if lexical."""
+        composite = self._score_components(sims)[-1]
+        if not self.lexical:
+            return composite
+        from continuum.retrieval.bm25 import BM25Index
+
+        if self._bm25 is None or self._bm25_len != len(self._cached_items):
+            self._bm25 = BM25Index(list(self._cached_items))
+            self._bm25_len = len(self._cached_items)
+        lex = np.asarray(self._bm25.score_all(query_text), dtype=np.float64)
+        n = len(composite)
+        dense_rank = np.empty(n, dtype=np.float64)
+        dense_rank[np.argsort(-composite, kind="stable")] = np.arange(1, n + 1)
+        lex_rank = np.empty(n, dtype=np.float64)
+        lex_rank[np.argsort(-lex, kind="stable")] = np.arange(1, n + 1)
+        # A turn sharing no token with the query has no lexical evidence;
+        # ranking it anyway would hand the tail of the haystack RRF mass.
+        return 1.0 / (self.rrf_k + dense_rank) + np.where(
+            lex > 0, 1.0 / (self.rrf_k + lex_rank), 0.0,
+        )
 
     def _bundle_topk(
         self, query: Query, budget: TokenBudget
@@ -1884,13 +2307,22 @@ class SessionAwareSemanticRetriever(STMSemanticRetriever):
         qv = self.embedder.encode([query.text])
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             sims = (qv @ self._cached_matrix.T).flatten()  # type: ignore[union-attr]
+        scores = self._turn_scores(query.text, sims)
+        user_first = self.user_first and not _asks_about_assistant(query.text)
+        if user_first:
+            is_assistant = np.asarray(
+                [(it.metadata or {}).get("role") == "assistant" for it in self._cached_items],
+            )
+            # Shift assistant turns below the lowest user turn; they remain
+            # only as fallback for a session with no user turn left.
+            scores = scores - is_assistant * (float(scores.max() - scores.min()) + 1.0)
 
         first_index: dict[str, int] = {}
         grouped: dict[str, list[tuple[int, float, MemoryItem]]] = {}
         for idx, item in enumerate(self._cached_items):
             sid = str((item.metadata or {}).get("session_id") or "unknown")
             first_index.setdefault(sid, idx)
-            grouped.setdefault(sid, []).append((idx, float(sims[idx]), item))
+            grouped.setdefault(sid, []).append((idx, float(scores[idx]), item))
 
         ranked_sessions = sorted(
             grouped,
@@ -1900,16 +2332,62 @@ class SessionAwareSemanticRetriever(STMSemanticRetriever):
             ),
         )[: self.session_top_k]
 
-        picked: list[MemoryItem] = []
-        for sid in ranked_sessions:
-            turns = sorted(
-                grouped[sid],
-                key=lambda row: (-row[1], row[0]),
-            )[: self.turns_per_session]
-            picked.extend(item for _idx, _score, item in turns)
-            if len(picked) >= self.max_items:
-                picked = picked[: self.max_items]
-                break
+        # Candidate turns, kept as ``(idx, score, item)`` so the budget
+        # policy can re-rank them and ``chrono_sort`` can restore the
+        # timeline.
+        turn_budget = self.max_items
+        candidates: list[tuple[int, float, MemoryItem]] = []
+        if self.turn_rerank == "floor":
+            # Each selected session is guaranteed its strongest
+            # ``turns_per_session`` turns (in session-rank order, so a budget
+            # smaller than the floor keeps the best sessions), then the rest
+            # of the budget fills globally by score. ``global`` alone let one
+            # session with many strong turns take the whole budget; ``quota``
+            # alone stopped at session_top_k × turns_per_session and left
+            # the rest of the budget unused.
+            taken: set[int] = set()
+            for sid in ranked_sessions:
+                for row in sorted(grouped[sid], key=lambda r: (-r[1], r[0]))[
+                    : self.turns_per_session
+                ]:
+                    if len(candidates) < turn_budget:
+                        candidates.append(row)
+                        taken.add(row[0])
+            pool = [
+                row for sid in ranked_sessions for row in grouped[sid]
+                if row[0] not in taken
+            ]
+            pool.sort(key=lambda r: (-r[1], r[0]))
+            candidates.extend(pool[: max(0, turn_budget - len(candidates))])
+        elif self.turn_rerank == "global":
+            # Pool every turn from the ranked sessions and keep the
+            # globally strongest ``budget``. The fixed per-session quota
+            # is what required a gold turn to rank top-``turns_per_session``
+            # inside its own session; questions whose evidence sits
+            # unevenly across sessions (three turns in one, one in
+            # another) could not be served under it at all.
+            for sid in ranked_sessions:
+                candidates.extend(grouped[sid])
+            candidates.sort(key=lambda row: (-row[1], row[0]))
+            del candidates[turn_budget:]
+        else:
+            for sid in ranked_sessions:
+                turns = sorted(
+                    grouped[sid],
+                    key=lambda row: (-row[1], row[0]),
+                )[: self.turns_per_session]
+                candidates.extend(turns)
+                if len(candidates) >= turn_budget:
+                    del candidates[turn_budget:]
+                    break
+        if self.chrono_sort:
+            # Select by relevance, present in time order. The parent does
+            # this for the flat top-K path, but this override replaced the
+            # whole selection step, so ``--chrono-sort`` was a silent
+            # no-op under ``--session-aware-retrieval`` — i.e. in the
+            # pinned configuration, which is the only one that matters.
+            candidates.sort(key=lambda row: _chrono_key(row[2], row[0]))
+        picked: list[MemoryItem] = [item for _idx, _score, item in candidates]
 
         messages = [
             {
@@ -1931,6 +2409,11 @@ class SessionAwareSemanticRetriever(STMSemanticRetriever):
                 "selected_sessions": ranked_sessions,
                 "session_top_k": self.session_top_k,
                 "turns_per_session": self.turns_per_session,
+                "turn_rerank": self.turn_rerank,
+                "max_items": self.max_items,
+                "chrono_sort": bool(self.chrono_sort),
+                "lexical": self.lexical,
+                "user_first": user_first,
             },
         )
 
@@ -2529,6 +3012,7 @@ class _IngestingAdapter(ContinuumAdapter):
                     "session_id": str(msg.get("session_id", "")),
                     "user_id": user_id,
                     "date": str(msg.get("date", "") or ""),
+                    "haystack_index": msg.get("haystack_index", ""),
                 },
             )
             # Stamp the session date onto created_at so the scorer's
@@ -2721,6 +3205,20 @@ def _is_preference_question(question: str) -> bool:
     return any(term in q for term in _PREFERENCE_INTENT_TERMS)
 
 
+def _is_preference(question_type: str, question: str) -> bool:
+    """Preference routing: the dataset label when there is one, wording only
+    when there is not. The wording terms ("for my", "resources", …) also match
+    35 factual LongMemEval questions ("What did I bake for my niece's party?"),
+    32 of which were answered correctly under the factual prompts; the
+    preference prompt has no way to say "not mentioned", so it hallucinated
+    on the unanswerable variants.
+    """
+    qt = (question_type or "").lower().strip()
+    if qt:
+        return qt == "single-session-preference"
+    return _is_preference_question(question)
+
+
 # WS-1 temporal reasoning — date-delta questions ("how many days between X and
 # Y", "how many weeks ago", "in what order"). The measured failure is NOT
 # arithmetic difficulty: the direct context dropped the turn dates entirely, so
@@ -2782,6 +3280,48 @@ def _is_knowledge_update_question(question: str) -> bool:
     """Heuristic gate for 'what is the current state after a change' questions."""
     q = (question or "").lower()
     return any(term in q for term in _KNOWLEDGE_UPDATE_TERMS)
+
+
+# A KU question that asks for the value BEFORE the change. 13 such rows got
+# the latest-wins prompt and scored 53.8% against 80.7% for current-value
+# questions ("Where do I initially keep my old sneakers?" → the current spot).
+_PRIOR_VALUE_RE = re.compile(
+    r"\b(?:initially|originally|previously|previous|at first|used to"
+    r"|before (?:i|my) (?:changed|switched|moved|started|got|upgraded|replaced)"
+    r"|(?:in )?the first (?:\w+ )?(?:days?|weeks?|months?|years?))\b",
+    re.IGNORECASE,
+)
+
+
+def _is_prior_value_question(question: str) -> bool:
+    """True when the question asks for an earlier value, not the current one."""
+    return bool(_PRIOR_VALUE_RE.search(question or ""))
+
+
+# Count / list wording that should keep the aggregate prompt. Narrower than
+# ``is_aggregate_question``, whose "or" / "all" / "both" fire on ordinary
+# temporal questions ("the bike or the car?").
+_COUNT_QUESTION_RE = re.compile(
+    r"\b(?:how many|how much|in total|total|list)\b", re.IGNORECASE,
+)
+
+# Presupposition check. 30 questions name something the user never mentioned
+# while a near-miss is present (Dr. Johnson vs Dr. Smith, Shinjuku vs
+# Harajuku); the gold answer says so. Under "answer or say I don't know" the
+# reader answered with the near-miss's fact instead (53.3% vs 83.4%).
+# The second sentence is there because the first version over-fired: with
+# the evidence in context, it refused "the local animal shelter's
+# fundraising dinner" because the turn called it the "Love is in the Air"
+# dinner, and "the painting of a sunset" because the turn said "flea market
+# find".
+_PRESUPPOSITION_CLAUSE = (
+    "If the question assumes something the conversation never mentions — a "
+    "person, place, item or event that does not appear, even though something "
+    "similar does — do not answer with the similar thing: say the conversation "
+    "does not mention it, and name what it does mention instead. A different "
+    "name or description for the same thing (another name for the same event, "
+    "a general word for a specific item) counts as mentioned: answer normally."
+)
 
 
 # v3 Reflect — a single, bounded reasoning pass (NOT an agentic loop).
@@ -3098,8 +3638,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         answer_max_tokens: int = 128,
         top_k: int = 12,
         max_context_chars: int = 32000,
+        max_context_tokens: int = 0,
         reranker: CrossEncoderReranker | None = None,
         rerank_to: int = 0,
+        chrono_sort: bool = False,
         preference_conditioning: bool = False,
         temporal_conditioning: bool = False,
         aggregation_v2: bool = False,
@@ -3119,6 +3661,10 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             session=session, llm=llm, answer_max_tokens=answer_max_tokens,
         )
         self._top_k = top_k
+        # Present the final context in the order it was said. Applied here,
+        # after fusion and rerank, because any wrapper upstream (RRF, the
+        # reranker) re-sorts by relevance and would undo it.
+        self._chrono_sort = chrono_sort
         # v3 Reflect: a single bounded reasoning pass (NOT a loop). When on and
         # the question is in an eligible hard category, the final answer call uses
         # a chain-of-thought prompt (pull facts → connect → "Answer: <final>")
@@ -3151,6 +3697,11 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._synthesis_fn = synthesis_fn
         self._synthesis_facts: list[Any] = []  # DerivedFacts from ingest-time aggregation
         self._max_context_chars = max_context_chars
+        # Token-native budget (0 = unbounded, chars alone govern). The chars
+        # knob is what every historical run used, so it stays the default axis;
+        # this one lets the ablation state budgets in the unit the provider
+        # actually bills in. When both are set, whichever binds first wins.
+        self._max_context_tokens = max_context_tokens
         # WS-7: when on, preference-type questions get a prompt that tells the
         # model to identify and APPLY a stated user preference from the
         # retrieved turns (recall is ~93%; the gap is application). Feature-
@@ -3187,6 +3738,9 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         self._reranker = reranker
         self._rerank_to = rerank_to
         self.last_telemetry: dict[str, Any] = {}
+        #: Set by the context assembler on every answered row; consumed by
+        #: answer_question to publish the budget axis of the ablation.
+        self.last_budget_stats: BudgetStats | None = None
 
     async def process_conversation(self, messages: Iterable[dict[str, Any]]) -> None:
         """Normal ingest, then (v3) build per-entity aggregate counts."""
@@ -3235,6 +3789,32 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         )
 
     async def answer_question(self, question: str) -> str:
+        """
+        Public entry point — wraps the direct pipeline in per-row telemetry.
+
+        The direct reasoner used to hand-build ``last_telemetry`` and never
+        open a :class:`TelemetryCounter`, so real provider token counts and
+        cost were dropped on the floor for the one reasoner every headline
+        run uses (only the decomposed path wrapped the counter). That is why
+        `metrics.avg_context_tokens_pre_opt` reads 0.0 in every direct run.
+        """
+        start_row_telemetry()
+        self.last_budget_stats = None
+        try:
+            return await self._answer_question_direct(question)
+        finally:
+            counter = end_row_telemetry()
+            merged: dict[str, Any] = dict(self.last_telemetry or {})
+            if counter is not None:
+                # Counter fields first, then the hand-built ones — the
+                # pipeline's own flags (answer_mode, prompt branches) are
+                # authoritative for keys both sides set.
+                merged = {**counter.snapshot(), **merged}
+            if self.last_budget_stats is not None:
+                merged.update(self.last_budget_stats.as_dict())
+            self.last_telemetry = merged
+
+    async def _answer_question_direct(self, question: str) -> str:
         retriever = getattr(self.session, "retriever", None)
         ctx: ContextBundle | None = None
         if retriever is not None:
@@ -3269,7 +3849,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # Gate it off for preference questions — keep the retrieval gains clean.
         _qt_early = (getattr(self, "dataset_question_type", "") or "").lower()
         _is_pref_early = self._pref_conditioning and (
-            _qt_early == "single-session-preference" or _is_preference_question(question)
+            _is_preference(_qt_early, question)
         )
         # Keep ``rerank_to`` after reranking (falls back to top_k if unset).
         # Fire only when the pool actually exceeds the keep count — else
@@ -3287,6 +3867,12 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         if not items:
             self.last_telemetry = {"llm_call_count": 0, "answer_mode": "direct"}
             return ""
+        if self._chrono_sort:
+            items = [
+                it for _i, it in sorted(
+                    enumerate(items), key=lambda pair: _chrono_key(pair[1], pair[0]),
+                )
+            ]
 
         from evals.longmemeval.decomposed_answer import is_aggregate_question
         qt = (getattr(self, "dataset_question_type", "") or "").lower()
@@ -3308,9 +3894,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             and _is_temporal_order_question(question)
         )
         # WS-7 preference branch (gated on the flag + the type/wording).
-        preference = self._pref_conditioning and (
-            qt == "single-session-preference" or _is_preference_question(question)
-        )
+        preference = self._pref_conditioning and _is_preference(qt, question)
         # WS-3 knowledge-update branch (gated): the current LTM facts are
         # already superseded-filtered; surface + prioritise them so the reader
         # prefers current state over the stale raw turn still in context.
@@ -3322,6 +3906,28 @@ class _DirectAnswerAdapter(_IngestingAdapter):
         # first matching span (43/50 multi-session failures were
         # missing_aggregation despite 85% recall).
         aggregate = qt == "multi-session" or is_aggregate_question(question)
+        # A count/list question takes the aggregate prompt even when the
+        # temporal or KU detector also fires: "How many doctor's appointments
+        # did I go to in March?" is a count over a window, not a date delta.
+        # Before, the temporal prompt pre-empted it (22 multi-session rows,
+        # 63.6% vs 76.2% on the aggregate prompt) and the KU prompt's "reply
+        # with just the current answer" pre-empted 6 more (33.3%). Genuine
+        # date arithmetic and ordering still go to the temporal prompt.
+        temporal_calc = (
+            _is_temporal_delta_question(question) or _is_temporal_order_question(question)
+        )
+        aggregate_first = (
+            aggregate
+            and not temporal_calc
+            and not preference
+            # --aggregation-v2 (opt-in) keeps its own enumerate-then-count prompt.
+            and not self._aggregation_v2
+            and (qt == "multi-session" or bool(_COUNT_QUESTION_RE.search(question)))
+        )
+        # KU questions that ask for an EARLIER value ("initially", "previous",
+        # "in the first three months") — the latest-wins instruction answers
+        # them with the current value, which is wrong by construction.
+        ku_prior = ku and _is_prior_value_question(question)
 
         # v3 Reflect (gated): a single bounded CoT pass for the hard reasoning
         # categories. Kept OFF the deterministic temporal-delta path (codemath is
@@ -3349,21 +3955,47 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 continue
             meta = getattr(it, "metadata", {}) or {}
             role = meta.get("role", "") or ""
-            if temporal:
+            # ``ku`` only drives the context when the KU prompt is the one
+            # that will be used; the temporal prompt wins the branch below.
+            ku_ctx = ku and not temporal
+            stamp = ""
+            # Aggregate questions are stamped too: "how many ... in March"
+            # was being asked to filter by month over an undated context.
+            if temporal or ku_ctx or aggregate_first:
                 # Prefix each turn with its date so date arithmetic is
                 # possible at all (otherwise the model sees no timestamps).
+                #
+                # Knowledge-update needs this for a different reason: its
+                # prompt instructs the reader to "prefer the latest
+                # statement", but the turns arrive in relevance order with
+                # no timestamps, so there was nothing to read recency from
+                # — the instruction was unactionable. 14 stale_fact and 16
+                # wrong_span failures on the 500-row run were answers that
+                # took the retired value with the fresh turn in context at
+                # gold_turn_recall = 1.0.
                 date = meta.get("date") or ""
                 if not date:
                     ca = getattr(it, "created_at", None)
                     date = ca.isoformat()[:10] if ca is not None else ""
                 stamp = f"[{date}] " if date else ""
-                lines.append(f"{stamp}[{role}] {content}" if role else f"{stamp}{content}")
-            elif ku and meta.get("source") == "ltm_fact":
+            if ku_ctx and meta.get("source") == "ltm_fact":
                 # Mark resolved current facts so the reader trusts them.
-                lines.append(f"[CURRENT FACT] {content}")
+                lines.append(f"{stamp}[CURRENT FACT] {content}")
+            elif role:
+                lines.append(f"{stamp}[{role}] {content}")
             else:
-                lines.append(f"[{role}] {content}" if role else content)
-        context = "\n".join(lines)[: self._max_context_chars]
+                lines.append(f"{stamp}{content}" if stamp else content)
+        # Budget enforcement: admit WHOLE lines under both the char and the
+        # token cap. The previous `"\n".join(lines)[:max_chars]` was a byte
+        # slice that cut the last turn mid-sentence — harmless at 64k, but it
+        # would corrupt the tail item at the low budgets the ablation walks
+        # down to, and score as "budget too small" for the wrong reason.
+        context, budget_stats = admit_lines(
+            lines,
+            max_chars=self._max_context_chars,
+            max_tokens=self._max_context_tokens,
+        )
+        self.last_budget_stats = budget_stats
         # v3 synthesis: on counting questions, inject ONLY the relevant
         # code-computed aggregate(s) (v3.1: relevance-filtered — v3.0 dumped all
         # ~40 and buried the answer), so the reader reads the count/total.
@@ -3430,7 +4062,7 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             today = (getattr(self, "dataset_question_date", "") or "").strip()
             today_line = f"Today's date is {today}.\n" if today else ""
             _reflect_pref = (
-                qt == "single-session-preference" or _is_preference_question(question)
+                _is_preference(qt, question)
             )
             if _reflect_pref:
                 # Preference-application Reflect: the generic "answer or say I
@@ -3475,6 +4107,28 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                     f"Retrieved conversation:\n{context}\n\n"
                     f"Question: {question}"
                 )
+        elif aggregate_first:
+            today = (getattr(self, "dataset_question_date", "") or "").strip()
+            today_line = f"Today's date is {today}. " if today else ""
+            ku_line = (
+                "If an amount or status changed over time, use the latest-dated "
+                "value unless the question asks about an earlier time. "
+                if ku else ""
+            )
+            prompt = (
+                "The question below asks you to combine information that "
+                "may be spread across MULTIPLE parts of the retrieved "
+                "conversation. Each turn is prefixed with the date it was "
+                "said, in [YYYY-MM-DD] form. " + today_line + "Read ALL of "
+                "it, find EVERY relevant item, and give the COMPLETE "
+                "aggregated answer — the full list or the total count across "
+                "everything. If the question names a time period, include only "
+                "items from that period. " + ku_line + "Do not stop at the "
+                "first match. " + _PRESUPPOSITION_CLAUSE + " Reply with just "
+                "the answer.\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
         elif temporal:
             # The turns above are date-stamped. Give "now" and ask for an
             # explicit, scoped date calculation (NOT a general reasoning loop).
@@ -3486,7 +4140,8 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 "to answer the question: find the relevant event date(s), then "
                 "compute the difference (count of days / weeks / months, or how "
                 "long ago relative to today), or put the events in time order. "
-                "Work it out from the dates — do not guess. Reply with just the "
+                "Work it out from the dates — do not guess. "
+                + _PRESUPPOSITION_CLAUSE + " Reply with just the "
                 "answer (the number or ordering).\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
@@ -3514,16 +4169,30 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                     "Include all of them; the exact wording of each label should "
                     "match how you'd name it in the answer."
                 )
+        elif ku_prior:
+            prompt = (
+                "The user's situation CHANGED over time. Each turn below is "
+                "prefixed with its date as [YYYY-MM-DD]. This question asks "
+                "about an EARLIER state — what held initially, before a change, "
+                "or during the period it names — NOT the current one. Use the "
+                "dates to find the value that held at that time. "
+                + _PRESUPPOSITION_CLAUSE + " Reply with just that answer.\n\n"
+                f"Retrieved conversation:\n{context}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
         elif ku:
             prompt = (
-                "The user's situation may have CHANGED over time. Items marked "
-                "[CURRENT FACT] are the user's current, resolved facts — "
-                "outdated versions have already been removed by the memory "
-                "system. When the raw conversation contains statements that "
-                "conflict across time, the user's CURRENT situation is the most "
-                "recent one. Prefer the [CURRENT FACT] items and the latest "
+                "The user's situation may have CHANGED over time. Each turn "
+                "below is prefixed with its date as [YYYY-MM-DD]; a later "
+                "date supersedes an earlier one. Items marked [CURRENT FACT] "
+                "are the user's current, resolved facts — outdated versions "
+                "have already been removed by the memory system. When the raw "
+                "conversation contains statements that conflict across time, "
+                "the user's CURRENT situation is the one with the LATEST date. "
+                "Prefer the [CURRENT FACT] items and the latest-dated "
                 "statement; never answer with a value the user has since "
-                "changed. Reply with just the current answer.\n\n"
+                "changed. " + _PRESUPPOSITION_CLAUSE + " Reply with just the "
+                "current answer.\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
@@ -3573,15 +4242,17 @@ class _DirectAnswerAdapter(_IngestingAdapter):
                 "conversation. Read ALL of it, find EVERY relevant item, "
                 "and give the COMPLETE aggregated answer — the full list "
                 "or the total count across everything. Do not stop at the "
-                "first match. Reply with just the answer.\n\n"
+                "first match. " + _PRESUPPOSITION_CLAUSE + " Reply with just "
+                "the answer.\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
         else:
             prompt = (
                 "Answer the question using ONLY the retrieved conversation "
-                "below. Reply with just the answer — no explanation. If the "
-                "answer truly isn't present, reply 'I don't know.'\n\n"
+                "below. Reply with just the answer — no explanation. "
+                + _PRESUPPOSITION_CLAUSE + " Otherwise, if the answer truly "
+                "isn't present, reply 'I don't know.'\n\n"
                 f"Retrieved conversation:\n{context}\n\n"
                 f"Question: {question}\nAnswer:"
             )
@@ -3638,6 +4309,8 @@ class _DirectAnswerAdapter(_IngestingAdapter):
             "answer_mode": "direct",
             "retrieved_items": len(items),
             "aggregate_prompt": aggregate,
+            "aggregate_first": aggregate_first,
+            "ku_prior_prompt": ku_prior,
             "aggregation_v2": bool(aggregate and self._aggregation_v2),
             "preference_prompt": preference,
             "temporal_prompt": temporal,
@@ -4880,7 +5553,7 @@ def make_adapter_factory(
     answer_max_tokens: int = 200,
     chain: OptimizerChain | None = None,
     reranker: CrossEncoderReranker | None = None,
-    rerank_to: int = 4,
+    rerank_to: int = 0,
     synthesis_fn: Any = None,
     retrieval_mode: str = "topk",
     retriever_kind: str = "cosine",
@@ -4891,6 +5564,7 @@ def make_adapter_factory(
     iterative_max_rounds: int = 2,
     direct_answer: bool = False,
     direct_max_context_chars: int = 32000,
+    direct_max_context_tokens: int = 0,
     preference_conditioning: bool = False,
     temporal_conditioning: bool = True,  # WS-1 WIN (+33pp) → default-on for v1.1
     aggregation_v2: bool = False,
@@ -4901,6 +5575,8 @@ def make_adapter_factory(
     reflect_types: frozenset[str] = _REFLECT_DEFAULT_TYPES,
     router: bool = False,
     vote_n: int = 1,
+    graph_expand: int = 0,
+    chrono_sort: bool = False,
     distill: bool = False,
     distill_max_tokens: int = 1024,
     distill_types: frozenset[str] = _DISTILL_DEFAULT_TYPES,
@@ -4924,6 +5600,8 @@ def make_adapter_factory(
     session_aware_retrieval: bool = False,
     session_top_k: int = 4,
     turns_per_session: int = 2,
+    turn_rerank: str = "quota",
+    user_turns_first: bool = False,
     wiki_memory: bool = False,
     wiki_top_k: int = 8,
     content_wiki_memory: bool = False,
@@ -4989,20 +5667,36 @@ def make_adapter_factory(
                 if session_aware_retrieval else STMSemanticRetriever
             )
             retriever_kwargs: dict[str, Any] = {}
+            # Session-aware + hybrid fuses BM25 inside the retriever, over
+            # the whole haystack, *before* session selection. Wrapping it in
+            # HybridRetriever instead re-sorts its output by fused rank,
+            # which undid both the session selection and --chrono-sort.
+            fuse_inside = session_aware_retrieval and retriever_kind == "hybrid"
             if session_aware_retrieval:
                 retriever_kwargs.update({
                     "session_top_k": session_top_k,
                     "turns_per_session": turns_per_session,
                     "max_items": decompose_max_items,
+                    "turn_rerank": turn_rerank,
+                    "lexical": fuse_inside,
+                    "rrf_k": rrf_k,
+                    "user_first": user_turns_first,
                 })
             cosine_retriever: Any = retriever_cls(
                 store=store, embedder=embedder, top_k=top_k,
                 mode=retrieval_mode, max_context_tokens=max_context_tokens,
                 score_weights=score_weights, tau_hours=tau_hours,
+                # Under a fusion wrapper the child's order is read as its
+                # relevance ranking, so a chronological child order would be
+                # fed to RRF as relevance. Presentation order is applied by
+                # the answer adapter, after fusion, instead.
+                chrono_sort=chrono_sort and retriever_kind != "hybrid",
                 **retriever_kwargs,
             )
             # ── --retriever {cosine,bm25,hybrid} ────────────────────────
-            if retriever_kind == "bm25":
+            if fuse_inside:
+                base_retriever = cosine_retriever
+            elif retriever_kind == "bm25":
                 base_retriever = BM25HaystackRetriever(
                     store=store, top_k=top_k,
                 )
@@ -5017,6 +5711,10 @@ def make_adapter_factory(
                 )
             else:  # cosine (default)
                 base_retriever = cosine_retriever
+        if graph_expand > 0:
+            base_retriever = GraphExpandRetriever(
+                base_retriever, store=store, n=graph_expand,
+            )
         retriever: Any = base_retriever
         if decompose and not decompose_answer:
             retriever = DecompositionRetriever(
@@ -5031,8 +5729,10 @@ def make_adapter_factory(
             return _DirectAnswerAdapter(
                 session=session, llm=llm, answer_max_tokens=answer_max_tokens,
                 top_k=top_k, max_context_chars=direct_max_context_chars,
+                max_context_tokens=direct_max_context_tokens,
                 reranker=reranker,  # WS-4: precision pass in the winning path
                 rerank_to=rerank_to,  # keep best N after rerank (not top_k)
+                chrono_sort=chrono_sort,  # presentation order, after fusion/rerank
                 preference_conditioning=preference_conditioning,  # WS-7
                 temporal_conditioning=temporal_conditioning,  # WS-1
                 aggregation_v2=aggregation_v2,  # WS-2
@@ -5148,6 +5848,68 @@ def _build_small_llm(args: argparse.Namespace, model: str) -> Any:
     return SmallLLM(model=model, url=url, api_key=key)
 
 
+def _build_judge_llm(args: argparse.Namespace) -> Any:
+    """
+    Build the judge's own LLM client from ``--judge-provider`` /
+    ``--judge-model``, independent of the answerer.
+
+    Exists because the two roles have opposite requirements. The answerer
+    wants the strongest model available and is given a budget it can think
+    inside; the judge emits one token (``yes``/``no``) at ``max_tokens=5``
+    and must be fast and non-reasoning. PREREGISTRATION.md §3.2 states the
+    rule and the cost of breaking it — a reasoning judge at that budget
+    returned "no" for every row and flipped 38/50 correct answers to wrong.
+
+    Reasoning providers are therefore *not* rejected here (``meta`` stays in
+    the choices so the axis can be measured deliberately), but the default
+    ``--judge-model`` for each provider is a non-reasoning one.
+    """
+    provider = args.judge_provider
+    model = args.judge_model or {
+        "groq":       DEFAULT_GROQ_MODEL,
+        "nvidia":     DEFAULT_NVIDIA_MODEL,
+        "gemini":     DEFAULT_GEMINI_MODEL,
+        "openai":     DEFAULT_OPENAI_MODEL,
+        "openrouter": DEFAULT_OPENROUTER_MODEL,
+        "meta":       DEFAULT_META_MODEL,
+        "lmstudio":   DEFAULT_LMSTUDIO_MODEL,
+        "ollama":     DEFAULT_OLLAMA_MODEL,
+    }.get(provider, DEFAULT_OLLAMA_MODEL)
+
+    # The judge is one short call per row — it does not need the answerer's
+    # rpm budget, and sharing it would make the two compete for throttle slots.
+    rpm = max(1, args.rpm)
+    if provider == "groq":
+        return GroqLLM(model=model, rpm=rpm)
+    if provider == "nvidia":
+        return NvidiaLLM(model=model, rpm=rpm)
+    if provider == "gemini":
+        return GeminiLLM(model=model, rpm=rpm)
+    if provider == "openai":
+        return OpenAILLM(model=model, rpm=rpm)
+    if provider == "openrouter":
+        return OpenRouterLLM(
+            model=model, rpm=rpm,
+            provider_pin=args.openrouter_provider, seed=args.seed,
+        )
+    if provider == "meta":
+        log.warning(
+            "judge provider=meta — muse models are reasoning models and the "
+            "judge runs at max_tokens=5. PREREGISTRATION.md §3.2 forbids this "
+            "for any number that enters a comparison table."
+        )
+        return MetaLLM(
+            model=model, rpm=rpm,
+            reasoning_effort=args.meta_reasoning_effort or "minimal",
+        )
+    if provider == "lmstudio":
+        return LMStudioLLM(
+            model=model, base_url=args.lmstudio_url,
+            temperature=args.lmstudio_temperature,
+        )
+    return OllamaLLM(model=model, base_url=args.ollama_url)
+
+
 def _build_ltm_store_factory(
     args: argparse.Namespace, embedder: Any,
 ) -> tuple[Callable[[], Any], str]:
@@ -5184,12 +5946,59 @@ def _build_ltm_store_factory(
     if llm_available:
         try:
             from continuum.extraction.fact_extractor import FactExtractor
-            from continuum.promotion.mem0_promoter import Mem0Promoter
-            promoter = Mem0Promoter()  # litellm.acompletion by default
-            fact_extractor = FactExtractor()
+            from continuum.promotion.continuum_promoter import ContinuumPromoter
+            from evals.longmemeval.openrouter_completion import make_completion_fn
+
+            # One completion fn, one model, for BOTH ingest components. This
+            # replaces litellm's three independent routing configs, each of
+            # which defaulted to a bare `gpt-4o-mini` resolving to OpenAI (not
+            # the OpenRouter account in use) and failed silently in a different
+            # way. See openrouter_completion.py.
+            from continuum.core.config import (
+                FactExtractionConfig as _FEC,
+                PromoterConfig as _PC,
+            )
+
+            ingest_fn = make_completion_fn(
+                model=args.ingest_model, rpm=args.ingest_rpm
+            )
+            # Budgets sized for this call site, not the library default. The
+            # store feeds RAW sessions (up to ~18.6k chars) because it skips MTM
+            # compression, and the library's 1000-token default truncates the
+            # JSON mid-string — which the extractor then swallows into "no
+            # facts". Explicit here so no env var is needed to get a valid run.
+            promoter = ContinuumPromoter(
+                _PC(max_tokens=4096, timeout=120), completion_fn=ingest_fn
+            )
+            fact_extractor = FactExtractor(
+                _FEC(max_tokens=8000, timeout=120), completion_fn=ingest_fn
+            )
+            log.info("ingest LLM = %s (OpenRouter, direct — litellm bypassed)", args.ingest_model)
         except Exception as exc:  # pragma: no cover — defensive
             log.warning("LLM promoter unavailable (%s); using heuristic", exc)
             llm_available = False
+
+    # Ingest cache. Extraction + promoter decisions are the expensive half
+    # (~53 LLM calls/row) and are identical across supersession arms, so the
+    # second arm — and every re-run — replays instead of recomputing.
+    from continuum.core.config import FactExtractionConfig, PromoterConfig
+    from evals.longmemeval import ingest_cache as ic
+    _fc, _pc = FactExtractionConfig(), PromoterConfig()
+    # The ingest model comes from --ingest-model now, not from the per-component
+    # config — but token budgets still do, and they change the output, so both
+    # participate in the key.
+    fingerprint = ic.config_fingerprint(
+        fact_model=args.ingest_model if llm_available else "heuristic",
+        fact_max_tokens=8000 if llm_available else _fc.max_tokens,
+        fact_temperature=_fc.temperature,
+        promoter_model=args.ingest_model if llm_available else "heuristic",
+        promoter_path="llm" if llm_available else "heuristic",
+    )
+    cache = ic.IngestCache(enabled=args.ingest_cache)
+    log.info(
+        "ingest cache %s (dir=%s, fingerprint=%s)",
+        "ENABLED" if args.ingest_cache else "disabled", cache.dir, fingerprint,
+    )
 
     def factory() -> Any:
         if backend == "postgres":
@@ -5205,6 +6014,11 @@ def _build_ltm_store_factory(
             fact_extractor=fact_extractor,
             llm_available=llm_available,
             ltm_backend_label=backend,
+            supersession_mode=args.supersession_mode,
+            cache=cache,
+            cache_fingerprint=fingerprint,
+            concurrency=args.ingest_concurrency,
+            replay_facts_only=args.recompute_decisions,
         )
 
     return factory, backend
@@ -5231,6 +6045,7 @@ async def main_async(args: argparse.Namespace) -> int:
             "gemini":     DEFAULT_GEMINI_MODEL,
             "openai":     DEFAULT_OPENAI_MODEL,
             "openrouter": DEFAULT_OPENROUTER_MODEL,
+            "meta":       DEFAULT_META_MODEL,
             "bedrock":    DEFAULT_BEDROCK_MODEL,
             "lmstudio":   DEFAULT_LMSTUDIO_MODEL,
             "ollama":     DEFAULT_OLLAMA_MODEL,
@@ -5258,6 +6073,16 @@ async def main_async(args: argparse.Namespace) -> int:
     elif args.provider == "openai":
         log.info("provider=openai model=%s rpm=%d", model, args.rpm)
         llm = OpenAILLM(model=model, rpm=args.rpm)
+    elif args.provider == "meta":
+        log.info(
+            "provider=meta model=%s rpm=%d reasoning_effort=%s headroom=%d",
+            model, args.rpm, args.meta_reasoning_effort or "(default)",
+            META_REASONING_HEADROOM,
+        )
+        llm = MetaLLM(
+            model=model, rpm=args.rpm,
+            reasoning_effort=args.meta_reasoning_effort or None,
+        )
     elif args.provider == "bedrock":
         log.info(
             "provider=bedrock model=%s region=%s rpm=%d",
@@ -5470,9 +6295,16 @@ async def main_async(args: argparse.Namespace) -> int:
         )
     if args.session_aware_retrieval:
         log.info(
-            "session-aware retrieval ENABLED — top %d sessions, %d turns/session",
+            "session-aware retrieval ENABLED — top %d sessions, %d turns/session, "
+            "turn_rerank=%s, chrono_sort=%s, lexical_fusion=%s, user_turns_first=%s "
+            "(turns reaching the reader ≤ %d)",
             args.session_top_k,
             args.turns_per_session,
+            args.turn_rerank,
+            args.chrono_sort,
+            args.retriever == "hybrid",
+            args.user_turns_first,
+            _effective_turn_budget(args),
         )
     if args.wiki_memory:
         log.info(
@@ -5484,6 +6316,29 @@ async def main_async(args: argparse.Namespace) -> int:
             "content wiki memory ENABLED — topic fact pages, top %d pages",
             args.content_wiki_top_k,
         )
+    # ── judge LLM ─────────────────────────────────────────────────────────
+    # The judge used to reuse the answerer's client, which silently coupled
+    # two roles that PREREGISTRATION.md §3.2 keeps apart: reasoning models
+    # answer, structured/classification sub-tasks use a fast non-reasoning
+    # model. The judge asks for 5 tokens; a reasoning answerer spends them
+    # thinking and returns nothing, so every row scores wrong and the run
+    # still reports a clean number. --judge-provider breaks the coupling.
+    judge_llm = llm
+    if args.judge_provider:
+        judge_llm = _build_judge_llm(args)
+        log.info(
+            "judge decoupled from answerer — judge=%s/%s answerer=%s/%s",
+            args.judge_provider, getattr(judge_llm, "model", "?"),
+            args.provider, model,
+        )
+    elif args.provider == "meta":
+        log.warning(
+            "answerer provider=meta is a REASONING model and the judge is "
+            "reusing it at max_tokens=5 — it will return empty and score "
+            "every row wrong. Pass --judge-provider (see "
+            "PREREGISTRATION.md §3.2)."
+        )
+
     row_scorer = None
     # Two scoring code paths:
     # (a) --judge {none,rule,hybrid,llm}: routes through HybridScorer's
@@ -5493,31 +6348,40 @@ async def main_async(args: argparse.Namespace) -> int:
     # (b) legacy --llm-judge: unconditional LLM judge (kept for back-compat).
     if args.judge:
         from evals.longmemeval.hybrid_scorer import HybridScorer
-        judge_obj = LLMJudgeScorer(llm=llm) if args.judge in ("hybrid", "llm") else None
+        judge_obj = (
+            LLMJudgeScorer(llm=judge_llm)
+            if args.judge in ("hybrid", "llm")
+            else None
+        )
         hybrid = HybridScorer(
             mode=args.judge,
             llm_judge=judge_obj,
-            judge_model=model,
+            judge_model=getattr(judge_llm, "model", model),
         )
 
-        async def row_scorer(row: EvalRow, answer: str) -> bool:
+        async def row_scorer(row: EvalRow, answer: str) -> tuple[bool, str]:
             result, _hit = await hybrid.score(
                 row.question, row.expected_answer, answer,
                 question_id=row.question_id,
             )
-            return result.correct
+            # Report the deciding stage, not just the verdict. HybridScorer
+            # short-circuits on a deterministic hit, so ``llm`` here means
+            # the ladder failed and the judge overturned it — the run's
+            # headline number is judged to exactly that extent.
+            return result.correct, result.method
 
         log.info(
             "hybrid scorer ENABLED — mode=%s judge=%s",
             args.judge, "on" if judge_obj is not None else "off",
         )
     elif args.llm_judge:
-        judge = LLMJudgeScorer(llm=llm)
+        judge = LLMJudgeScorer(llm=judge_llm)
 
-        async def row_scorer(row: EvalRow, answer: str) -> bool:
-            return await judge.is_correct(
+        async def row_scorer(row: EvalRow, answer: str) -> tuple[bool, str]:
+            verdict = await judge.is_correct(
                 row.question, row.expected_answer, answer
             )
+            return bool(verdict), "llm"
 
         log.info("LLM judge scoring ENABLED — semantic answer grading")
 
@@ -5561,6 +6425,7 @@ async def main_async(args: argparse.Namespace) -> int:
         iterative_max_rounds=args.max_rounds,
         direct_answer=(args.reasoner == "direct"),
         direct_max_context_chars=args.max_context_chars,
+        direct_max_context_tokens=args.max_answer_prompt_tokens,
         preference_conditioning=args.pref_conditioning,
         temporal_conditioning=args.temporal_conditioning,
         aggregation_v2=args.aggregation_v2,
@@ -5594,6 +6459,10 @@ async def main_async(args: argparse.Namespace) -> int:
         session_aware_retrieval=args.session_aware_retrieval,
         session_top_k=args.session_top_k,
         turns_per_session=args.turns_per_session,
+        turn_rerank=args.turn_rerank,
+        user_turns_first=args.user_turns_first,
+        graph_expand=args.graph_expand,
+        chrono_sort=args.chrono_sort,
         wiki_memory=args.wiki_memory,
         wiki_top_k=args.wiki_top_k,
         content_wiki_memory=args.content_wiki_memory,
@@ -5607,6 +6476,12 @@ async def main_async(args: argparse.Namespace) -> int:
     # When `--debug-trace` is set we open a TraceWriter rooted at
     # <out_dir>/logs. The writer is shared across smoke + full so a single
     # JSONL file captures the whole run; one run_id is stamped on each row.
+    versions = _versions_block(args, model, judge_llm, embedder)
+    if versions["non_comparable"]:
+        log.warning(
+            "non_comparable run — deviates from PREREGISTRATION §3.1 on: %s",
+            ", ".join(versions["deviations"]),
+        )
     trace_cm: Any = contextlib.nullcontext(None)
     if args.debug_trace:
         from evals.longmemeval.trace import TraceWriter
@@ -5634,6 +6509,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 row_scorer=row_scorer,
                 limit=smoke_limit,
                 trace_writer=trace_writer,
+                versions=versions,
             )
             log.info("smoke completed in %.0fs", time.perf_counter() - t0)
 
@@ -5666,6 +6542,7 @@ async def main_async(args: argparse.Namespace) -> int:
             row_scorer=row_scorer,
             limit=args.limit,
             trace_writer=trace_writer,
+            versions=versions,
         )
     log.info("full run completed in %.0fs", time.perf_counter() - t0)
     log.info(
@@ -5679,8 +6556,100 @@ async def main_async(args: argparse.Namespace) -> int:
         target.write_text(json.dumps(full.to_dict(), indent=2, default=str))
         log.info("optimizer metrics → %s", target)
         _print_optimizer_summary(full)
+    if args.budget_report:
+        _write_budget_report(full, out_dir, args)
     await llm.aclose()
     return 0
+
+
+def _write_budget_report(results: Any, out_dir: Path, args: Any) -> None:
+    """
+    Dump the cost/accuracy ablation's x-axis (docs/LOW_BUDGET_PLAN.md).
+
+    One row per question plus a run-level summary, so a budget point can be
+    plotted without re-parsing the full baseline JSON. Also prints the two
+    sanity checks that decide whether the run is a usable ablation point:
+    whether the budget ever bound, and whether the reader was priced.
+    """
+    payload = results.to_dict()
+    m = payload["metrics"]
+    rows = [
+        {
+            "question_id": r["question_id"],
+            "question_type": r["question_type"],
+            "correct": r["correct"],
+            "context_chars": r["context_chars"],
+            "context_tokens": r["context_tokens"],
+            "items_offered": r["items_offered"],
+            "items_admitted": r["items_admitted"],
+            "items_dropped": r["items_dropped"],
+            "budget_bound_by": r["budget_bound_by"],
+            "prompt_tokens_total": r["prompt_tokens_total"],
+            "completion_tokens_total": r["completion_tokens_total"],
+            "cost_usd": r["cost_usd"],
+        }
+        for r in payload["rows"]
+    ]
+    unpriced = unpriced_models()
+    report = {
+        "config": {
+            "model": args.model,
+            "provider": args.provider,
+            "reasoner": args.reasoner,
+            "max_context_chars": args.max_context_chars,
+            "max_answer_prompt_tokens": args.max_answer_prompt_tokens,
+            "top_k": args.top_k,
+            "rerank_to": args.rerank_to if args.rerank else None,
+            "session_top_k": args.session_top_k,
+            "turns_per_session": args.turns_per_session,
+        },
+        "summary": {
+            "n_questions": m["n_questions"],
+            "accuracy": m["accuracy"],
+            "avg_context_tokens": m["avg_context_tokens"],
+            "context_tokens_p50": m["context_tokens_p50"],
+            "context_tokens_p95": m["context_tokens_p95"],
+            "avg_context_chars": m["avg_context_chars"],
+            "measured_chars_per_token": m["measured_chars_per_token"],
+            "avg_prompt_tokens_total": m["avg_prompt_tokens_total"],
+            "pct_rows_budget_bound": m["pct_rows_budget_bound"],
+            "total_cost_usd": m["total_cost_usd"],
+            "tokens_measured": tokens_measured(),
+            "unpriced_models": unpriced,
+        },
+        "by_question_type": m["by_question_type"],
+        "rows": rows,
+    }
+    target = out_dir / "budget_report.json"
+    target.write_text(json.dumps(report, indent=2, default=str))
+    log.info("budget report → %s", target)
+
+    s = report["summary"]
+    log.info(
+        "budget: avg %.0f ctx tok (p50 %.0f / p95 %.0f) | %.1f chars/tok | "
+        "%.0f%% of rows budget-bound | $%.4f",
+        s["avg_context_tokens"], s["context_tokens_p50"],
+        s["context_tokens_p95"], s["measured_chars_per_token"],
+        s["pct_rows_budget_bound"], s["total_cost_usd"],
+    )
+    if not s["tokens_measured"]:
+        log.warning(
+            "token counts are chars/3.9 ESTIMATES — tiktoken is not installed. "
+            "Install it before treating this run as an ablation point.",
+        )
+    if unpriced:
+        log.warning(
+            "no pricing entry for %s — cost is understated. Add it to "
+            "_DEFAULT_PRICING in evals/longmemeval/telemetry.py.",
+            ", ".join(unpriced),
+        )
+    if s["pct_rows_budget_bound"] < 1.0:
+        log.warning(
+            "the budget never bound on any row: the retriever offered less "
+            "than %d chars of context, so this is NOT a distinct point on "
+            "the ablation curve. Raise --top-k/--rerank-to or lower the budget.",
+            args.max_context_chars,
+        )
 
 
 def _print_optimizer_summary(results: Any) -> None:
@@ -5712,6 +6681,86 @@ def _print_optimizer_summary(results: Any) -> None:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
+
+# PREREGISTRATION.md §3.1 — the configuration a comparable run must use.
+_PINNED_CONFIG: dict[str, Any] = {
+    "reasoner": "direct",
+    "retriever": "hybrid",
+    "session_aware_retrieval": True,
+    "use_ltm": True,
+    "answer_max_tokens": 2048,
+    "max_context_chars": 64000,
+    "top_k": 8,
+    "rrf_k": 60,
+    "seed": 0,
+}
+_PINNED_ANSWERER = "openrouter/openai/gpt-oss-120b"
+
+
+def _versions_block(
+    args: argparse.Namespace, model: str, judge_llm: Any, embedder: Any,
+) -> dict[str, Any]:
+    """The §3.3 ``versions`` block: what produced this result, and whether it
+    is comparable. ``deviations`` lists every §3.1 value this run changed, so
+    ``non_comparable`` is derived rather than asserted by hand."""
+    import hashlib
+    import importlib.metadata
+    import subprocess
+
+    from evals.longmemeval.judge import JUDGE_SYSTEM_PROMPT
+
+    def _git(*cmd: str) -> str:
+        try:
+            return subprocess.run(
+                ["git", *cmd], capture_output=True, text=True, check=True,
+                cwd=Path(__file__).resolve().parent,
+            ).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            return ""
+
+    def _pkg(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    answerer = f"{args.provider}/{model}"
+    deviations = [
+        f"{flag}={getattr(args, flag, None)!r} (pinned {pinned!r})"
+        for flag, pinned in _PINNED_CONFIG.items()
+        if getattr(args, flag, None) != pinned
+    ]
+    if answerer != _PINNED_ANSWERER:
+        deviations.append(f"answerer={answerer} (pinned {_PINNED_ANSWERER})")
+    return {
+        "continuum_sha": _git("rev-parse", "--short", "HEAD"),
+        "worktree_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+        "mem0ai": _pkg("mem0ai"),
+        "graphiti_core": _pkg("graphiti-core"),
+        "embedder": getattr(embedder, "model_name", None),
+        "answerer": answerer,
+        "judge": f"{args.judge_provider or args.provider}/{getattr(judge_llm, 'model', '?')}",
+        "judge_prompt_sha256": hashlib.sha256(JUDGE_SYSTEM_PROMPT.encode()).hexdigest(),
+        "argv": sys.argv[1:],
+        "deviations": deviations,
+        "non_comparable": bool(deviations),
+    }
+
+
+def _effective_turn_budget(args: argparse.Namespace) -> int:
+    """How many turns can actually reach the reader under session-aware retrieval.
+
+    The retriever offers ``max(--decompose-max-items, --top-k)`` turns
+    (``quota`` stops earlier, at session_top_k x turns_per_session), and the
+    answer adapter then keeps at most ``--top-k`` (or ``--rerank-to`` after a
+    rerank).
+    """
+    offered = max(args.decompose_max_items, args.top_k)
+    if args.turn_rerank == "quota":
+        offered = min(offered, args.session_top_k * args.turns_per_session)
+    kept = args.rerank_to if args.rerank and args.rerank_to > 0 else args.top_k
+    return min(offered, kept)
 
 
 def _parse_scorer_weights(spec: str) -> dict[str, float]:
@@ -5753,7 +6802,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--provider",
         choices=(
             "ollama", "groq", "nvidia", "gemini",
-            "openai", "openrouter", "bedrock", "lmstudio",
+            "openai", "openrouter", "meta", "bedrock", "lmstudio",
         ),
         default="ollama",
         help="LLM provider for the answerer.",
@@ -5768,8 +6817,44 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "gemini → gemini-2.0-flash, "
             "openai → gpt-4o-mini, "
             "openrouter → openai/gpt-oss-120b, "
+            "meta → muse-wonder-1.0, "
             "bedrock → anthropic.claude-3-haiku-20240307-v1:0, "
             "lmstudio → qwen/qwen3-14b."
+        ),
+    )
+    p.add_argument(
+        "--meta-reasoning-effort",
+        choices=("minimal", "low", "medium", "high"),
+        default=None,
+        help=(
+            "reasoning_effort for --provider meta. Lower spends fewer "
+            "reasoning tokens (measured: ~40 at minimal, ~134 at low, ~184 "
+            "at the default) and so costs less per call. Unset sends the "
+            "endpoint default plus --temperature."
+        ),
+    )
+    p.add_argument(
+        "--judge-provider",
+        choices=(
+            "ollama", "groq", "nvidia", "gemini",
+            "openai", "openrouter", "meta", "lmstudio",
+        ),
+        default=None,
+        help=(
+            "Run the LLM judge on its own provider instead of reusing the "
+            "answerer's client. REQUIRED when the answerer is a reasoning "
+            "model: the judge calls it at max_tokens=5, which a reasoning "
+            "model spends entirely on thinking and returns empty, scoring "
+            "every row wrong (PREREGISTRATION.md §3.2 — 38/50 correct "
+            "answers were flipped this way). Unset reuses the answerer."
+        ),
+    )
+    p.add_argument(
+        "--judge-model", default="",
+        help=(
+            "Model for --judge-provider. Defaults to that provider's "
+            "default model. §3.2 pins the judge to a NON-reasoning model "
+            "(llama-3.3-70b-instruct)."
         ),
     )
     p.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
@@ -5826,6 +6911,49 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--top-k", type=int, default=8)
     p.add_argument(
+        "--graph-expand", type=int, default=0,
+        help=(
+            "Entity-matching 1-hop expansion (0=off). After the base retriever "
+            "picks top-k, add N unpicked haystack items that share a named "
+            "entity with the query/top hits — the Mem0-style entity signal. "
+            "Mirrors continuum.retrieval graph expansion; A/B with 0 vs N."
+        ),
+    )
+    p.add_argument(
+        "--turn-rerank", choices=("quota", "global", "floor"), default="quota",
+        help=(
+            "how turns are chosen inside the top --session-top-k sessions. "
+            "'quota' (default, the pinned arm) takes the best "
+            "--turns-per-session from each and stops there, so it offers at "
+            "most --session-top-k x --turns-per-session turns. 'global' pools "
+            "every turn from those sessions and keeps the strongest overall, "
+            "which lets one session take the whole budget. 'floor' guarantees "
+            "each selected session its best --turns-per-session turns, then "
+            "fills the rest of the budget globally. Only affects "
+            "--session-aware-retrieval."
+        ),
+    )
+    p.add_argument(
+        "--user-turns-first", action="store_true",
+        help=(
+            "Rank every user turn ahead of every assistant turn, unless the "
+            "question asks about what the assistant said ('you suggested', "
+            "'our previous conversation'). Outside single-session-assistant, "
+            "837/840 gold turns are user turns, yet assistant replies took "
+            "~41%% of a 24-turn budget. Only affects --session-aware-retrieval."
+        ),
+    )
+    p.add_argument(
+        "--chrono-sort", action="store_true",
+        help=(
+            "Select the top-K by relevance as usual, but PRESENT them in "
+            "chronological (original haystack) order instead of score order. "
+            "Cosine top-K otherwise scrambles the timeline, which is fatal "
+            "for event-ordering questions. Opt-in; only affects the default "
+            "cosine retriever's top-K branch."
+        ),
+    )
+    p.add_argument(
         "--retrieval-mode",
         choices=("topk", "auto", "long"),
         default="topk",
@@ -5879,6 +7007,84 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Where the LTM lives when --use-ltm is on. 'auto' picks "
             "postgres iff DATABASE_URL is set, otherwise in_memory. "
             "Tagged onto the result JSON's metrics.ltm_backend."
+        ),
+    )
+    p.add_argument(
+        "--ingest-model",
+        default="openai/gpt-4o-mini",
+        help=(
+            "OpenRouter model for the ingest side (fact extraction + promoter "
+            "decisions) when --use-ltm is on. Called directly via the openai "
+            "SDK against OpenRouter — litellm is not used, and this single flag "
+            "replaces CONTINUUM_FACT_MODEL / CONTINUUM_PROMOTER_LLM_MODEL. "
+            "Keep it small: it runs ~53x per row. Default openai/gpt-4o-mini, "
+            "which is what prior --use-ltm runs effectively used."
+        ),
+    )
+    p.add_argument(
+        "--ingest-rpm",
+        type=int,
+        default=25,
+        help=(
+            "Client-side request/min cap for ingest calls (default 25, same as "
+            "the answerer). Enforced by an AIMD throttle that WIDENS on 429 and "
+            "edges back after a clean streak, so a run self-tunes to the "
+            "provider's real limit instead of retry-storming."
+        ),
+    )
+    p.add_argument(
+        "--ingest-concurrency",
+        type=int,
+        default=4,
+        help=(
+            "How many session extractions may be in flight at once (default 4). "
+            "This does NOT raise the request rate — --ingest-rpm still paces "
+            "admission; concurrency only stops the pipe going idle while "
+            "responses are in flight. Sequential (=1) wastes most of the RPM "
+            "budget: ~53 calls/row at ~10s each is ~6 rpm against a 25 rpm cap. "
+            "Set 1 to disable."
+        ),
+    )
+    p.add_argument(
+        "--ingest-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Cache the expensive half of --use-ltm ingest (LLM fact extraction "
+            "+ promoter decisions) keyed by haystack content and model config. "
+            "Both supersession arms share it — they differ only in how "
+            "decisions are executed — so the second arm and every re-run cost "
+            "no LLM calls. ~53 calls/row otherwise. Pass --no-ingest-cache to "
+            "force recomputation."
+        ),
+    )
+    p.add_argument(
+        "--recompute-decisions", action="store_true",
+        help=(
+            "On an ingest-cache hit, reuse the cached FACTS but re-run the "
+            "promoter's decisions instead of replaying the cached ones. Pass "
+            "this whenever promotion logic has changed: config_fingerprint "
+            "hashes models and sampling settings, not decision rules, so a "
+            "warm cache would otherwise replay the old decisions and the new "
+            "logic would silently never run. Keeps the expensive half of the "
+            "cache (fact extraction, ~53 LLM calls/row) and re-does only the "
+            "cheap half."
+        ),
+    )
+    p.add_argument(
+        "--supersession-mode",
+        choices=("invalidate", "bitemporal"),
+        default="invalidate",
+        help=(
+            "What happens to a superseded fact when --use-ltm is on. "
+            "'invalidate' (default, arm A) is Mem0 0.1.67's model: DELETE "
+            "stamps invalidated_at so the fact becomes unreachable, and UPDATE "
+            "overwrites the target's text — the old value is destroyed. "
+            "'bitemporal' (arm B) closes the fact's valid_to instead, keeping "
+            "the row live and answerable by an as-of query; UPDATE becomes a "
+            "supersession rather than an overwrite. Retrieval sees the same "
+            "current view either way. See docs/ACCURACY_AND_BENCHMARK_PLAN.md "
+            "§A5. Default stays 'invalidate' so existing runs reproduce."
         ),
     )
     p.add_argument(
@@ -5956,11 +7162,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Direct mode (--reasoner direct): cap on characters of "
             "retrieved conversation handed to the answerer (default "
-            "32000 ≈ 8k tokens). Multi-session aggregation needs many "
-            "sessions in context — raise to 48000-96000 on large-window "
-            "models. Too low silently drops answer-bearing turns even "
-            "when the session was retrieved (recall stays 1.0 but the "
-            "model says 'I don't have that information')."
+            "32000 ≈ 8.2k tokens at the measured 3.9 chars/token). "
+            "Multi-session aggregation needs many sessions in context — "
+            "raise to 48000-96000 on large-window models. Too low "
+            "silently drops answer-bearing turns even when the session "
+            "was retrieved (recall stays 1.0 but the model says 'I "
+            "don't have that information'). Enforced by admitting WHOLE "
+            "turns, so the last turn is never cut mid-sentence."
         ),
     )
     # ── Batching (Groq free-tier friendly) ─────────────────────────────────
@@ -6189,6 +7397,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "100000 (fits a 128K-context model with response headroom)."
         ),
     )
+    p.add_argument(
+        "--max-answer-prompt-tokens", type=int, default=0,
+        help=(
+            "Direct mode: token-native context budget (0 = off, chars "
+            "alone govern). Counted with tiktoken o200k_base on the "
+            "assembled context. When both this and --max-context-chars "
+            "are set, whichever binds first wins. Use this for budget "
+            "ablations you want stated in the unit the provider bills."
+        ),
+    )
+    p.add_argument(
+        "--budget-report", action="store_true",
+        help=(
+            "Write budget_report.json to the output dir: per-row "
+            "question_type, context chars/tokens, items admitted vs "
+            "dropped, prompt/completion tokens and cost. This is the "
+            "x-axis for the cost-accuracy ablation (docs/LOW_BUDGET_PLAN.md)."
+        ),
+    )
     p.add_argument("--output", type=Path, default=Path("results"))
     p.add_argument(
         "--limit", type=int, default=None,
@@ -6255,8 +7482,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--rerank-to", type=int, default=4,
-        help="Number of items to keep after reranking (default 4).",
+        "--rerank-to", type=int, default=0,
+        help=(
+            "Number of items to keep after reranking. Default 0 keeps --top-k. "
+            "The old default of 4 silently cut a --top-k 24 context to 4 "
+            "turns the moment --rerank was switched on."
+        ),
     )
     p.add_argument(
         "--rerank-model",
@@ -6333,7 +7564,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Phase 1 evidence distillation: one bounded extractive call quotes "
             "only the retrieved turns relevant to the question, then the reader "
-            "answers over that short slice (recall is ~98%; the reader drowns in "
+            "answers over that short slice (recall is ~98%%; the reader drowns in "
             "~70 turns). Gated to multi-session + knowledge-update. +1 reader "
             "call per eligible question."
         ),

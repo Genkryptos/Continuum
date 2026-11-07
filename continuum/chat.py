@@ -15,7 +15,7 @@ by hand after ``make db-up && make db-migrate``::
 What it wires (the real components):
   • ``PostgresSTM``  — every turn persists to ``stm_messages`` and survives
     restarts (re-run with the same ``--session`` and it remembers).
-  • ``PostgresLTM``  — each user turn is routed through the **Mem0 decider**
+  • ``PostgresLTM``  — each user turn is routed through the **supersession decider**
     (ADD / UPDATE / DELETE / NOOP) against its nearest LTM neighbors, so you can
     SEE supersession and retraction happen: "I moved to Y" retires the old
     location and stores the new; "I was never in Y" *retracts* — retires the
@@ -168,7 +168,7 @@ def build_mock_responder() -> Any:
 
 def build_decider_completion(api_key: str) -> Any:
     """
-    A litellm-style ``completion_fn`` for the Mem0 decider, backed by OpenRouter.
+    A litellm-style ``completion_fn`` for the supersession decider, backed by OpenRouter.
 
     The decider calls it with ``model/messages/tools/tool_choice`` and reads
     ``resp["choices"][0]["message"]["tool_calls"]`` — OpenRouter's chat API is
@@ -540,7 +540,7 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
         responder = build_mock_responder()
         responder_label = "mock" if args.mock else "mock (no OPENROUTER_API_KEY found)"
 
-    # Memory decider (Mem0 ADD/UPDATE/DELETE/NOOP) — only on the Postgres path.
+    # Memory decider (ADD/UPDATE/DELETE/NOOP) — only on the Postgres path.
     # Routes each turn's LTM write through conflict resolution + retraction
     # instead of a blind upsert. The LLM tie-breaker (for the ambiguous
     # similarity band) uses OpenRouter when a key is present; without one it
@@ -549,17 +549,17 @@ def _build_components(cfg: ContinuumConfig, args: argparse.Namespace) -> dict[st
     fact_splitter = None
     if ltm is not None:
         from continuum.core.config import PromoterConfig
-        from continuum.promotion.mem0_promoter import Mem0Promoter
+        from continuum.promotion.continuum_promoter import ContinuumPromoter
 
         decider_fn = build_decider_completion(key) if have_key else None
-        decider = Mem0Promoter(PromoterConfig(llm_model=args.model), completion_fn=decider_fn)
+        decider = ContinuumPromoter(PromoterConfig(llm_model=args.model), completion_fn=decider_fn)
         fact_splitter = build_fact_splitter(key, args.model) if have_key else None
         if not have_key:
             # No tie-breaker LLM → the decider logs an expected failure for
             # ambiguous-band turns (we ADD-fallback those). Hush that noise.
             import logging
 
-            logging.getLogger("continuum.promotion.mem0_promoter").setLevel(logging.CRITICAL)
+            logging.getLogger("continuum.promotion.continuum_promoter").setLevel(logging.CRITICAL)
 
     return {
         "embedder": embedder,
@@ -612,7 +612,7 @@ async def _handle_command(line: str, session: ContinuumSession, info: dict[str, 
             tie = (
                 "LLM" if info["responder_label"].startswith("openrouter") else "deterministic-only"
             )
-            print(f"  memory    : Mem0 decider (ADD/UPDATE/DELETE/NOOP; tie-break={tie})")
+            print(f"  memory    : supersession decider (ADD/UPDATE/DELETE/NOOP; tie-break={tie})")
     elif head == "/search":
         if not rest:
             print("  usage: /search <query>")

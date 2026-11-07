@@ -203,6 +203,23 @@ class PostgresLTM:
         looks before giving up. Its default (40) silently drops good matches
         once the planner starts using the index; see
         :data:`DEFAULT_HNSW_EF_SEARCH`.
+    lexical_channel:
+        Include the ``pg_trgm`` sparse channel in :meth:`search_hybrid`
+        (default ``True`` — unchanged behaviour). Set ``False`` for
+        dense-only retrieval.
+
+        Measured at 50k rows of real conversational text: the sparse channel
+        accounts for **2,112 ms of a 2,317 ms** hybrid query, because
+        ``similarity()`` is computed over every trigram-matching row and
+        long documents make that expensive. Commit ``03715dd`` separately
+        found hybrid statistically indistinguishable from cosine alone on a
+        paraphrase needle set.
+
+        It is **on by default regardless**, because that evidence does not
+        cover the regime where lexical matching has a mechanism argument —
+        rare literal tokens (error codes, SKUs, identifiers) that dense
+        embeddings smooth away. Turn it off only if you have measured your
+        own query mix. See ``findings/scale_retrieval_2026-08.md``.
     pool_min_size / pool_max_size:
         Sizing for the lazily-created DSN pool.
     """
@@ -219,6 +236,7 @@ class PostgresLTM:
         rrf_k: int = DEFAULT_RRF_K,
         trgm_threshold: float = DEFAULT_TRGM_THRESHOLD,
         hnsw_ef_search: int | None = None,
+        lexical_channel: bool = True,
         namespace: str = "default",
         pool_min_size: int = 2,
         pool_max_size: int = 10,
@@ -240,6 +258,7 @@ class PostgresLTM:
         self._embedding_type = embedding_type
         self._rrf_k = rrf_k
         self._trgm_threshold = trgm_threshold
+        self._lexical_channel = bool(lexical_channel)
         self._hnsw_ef_search = min(
             MAX_HNSW_EF_SEARCH,
             max(1, int(hnsw_ef_search) if hnsw_ef_search is not None else _default_ef_search()),
@@ -708,7 +727,7 @@ class PostgresLTM:
             join_clause += " LEFT JOIN dense d ON d.id = n.id"
             present.append("d.id IS NOT NULL")
 
-        if q.text and q.text.strip():
+        if self._lexical_channel and q.text and q.text.strip():
             params["t"] = q.text
             ctes.append(
                 f"""sparse AS (

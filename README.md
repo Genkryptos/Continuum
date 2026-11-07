@@ -1,5 +1,7 @@
 # Continuum
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21691914.svg)](https://doi.org/10.5281/zenodo.21691914)
+
 **Production-grade memory infrastructure for AI agents.** Tiered storage (STM / MTM / LTM), first-class supersession and bi-temporal queries, cost-efficient retrieval. Plugs in under whatever reasoner you're using — LangGraph, AutoGen, custom — and provides the memory layer they all lack.
 
 ```bash
@@ -33,11 +35,30 @@ between runs); the LongMemEval number is honest but carries reader variance.
 | **Bi-temporal "as of date Y"** (20 scripted timelines) | **100 %** | 75 % |
 | **LongMemEval-S** (500 Q, judged, gpt-oss-120b) | **~74 %** (73.6 – 75.6 % across repeated runs) | 60.8 % (v1.0) · 34.4 % (May ceiling) |
 | ↳ same-setup per-category (control run) | multi-session 62 % · temporal 75 % · KU 64 % · assistant 96 % · user 91 % | — |
-| ↳ turn-selection fixes (Nov 2026, **not yet released**, non-comparable config — see below) | **85.8 %** gpt-oss-120b · **87.8 %** with 17 token-capped answers re-run · **90.8 %** muse-wonder-1.0 reader | ~74 % (row above) |
+| ↳ turn-selection fixes (Nov 2026, eval harness, non-comparable config — see below) | **85.8 %** gpt-oss-120b · **87.8 %** with 17 token-capped answers re-run · **90.8 %** muse-wonder-1.0 reader | ~74 % (row above) |
 | Retrieval recall @ 4 (200-session synthetic corpus) | 55 % | 55 % (tied — recency signal absent) |
 | Ingest p50 / session (1 user turn) | 0.18 ms + 6 LLM-extraction calls | 0.00 ms (raw list) |
 
 Sources: LongMemEval-S numbers are documented in the [v1 findings report](findings/reasoning_loop_2026-06.md) and regenerated with `make repro-everything` (raw run outputs are gitignored, not committed); synthetic benchmarks from [`bench/`](bench/), reproducible via `make bench-all` (~60 s, no infra, no API key).
+
+## Paper
+
+The design, the formal bi-temporal model, and a head-to-head against the real Mem0 SDK are written up in the preprint:
+
+> Sahu, M. (2026). *Correctness Under Time: Bi-Temporal, Supersession-Aware Memory for AI Agents.* Zenodo. https://doi.org/10.5281/zenodo.21691914
+
+Source and build: [`paper/continuum.tex`](paper/continuum.tex) (`cd paper && tectonic continuum.tex`). Key result: run on the same scenarios, Mem0 answers *latest-value* queries competitively (72 %) but only **27 %** of point-in-time ("what was true then") queries, because it deletes superseded facts; Continuum's bi-temporal store answers **100 %**.
+
+```bibtex
+@misc{sahu2026continuum,
+  author    = {Sahu, Mayank},
+  title     = {Correctness Under Time: Bi-Temporal, Supersession-Aware Memory for AI Agents},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.21691914},
+  url       = {https://doi.org/10.5281/zenodo.21691914}
+}
+```
 
 > **Nov 2026 — turn-selection fixes: 85.8 % at gpt-oss-120b (not yet comparable).**
 > Failure forensics showed the remaining misses weren't the reader. They were
@@ -53,10 +74,13 @@ Sources: LongMemEval-S numbers are documented in the [v1 findings report](findin
 >
 > These are **not yet comparable** to the ~74 % or to published results: they ran
 > at top-k 48 with LTM off (not the published config), from an uncommitted
-> worktree, and the 87.8 % file mixes 2048- and 8192-token answer caps. The code
-> is in [PR #7](https://github.com/Genkryptos/Continuum/pull/7), not in a release
-> yet. Run artifacts:
-> [`findings/longmemeval/audit_fixes_2026-11/`](https://github.com/Genkryptos/Continuum/tree/experiment/lexical-channel-gating/findings/longmemeval/audit_fixes_2026-11).
+> worktree, and the 87.8 % file mixes 2048- and 8192-token answer caps.
+>
+> The fixes live in the LongMemEval harness (`evals/longmemeval/`), not in the
+> library's `Memory.recall()` or the MCP server, so `pip install continuum-mcp`
+> does not get these numbers. Re-run the gpt-oss-120b arm with
+> `run_arm_audit_fixes_oss120b.sh`. Run artifacts:
+> [`findings/longmemeval/audit_fixes_2026-11/`](findings/longmemeval/audit_fixes_2026-11/).
 
 > **Honest headline — read this.** On LongMemEval-S the judged number for the
 > released code is **~74 %**
@@ -340,7 +364,7 @@ continuum/                  the framework itself
 │   └── postgres/           pgvector-backed MTM + LTM with supersession + bi-temporal
 ├── retrieval/              composite scorer + BM25 + reciprocal-rank-fusion hybrid
 ├── extraction/             entity / fact / LLM extractors + cached SmallLLM helper
-├── promotion/              Mem0Promoter, triggers, IdleStmFlush
+├── promotion/              ContinuumPromoter, triggers, IdleStmFlush
 ├── optimizer/              token-budget compression chain (5 strategies)
 ├── scoring/                composite scorer (relevance / importance / recency / confidence)
 ├── policies/               policy engine + 8 default policies (migration 004)

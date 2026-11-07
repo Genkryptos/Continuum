@@ -1,0 +1,56 @@
+{
+  "n_records": 5000,
+  "concurrency": 16,
+  "seed": 0,
+  "environment": {
+    "server_version": "PostgreSQL 16.10 (Homebrew) on aarch64-apple-darwin24.4.0, compiled by Apple clang version 17.0.0 (clang-1700.0.13.3), 64-bit",
+    "pgvector_version": "0.8.0",
+    "migrations": "001,002,003,004,005,006,007",
+    "hnsw_index": "CREATE INDEX memory_nodes_embedding_hnsw_idx ON public.memory_nodes USING hnsw (embedding halfvec_cosine_ops) WITH (m='32', ef_construction='200')",
+    "hnsw_ef_search_server_default": "40",
+    "hnsw_ef_search_used_by_store": 1000
+  },
+  "embed": {
+    "seconds": 18.69569704100104,
+    "texts_per_s": 267.44121864162815,
+    "model": "BAAI/bge-m3",
+    "dim": 1024
+  },
+  "write": {
+    "seconds": 2.3532542920002015,
+    "writes_per_s": 2124.7172551633325,
+    "latency_p50_ms": 5.978249999316176,
+    "latency_p95_ms": 7.311125000342145,
+    "latency_p99_ms": 9.775792001164518
+  },
+  "end_to_end": {
+    "seconds": 21.04895133300124,
+    "records_per_s": 237.54152503364074,
+    "embed_share_pct": 88.82008773372623
+  },
+  "embedding_coverage": {
+    "with_vector": 5000,
+    "total": 5000
+  },
+  "retrieval": {
+    "k": 10,
+    "repeats": 3,
+    "n_needles": 20,
+    "recall_per_run": [
+      0.9,
+      0.9,
+      0.9
+    ],
+    "recall_mean": 0.9,
+    "recall_min": 0.9,
+    "recall_max": 0.9,
+    "latency_p50_ms": 53.77920800128777,
+    "latency_p95_ms": 62.60995900083799,
+    "latency_p99_ms": 93.29020799850696,
+    "misses_first_run": [
+      "What is the safe window to bounce authentication nodes?",
+      "How are premium customer issues escalated?"
+    ]
+  },
+  "finished_at": "2026-08-08T23:42:15.221302+00:00"
+}

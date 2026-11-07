@@ -16,7 +16,7 @@ import pytest
 
 from continuum.chat import _cosine, _neighbor_text, _remember, _split_clauses
 from continuum.core.types import MemoryItem, MemoryTier
-from continuum.promotion.mem0_promoter import Decision
+from continuum.promotion.continuum_promoter import Decision
 
 pytestmark = pytest.mark.unit
 

@@ -368,6 +368,10 @@ control showed the true effect is ~neutral. **Always carry a same-setup control.
 ### Shipped (all opt-in, 1373 unit tests green, mypy+ruff clean)
 - `--reflect` (default types: single-session-preference, knowledge-update) — the
   bounded single-pass CoT; **on by default** (helps where it fires, neutral else).
+  *Correction (2026-11-07):* it is **not** on by default in the code —
+  `--reflect` is `store_true` with no default, and the 500-row runs of
+  2026-11-07 logged `reflect_applied=False` on every row. Any run that did not
+  pass `--reflect` explicitly ran without it.
 - `--synthesis` / `--router` — **off by default** (net-negative; kept for research).
 - `continuum/promotion/synthesis.py` — aggregation, salvage parser, scope guard,
   strict `route_count_answer`.

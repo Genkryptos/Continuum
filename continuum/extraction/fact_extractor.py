@@ -157,11 +157,43 @@ class FactExtractor:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": self._user_prompt(block, entities)},
         ]
+        content = ""
         try:
             content = await self._complete(messages)
             data = json.loads(content)
             if not isinstance(data, dict):
                 raise ValueError("LLM did not return a JSON object")
+        except json.JSONDecodeError as exc:
+            # Two very different failures look identical in the logs, and they
+            # have opposite fixes:
+            #   * TRUNCATED — the response hit ``max_tokens`` mid-JSON. Fix by
+            #     raising the budget or shrinking the block.
+            #   * MALFORMED — the model emitted invalid JSON well inside the
+            #     budget. Raising the budget does nothing; the model is the
+            #     problem (some models are simply weaker at strict JSON).
+            # Distinguish by how much of the budget was actually consumed. An
+            # unterminated response that used only a fraction of it was never
+            # truncated — claiming so sends the reader after the wrong fix.
+            approx_tokens = len(content) / 4.0  # ~4 chars/token, good enough
+            truncated = (
+                not content.rstrip().endswith("}") and approx_tokens >= 0.8 * self.config.max_tokens
+            )
+            log.error(
+                "fact extraction %s for block %s (%d input chars, %d chars "
+                "≈%d tokens returned, max_tokens=%d) — returning no facts. %s",
+                "TRUNCATED — hit max_tokens" if truncated else "returned MALFORMED JSON",
+                block.id,
+                len(block.text or ""),
+                len(content),
+                int(approx_tokens),
+                self.config.max_tokens,
+                "Raise the token budget or shrink the block via MTM compression."
+                if truncated
+                else f"Well inside the token budget, so this is the model "
+                f"emitting invalid JSON — try a model stronger at strict "
+                f"JSON rather than a bigger budget. Parse error: {exc}",
+            )
+            return []
         except Exception:
             log.exception(
                 "fact extraction failed for block %s — returning no facts",

@@ -1,7 +1,7 @@
 """
-tests/unit/test_mem0_retraction.py
-==================================
-Mem0 decider — retraction handling in ``_short_circuit``.
+tests/unit/test_promoter_retraction.py
+======================================
+ContinuumPromoter — retraction handling in ``_short_circuit``.
 
 A retraction fact ("I was never in Bengaluru") must deterministically RETIRE
 its contradicted neighbor (op=DELETE → ``ltm.invalidate``), not be stored as a
@@ -19,7 +19,7 @@ import pytest
 from continuum.core.config import PromoterConfig
 from continuum.core.types import MemoryItem, MemoryTier, ScoreBreakdown, ScoredItem
 from continuum.extraction.fact_extractor import Fact
-from continuum.promotion.mem0_promoter import Mem0Promoter
+from continuum.promotion.continuum_promoter import ContinuumPromoter
 
 pytestmark = pytest.mark.unit
 
@@ -40,9 +40,9 @@ def _si(text: str, cos: float, nid: uuid.UUID = N_ID) -> ScoredItem:
     )
 
 
-def _promoter(**cfg: object) -> Mem0Promoter:
+def _promoter(**cfg: object) -> ContinuumPromoter:
     # No completion_fn needed: every assertion here is a short-circuit path.
-    return Mem0Promoter(PromoterConfig(**cfg))
+    return ContinuumPromoter(PromoterConfig(**cfg))
 
 
 def test_retraction_deletes_contradicted_neighbor() -> None:

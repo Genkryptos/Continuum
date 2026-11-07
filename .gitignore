@@ -59,3 +59,16 @@ samples/control_failed_ids.json
 
 # Personal, machine-specific Claude Code settings (hooks reference local services)
 .claude/settings.local.json
+
+# LaTeX build artifacts
+paper/*.pdf
+paper/*.aux
+paper/*.log
+paper/*.out
+
+# Converted BEAM datasets — derived artifacts, rebuild with:
+#   python3.12 -m evals.beam.convert --split 100K --out evals/beam/data/beam_100K_c_o.json
+evals/beam/data/
+
+# Ingest cache for --use-ltm eval runs (content-addressed, regenerable)
+evals/longmemeval/.ingest_cache/
