@@ -102,6 +102,17 @@ the deterministic levers hurt, the prompt/sample levers are neutral, and the
 residual error is **reader-bound** (counting via coreference, inference). A
 stronger reader moves it; the memory layer does not.
 
+> **Superseded (2026-11-07).** This conclusion was drawn from *session*
+> recall, which stays at 0.83–0.97 while *turn* recall collapses. Measured at
+> the turn level on the 500-row A-BUDGET + A-CHRONO run: accuracy is **93.2%**
+> on the 395 rows where every gold turn reached the reader and 34.9–38.8%
+> where some did not; on under-counted aggregation questions the reader
+> returned exactly the number of gold turns it was given. The remainder is
+> turn selection, i.e. the memory layer. About 1pp of it is genuinely
+> reader-bound. That run used a different answerer (`muse-wonder-1.0`), so the
+> magnitudes must be re-measured at `gpt-oss-120b`; the mechanism does not
+> depend on the answerer. See `evals/PREREGISTRATION.md` §3.5.
+
 ## 6. Positioning
 
 Only reader-matched numbers are worth putting in a table. The figures below are
