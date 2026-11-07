@@ -1,0 +1,111 @@
+{
+ "source": "results/arm_audit_fixes_oss120b_20261107 (+ empty17 rerun), Opus-graded 436/500",
+ "primary_bucket": {
+  "A_false_refusal_with_evidence": [
+   "50635ada",
+   "7024f17c",
+   "51c32626",
+   "d905b33f",
+   "73d42213",
+   "099778bb",
+   "37f165cf",
+   "51a45a95",
+   "58ef2f1c",
+   "b86304ba",
+   "71017277",
+   "gpt4_f420262d",
+   "gpt4_fa19884d",
+   "7401057b",
+   "3fdac837"
+  ],
+  "B_count_wrong_with_evidence": [
+   "gpt4_2f8be40d",
+   "gpt4_15e38248",
+   "d23cf73b",
+   "gpt4_7fce9456",
+   "5a7937c8",
+   "gpt4_ab202e7f",
+   "4f54b7c9",
+   "21d02d0d",
+   "gpt4_5501fe77"
+  ],
+  "C_ku_stale_with_dated_evidence": [
+   "830ce83f",
+   "2133c1b5",
+   "07741c45",
+   "618f13b2",
+   "ba61f0b9",
+   "9ee3ecd6"
+  ],
+  "D_temporal_with_evidence": [
+   "gpt4_59149c78",
+   "gpt4_e414231f",
+   "gpt4_4929293b",
+   "370a8ff4",
+   "6e984301",
+   "gpt4_21adecb5",
+   "gpt4_7ca326fa"
+  ],
+  "E_empty_answer_token_cap": [
+   "2e6d26dc",
+   "88432d0a",
+   "60472f9c",
+   "gpt4_f420262c"
+  ],
+  "F_preference": [
+   "75832dbd",
+   "32260d93",
+   "38146c39",
+   "d24813b1",
+   "1c0ddc50",
+   "06f04340",
+   "1a1907b4",
+   "d6233ab6"
+  ],
+  "G_retrieval_incomplete": [
+   "6d550036",
+   "gpt4_a56e767c",
+   "gpt4_194be4b3",
+   "gpt4_731e37d7",
+   "1a8a66a6",
+   "a1cc6108",
+   "ba358f49",
+   "157a136e",
+   "gpt4_7f6b06db",
+   "gpt4_e061b84f",
+   "gpt4_2f56ae70",
+   "gpt4_1e4a8aec",
+   "eac54add"
+  ],
+  "H_abs_answered": [
+   "031748ae_abs",
+   "a96c20ee_abs"
+  ]
+ },
+ "cross_cutting": {
+  "relative_date_anchor": [
+   "71017277",
+   "gpt4_f420262d",
+   "gpt4_fa19884d",
+   "gpt4_59149c78",
+   "gpt4_e414231f",
+   "gpt4_4929293b",
+   "7024f17c"
+  ],
+  "user_age_turn_missing": [
+   "a1cc6108",
+   "ba358f49",
+   "157a136e"
+  ]
+ },
+ "counts": {
+  "A_false_refusal_with_evidence": 15,
+  "B_count_wrong_with_evidence": 9,
+  "C_ku_stale_with_dated_evidence": 6,
+  "D_temporal_with_evidence": 7,
+  "E_empty_answer_token_cap": 4,
+  "F_preference": 8,
+  "G_retrieval_incomplete": 13,
+  "H_abs_answered": 2
+ }
+}
