@@ -51,7 +51,7 @@ def _item_dict(item: Any) -> dict[str, Any]:
     }
 
 
-async def _recall(mem: Memory, query: str, k: int = 8) -> list[dict[str, Any]]:
+async def _recall(mem: Memory, query: str, k: int = 24) -> list[dict[str, Any]]:
     return [_item_dict(h) for h in await mem.recall(query, k=k)]
 
 
@@ -443,7 +443,7 @@ def build_server(memory: Memory | None = None) -> MCPServer[Any]:
             raise ToolError(str(exc)) from exc
 
     @server.tool()
-    async def recall(query: str, k: int = 8) -> list[dict[str, Any]]:
+    async def recall(query: str, k: int = 24) -> list[dict[str, Any]]:
         """Retrieve up to k memories relevant to the query, best-first."""
         with _observe("recall", query=query, k=k) as obs:
             hits = await _recall(await _ready(), query, k)

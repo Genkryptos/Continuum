@@ -646,6 +646,16 @@ async def test_build_server_registers_four_tools() -> None:
     assert names == {"recall", "remember", "current", "timeline"}
 
 
+async def test_recall_defaults_to_24_results() -> None:
+    # The default clients see in the tool schema. At k=8 recall of the turns that
+    # answer a LongMemEval question was 0.80; at 24 it is 0.98
+    # (findings/library_recall_2026-11).
+    pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
+    server = build_server(memory=_FakeMemory())  # type: ignore[arg-type]
+    recall = next(t for t in await server.list_tools() if t.name == "recall")
+    assert recall.input_schema["properties"]["k"]["default"] == 24
+
+
 def test_build_server_accepts_injected_memory() -> None:
     pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
     m = _FakeMemory()

@@ -23,6 +23,13 @@ that the public API may still shift before 1.0.
   imports the old module path must switch. The real Mem0 SDK stays in the
   head-to-head benchmarks (`bench/mem0_compare.py`, `evals/locomo/`).
 
+- **The MCP `recall` tool returns up to 24 memories by default, up from 8.**
+  On 60 LongMemEval-S haystacks, recall of the turns that answer the question
+  is 0.80 at 8 and 0.98 at 24 (`findings/library_recall_2026-11/`). The cost is
+  up to three times as much recalled text in the client's context per call;
+  pass `k` to ask for fewer. The library's `Memory.recall(k=8)` default is
+  unchanged.
+
 ### Fixed
 - **`recall(k)` returns up to `k` relevant memories.** The retriever kept at most
   `ltm_top_k` (10) long-term hits whatever the caller asked for and padded the
