@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("mcp.server.fastmcp", reason="e2e needs the [mcp] extra")
+pytest.importorskip("mcp.server.mcpserver", reason="e2e needs the [mcp] extra")
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 

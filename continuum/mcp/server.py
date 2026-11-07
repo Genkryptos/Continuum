@@ -14,7 +14,7 @@ Run it:  ``continuum-mcp``  (stdio transport). Backing store is
 ``continuum.yaml``) and it will use Postgres via a full session.
 
 The tool *logic* lives in plain ``_recall``/``_remember``/… functions (unit-
-testable without the MCP runtime); the FastMCP tools are thin wrappers.
+testable without the MCP runtime); the MCPServer tools are thin wrappers.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 from continuum.memory import Memory
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
 __all__ = ["BackendUnavailableError", "build_server", "main"]
 
@@ -273,7 +273,7 @@ def _configure_logging() -> None:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("continuum-mcp %(levelname)s %(name)s: %(message)s"))
         root.addHandler(handler)
-        # Don't also propagate to the root logger — FastMCP installs its own
+        # Don't also propagate to the root logger — MCPServer installs its own
         # handler there, which would print every continuum line a second time.
         root.propagate = False
     root.setLevel(getattr(logging, level, logging.WARNING))
@@ -383,27 +383,18 @@ def _supersession_kwargs() -> dict[str, Any]:
     }
 
 
-def build_server(
-    memory: Memory | None = None,
-    *,
-    host: str | None = None,
-    port: int | None = None,
-) -> FastMCP:
+def build_server(memory: Memory | None = None) -> MCPServer[Any]:
     """Build the Continuum MCP server. Inject *memory* for tests / custom stores.
 
-    *host* / *port* set the bind address for the HTTP transports
-    (``streamable-http`` / ``sse``); they are ignored under stdio.
+    The bind address for the HTTP transports is not part of the server: pass
+    ``host`` / ``port`` to ``run()`` (see :func:`main`).
     """
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
 
     _configure_logging()
     mem = memory or _default_memory()
-    settings: dict[str, Any] = {}
-    if host is not None:
-        settings["host"] = host
-    if port is not None:
-        settings["port"] = port
-    server = FastMCP("continuum", **settings)
+    server: MCPServer[Any] = MCPServer("continuum")
 
     # The backing session must be started before use — that is when the Postgres
     # connection pool opens and the background workers spin up. (In-memory needs
@@ -412,7 +403,7 @@ def build_server(
     started = False
     start_lock = asyncio.Lock()
 
-    async def _ready() -> Memory:
+    async def _start() -> Memory:
         nonlocal started
         if started:
             return mem
@@ -440,6 +431,16 @@ def build_server(
                 ) from exc
             started = True
         return mem
+
+    async def _ready() -> Memory:
+        # MCPServer relays the message of a ToolError only; any other exception
+        # reaches the client as a bare "Error executing tool <name>". An
+        # unreachable backend is the one failure the caller can act on, so hand
+        # its message over intact.
+        try:
+            return await _start()
+        except BackendUnavailableError as exc:
+            raise ToolError(str(exc)) from exc
 
     @server.tool()
     async def recall(query: str, k: int = 8) -> list[dict[str, Any]]:
@@ -529,9 +530,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    if args.http or args.sse:
-        server = build_server(host=args.host, port=args.port)
-        server.run(transport="sse" if args.sse else "streamable-http")
+    if args.sse:
+        build_server().run(transport="sse", host=args.host, port=args.port)
+    elif args.http:
+        build_server().run(transport="streamable-http", host=args.host, port=args.port)
     else:
         build_server().run()
 
