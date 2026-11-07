@@ -96,6 +96,16 @@ that the public API may still shift before 1.0.
   "no such fact"** — it no longer invents a value for an attribute it has no data
   for. Untagged facts keep the relevance-ranked fallback.
 
+### Changed
+- **The MCP server now runs on the mcp 2.x SDK (`mcp>=2,<3`); 1.x is no longer
+  supported.** mcp 2 renamed `FastMCP` to `MCPServer`, and `mcp.server.fastmcp`
+  no longer imports, so the v1 server crashed at startup on a fresh install.
+  `build_server()` drops its `host`/`port` keywords — the bind address is passed
+  to `run()` now, which is what `continuum-mcp --http/--sse` does. An
+  unreachable backend still reaches the client as an error with its message;
+  other unexpected tool failures now arrive as a bare "Error executing tool
+  <name>" (mcp 2 withholds their text) and are logged in full on stderr.
+
 ### Fixed
 - **Dense-search beam width raised to `ef_search=1000` (pgvector's max), from
   400.** A clean size sweep (`scripts/index_crossover.py`) reconciled an earlier

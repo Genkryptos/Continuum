@@ -272,28 +272,29 @@ def test_item_dict_serialises_created_at() -> None:
 
 
 async def test_registered_tools_invoke_logic() -> None:
-    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
     m = _FakeMemory()
     m._recall = [_FakeItem("Boston")]
     m._current = "NYC"
     m._timeline = [_FakeItem("Boston"), _FakeItem("NYC")]
     server = build_server(memory=m)  # type: ignore[arg-type]
 
-    # FastMCP.call_tool returns (content, structured) — assert on the structured half.
-    _, recall_out = await server.call_tool("recall", {"query": "where?", "k": 3})
-    assert recall_out["result"][0]["content"] == "Boston"
+    # MCPServer.call_tool returns a CallToolResult — assert on its structured half.
+    async def call(name: str, args: dict[str, Any]) -> Any:
+        structured = getattr(await server.call_tool(name, args), "structured_content", None)
+        assert structured is not None
+        return structured["result"]
 
-    _, remember_out = await server.call_tool("remember", {"text": "I moved to NYC"})
-    assert remember_out["result"] == "stored"
+    recall_out = await call("recall", {"query": "where?", "k": 3})
+    assert recall_out[0]["content"] == "Boston"
+
+    assert await call("remember", {"text": "I moved to NYC"}) == "stored"
     assert m.added == [("I moved to NYC", None)]
 
-    _, current_out = await server.call_tool(
-        "current", {"subject": "user", "attribute": "residence"}
-    )
-    assert current_out["result"] == "NYC"
+    assert await call("current", {"subject": "user", "attribute": "residence"}) == "NYC"
 
-    _, timeline_out = await server.call_tool("timeline", {"entity": "residence"})
-    assert [d["content"] for d in timeline_out["result"]] == ["Boston", "NYC"]
+    timeline_out = await call("timeline", {"entity": "residence"})
+    assert [d["content"] for d in timeline_out] == ["Boston", "NYC"]
 
 
 # ── default memory + entry point ──────────────────────────────────────────────
@@ -382,16 +383,11 @@ def test_main_http_transports(
     captured: dict[str, Any] = {}
 
     class _FakeServer:
-        def run(self, transport: str = "stdio") -> None:
+        def run(self, transport: str = "stdio", **kwargs: Any) -> None:
             captured["transport"] = transport
+            captured["host"], captured["port"] = kwargs.get("host"), kwargs.get("port")
 
-    def _fake_build(
-        memory: Any = None, *, host: str | None = None, port: int | None = None
-    ) -> _FakeServer:
-        captured["host"], captured["port"] = host, port
-        return _FakeServer()
-
-    monkeypatch.setattr("continuum.mcp.server.build_server", _fake_build)
+    monkeypatch.setattr("continuum.mcp.server.build_server", lambda **_kw: _FakeServer())
     main([flag, "--host", "0.0.0.0", "--port", "9001"])
     assert captured["transport"] == expected_transport
     assert captured["host"] == "0.0.0.0"
@@ -402,7 +398,7 @@ async def test_tools_start_the_backend_exactly_once() -> None:
     # Regression: the server never called session.start(), so the Postgres
     # connection pool was never opened and the first tool call hung. It must be
     # started lazily on first use — once, no matter how many tools are called.
-    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
     m = _FakeMemory()
     server = build_server(memory=m)  # type: ignore[arg-type]
     assert m.starts == 0  # not started at build time — spawn stays instant
@@ -521,14 +517,16 @@ async def test_unreachable_backend_errors_instead_of_crashing(
     # A dead DSN must produce a reportable error, not kill the server: the pool
     # opens optimistically, so without the pre-flight probe the request's task
     # group tears down and the client gets no reply at all.
-    pytest.importorskip("mcp.server.fastmcp")
-    from mcp.server.fastmcp.exceptions import ToolError
+    pytest.importorskip("mcp.server.mcpserver")
+    from mcp.server.mcpserver.exceptions import ToolError
 
     monkeypatch.setenv("CONTINUUM_DB_DSN", "postgresql://u@127.0.0.1:5599/none")
     monkeypatch.delenv("CONTINUUM_MCP_AUTOSTART", raising=False)
     server = build_server(memory=_FakeMemory())  # type: ignore[arg-type]
-    # FastMCP wraps it as ToolError — which is exactly how the client receives
-    # isError=True plus the message, rather than losing the connection.
+    # It must surface as a ToolError carrying the message — which is how the
+    # client receives isError=True plus the text. Since mcp 2.x hides the text
+    # of any other exception (a bare "Error executing tool remember"), matching
+    # on "unreachable" also proves it was not left to crash as one.
     with pytest.raises(ToolError, match="unreachable"):
         await server.call_tool("remember", {"text": "x"})
     # …and the server is still usable afterwards.
@@ -541,7 +539,7 @@ def mcp_logs(caplog: pytest.LogCaptureFixture) -> Iterator[pytest.LogCaptureFixt
     Capture continuum's MCP logs.
 
     `_configure_logging` deliberately sets `propagate = False` on the `continuum`
-    logger (FastMCP installs its own root handler; propagating would double every
+    logger (MCPServer installs its own root handler; propagating would double every
     line). That also detaches caplog's root handler, so attach it to `continuum`
     directly rather than weakening the production wiring for the test's benefit.
     """
@@ -637,18 +635,11 @@ def test_supersession_wires_model_and_fn_when_enabled(monkeypatch: pytest.Monkey
     assert callable(kw["supersession_completion_fn"])
 
 
-def test_build_server_applies_host_port() -> None:
-    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
-    server = build_server(memory=_FakeMemory(), host="0.0.0.0", port=9123)  # type: ignore[arg-type]
-    assert server.settings.host == "0.0.0.0"
-    assert server.settings.port == 9123
-
-
 # ── server assembly ───────────────────────────────────────────────────────────
 
 
 async def test_build_server_registers_four_tools() -> None:
-    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
     server = build_server(memory=_FakeMemory())  # type: ignore[arg-type]
     tools = await server.list_tools()
     names = {t.name for t in tools}
@@ -656,7 +647,7 @@ async def test_build_server_registers_four_tools() -> None:
 
 
 def test_build_server_accepts_injected_memory() -> None:
-    pytest.importorskip("mcp.server.fastmcp")  # optional [mcp] extra
+    pytest.importorskip("mcp.server.mcpserver")  # optional [mcp] extra
     m = _FakeMemory()
     server = build_server(memory=m)  # type: ignore[arg-type]
     assert server is not None  # constructs without a DB / default memory

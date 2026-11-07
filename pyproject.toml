@@ -107,7 +107,10 @@ code = [
 ]
 # MCP server — expose memory as tools to any MCP client (continuum-mcp)
 mcp = [
-    "mcp>=1.0.0",
+    # 2.x: the server is written against MCPServer (FastMCP's v2 name); the v1
+    # module `mcp.server.fastmcp` no longer imports. Capped at the next major
+    # because the SDK's majors break this API outright.
+    "mcp>=2,<3",
 ]
 # Everything at once (for full local dev)
 all = [
