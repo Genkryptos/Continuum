@@ -7,6 +7,35 @@ that the public API may still shift before 1.0.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-08
+
+Fixes fresh installs of the MCP server: the `[mcp]` extra allowed any
+`mcp>=1.0.0`, so once mcp 2.3.0 shipped, `pip install "continuum-mcp[mcp]"`
+pulled it and `continuum-mcp` crashed on import.
+
+### Changed
+- **The MCP server now runs on the mcp 2.x SDK (`mcp>=2,<3`); 1.x is no longer
+  supported.** mcp 2 renamed `FastMCP` to `MCPServer`, and `mcp.server.fastmcp`
+  no longer imports, so the v1 server crashed at startup on a fresh install.
+  `build_server()` drops its `host`/`port` keywords — the bind address is passed
+  to `run()` now, which is what `continuum-mcp --http/--sse` does. An
+  unreachable backend still reaches the client as an error with its message;
+  other unexpected tool failures now arrive as a bare "Error executing tool
+  <name>" (mcp 2 withholds their text) and are logged in full on stderr.
+
+### Fixed
+- **`mypy --strict` passes against sentence-transformers 6**, whose `encode`
+  overloads no longer match the `Encoder` protocol. The model is now cast to
+  `Encoder`; runtime behavior is unchanged.
+- **`make build-verify` looked for `continuum_memory-*.whl`**, the package's old
+  name, so it found no wheel to verify.
+
+## [2.0.4] — 2026-07-25
+
+Everything from 2.0.1 through 2.0.4. Those PyPI releases fixed packaging and
+the project description and never got their own changelog sections, so this
+section collects what they shipped since 2.0.0.
+
 ### Added
 - **Automatic capture (`CONTINUUM_CAPTURE=1`, off by default).** The
   `UserPromptSubmit` hook can now *write*: durable facts you state are stored
@@ -95,16 +124,6 @@ that the public API may still shift before 1.0.
   When the store can answer attributes exactly its answer is final, **including
   "no such fact"** — it no longer invents a value for an attribute it has no data
   for. Untagged facts keep the relevance-ranked fallback.
-
-### Changed
-- **The MCP server now runs on the mcp 2.x SDK (`mcp>=2,<3`); 1.x is no longer
-  supported.** mcp 2 renamed `FastMCP` to `MCPServer`, and `mcp.server.fastmcp`
-  no longer imports, so the v1 server crashed at startup on a fresh install.
-  `build_server()` drops its `host`/`port` keywords — the bind address is passed
-  to `run()` now, which is what `continuum-mcp --http/--sse` does. An
-  unreachable backend still reaches the client as an error with its message;
-  other unexpected tool failures now arrive as a bare "Error executing tool
-  <name>" (mcp 2 withholds their text) and are logged in full on stderr.
 
 ### Fixed
 - **Dense-search beam width raised to `ef_search=1000` (pgvector's max), from

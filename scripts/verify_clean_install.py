@@ -7,7 +7,7 @@ run a minimal :class:`ContinuumSession`. Called from
 
 ::
 
-    python -m venv /tmp/v && /tmp/v/bin/pip install dist/continuum_memory-*.whl
+    python -m venv /tmp/v && /tmp/v/bin/pip install dist/continuum_mcp-*.whl
     /tmp/v/bin/python scripts/verify_clean_install.py
 """
 
