@@ -7,6 +7,14 @@ that the public API may still shift before 1.0.
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-11-08
+
+`recall(k)` now returns up to `k` relevant memories, and the MCP `recall` tool
+asks for 24 by default. Through `Memory.recall()` on 60 LongMemEval-S
+haystacks, recall of the turns that answer the question goes from 0.80 to 0.98
+at the new default. This is a retrieval number; the LongMemEval accuracy
+figures in the README come from the eval harness, not from this path.
+
 ### Added
 - **Deterministic scalar supersession, opt-in** (`scalar_supersession=True` /
   `CONTINUUM_PROMOTER_SCALAR_SUPERSESSION=1`): a fact restated with a different
@@ -22,7 +30,6 @@ that the public API may still shift before 1.0.
   Mem0Promoter` still works but warns; it will be removed in 3.0. Code that
   imports the old module path must switch. The real Mem0 SDK stays in the
   head-to-head benchmarks (`bench/mem0_compare.py`, `evals/locomo/`).
-
 - **The MCP `recall` tool returns up to 24 memories by default, up from 8.**
   On 60 LongMemEval-S haystacks, recall of the turns that answer the question
   is 0.80 at 8 and 0.98 at 24 (`findings/library_recall_2026-11/`). The cost is
