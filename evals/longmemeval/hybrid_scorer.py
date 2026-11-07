@@ -87,6 +87,18 @@ _PUNCT_RE = re.compile(r"[^\w\s%.\-/]")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
+# Second person → first person. The gold answers are written from the user's
+# side ("in a shoe rack in my closet") and the reader replies to the user
+# ("In a shoe rack in your closet") — the same answer. Applied only to the
+# whole-string equality stage, so it can never make a partial match pass.
+_PERSON = {"you": "i", "your": "my", "yours": "mine", "yourself": "myself"}
+_PERSON_RE = re.compile(r"\b(?:" + "|".join(_PERSON) + r")\b")
+
+
+def _first_person(normalized: str) -> str:
+    return _PERSON_RE.sub(lambda m: _PERSON[m.group(0)], normalized)
+
+
 def normalize_text(text: str, *, drop_articles: bool = True) -> str:
     """Cheap normalised form for the exact-match stage."""
     if not text:
@@ -303,7 +315,7 @@ class HybridScorer:
         # Stage 1b — normalised (case + articles + punctuation).
         en = normalize_text(e)
         pn = normalize_text(p)
-        if en and pn and en == pn:
+        if en and pn and (en == pn or _first_person(en) == _first_person(pn)):
             return ScoreResult(True, "normalized")
 
         # Stage 2 — numeric.

@@ -641,10 +641,37 @@ def test_failure_missing_temporal_for_bare_date_answer():
     )
 
 
-def test_failure_stale_fact_for_knowledge_update_with_used_to():
+def test_failure_stale_fact_comes_from_the_gold_pair():
     """
-    Knowledge-update question; the matched claim's text contains
-    "used to" — the stale half of the update pair was selected.
+    ``stale_fact`` is decided by :func:`evidence.supersession_verdict`, which
+    compares the answer against the gold turns themselves.
+    """
+    assert (
+        _classify_failure(
+            answer="Bella",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="knowledge-update",
+            decomposition_stats=_stats(
+                mode="claim_first_structured",
+                claim_first_route="KNOWLEDGE_UPDATE",
+            ),
+            supersession_verdict="stale",
+        )
+        == "stale_fact"
+    )
+
+
+def test_update_markers_alone_no_longer_imply_a_stale_answer():
+    """
+    The retired heuristic read ``stale_fact`` off marker words ("used to")
+    in the *matched claim*. That tests the retrieved span's phrasing, not
+    the answer: a claim reading "used to be Bella, now Luna" carries the
+    marker whether the answer took Bella or Luna. It fired on 0 rows across
+    every recorded run while 14 genuinely stale knowledge-update answers
+    went unlabelled, so it is gone — with no gold verdict, the honest
+    bucket is "the evidence was there and the answer was wrong".
     """
     assert (
         _classify_failure(
@@ -662,7 +689,65 @@ def test_failure_stale_fact_for_knowledge_update_with_used_to():
                 },
             ),
         )
-        == "stale_fact"
+        == "wrong_span"
+    )
+
+
+def test_failure_missing_gold_turn_when_an_answer_turn_was_dropped():
+    """
+    Right session retrieved, but an answer-bearing turn inside it never
+    reached the reader — still a retrieval failure, and invisible to
+    session-level recall.
+    """
+    assert (
+        _classify_failure(
+            answer="three",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="knowledge-update",
+            decomposition_stats=_stats(),
+            gold_turn_recall=0.5,
+        )
+        == "missing_gold_turn"
+    )
+
+
+def test_dropped_superseding_turn_is_retrieval_not_supersession():
+    """
+    A stale-looking answer when the *superseding* turn never reached the
+    reader is a retrieval miss: the old value was the only value available.
+    ``missing_gold_turn`` must win over ``stale_fact`` so the resolution
+    layer is not charged for it.
+    """
+    assert (
+        _classify_failure(
+            answer="three",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="knowledge-update",
+            decomposition_stats=_stats(),
+            supersession_verdict="stale",
+            gold_turn_recall=0.5,
+        )
+        == "missing_gold_turn"
+    )
+
+
+def test_full_gold_turn_recall_still_reads_wrong_span():
+    """Every gold turn present and the answer still wrong: the reader had it."""
+    assert (
+        _classify_failure(
+            answer="three",
+            error=None,
+            retrieved=["s_gold"],
+            expected=["s_gold"],
+            question_type="knowledge-update",
+            decomposition_stats=_stats(),
+            gold_turn_recall=1.0,
+        )
+        == "wrong_span"
     )
 
 
