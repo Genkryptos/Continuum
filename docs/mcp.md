@@ -280,7 +280,7 @@ the Postgres + embedder stack, where the relevant memory ranks first.
 
 | tool | signature | what it does |
 |---|---|---|
-| `recall` | `recall(query, k=8)` | retrieve up to `k` relevant memories, best-first |
+| `recall` | `recall(query, k=24)` | retrieve up to `k` relevant memories, best-first |
 | `remember` | `remember(text, occurred_at?, attribute?)` | store a fact/turn. `occurred_at` = when it became true; `attribute` = what it's *about* |
 | `current` | `current(subject, attribute, as_of?)` | the current value after supersession, e.g. `current("user","residence")`; `as_of` asks what was current back then |
 | `timeline` | `timeline(entity, since?, until?)` | bi-temporal history for an entity, oldest→newest |

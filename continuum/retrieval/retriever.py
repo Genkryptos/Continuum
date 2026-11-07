@@ -180,7 +180,9 @@ class Retriever:
             debug["ltm_hybrid"] = 0
             return pool
         try:
-            hits: Sequence[ScoredItem] = await self._ltm.search_hybrid(query, self.config.k1)
+            hits: Sequence[ScoredItem] = await self._ltm.search_hybrid(
+                query, max(self.config.k1, self._ltm_limit(query))
+            )
         except Exception:
             log.exception("LTM hybrid search failed")
             debug["ltm_hybrid"] = "failed"
@@ -362,7 +364,17 @@ class Retriever:
                 debug["reranked"] = "failed"
         else:
             debug["reranked"] = False
-        return ranked[: self.config.ltm_top_k]
+        return ranked[: self._ltm_limit(query)]
+
+    def _ltm_limit(self, query: Query) -> int:
+        """How many LTM hits to keep: ``config.ltm_top_k``, or more when the
+        caller asked for more.
+
+        Capping at ``ltm_top_k`` alone ignored ``query.top_k``: ``recall(k=48)``
+        got 10 relevance-ranked memories and the rest of the slots filled with
+        the most recent STM turns, relevant or not.
+        """
+        return max(self.config.ltm_top_k, query.top_k or 0)
 
     # ── 6. STM / MTM ────────────────────────────────────────────────────────
 

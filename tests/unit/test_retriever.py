@@ -408,10 +408,23 @@ class TestScoringRerank:
             ltm=FakeLTM(hits=hits),
             scorer=FakeScorer({f"f{i}": 1.0 - i * 0.01 for i in range(30)}),
         )
-        b = await r.retrieve(_q(), BUDGET)
-        # 5 LTM (capped) + 0 mtm + 0 stm
+        b = await r.retrieve(Query(text="what is X?", session_id="s1", top_k=3), BUDGET)
+        # 5 LTM (ltm_top_k is the floor) + 0 mtm + 0 stm
         assert b.tier_breakdown["ltm"] > 0
         assert len(b.items) == 5
+
+    async def test_query_top_k_above_ltm_top_k_is_honoured(self) -> None:
+        # recall(k=20) must get 20 relevance-ranked memories, not ltm_top_k of
+        # them padded with whatever STM turns are most recent.
+        hits = [_si(f"f{i}", 1.0 - i * 0.01) for i in range(30)]
+        ltm = FakeLTM(hits=hits)
+        r = Retriever(
+            RetrieverConfig(ltm_top_k=5, k1=10),
+            ltm=ltm,
+            scorer=FakeScorer({f"f{i}": 1.0 - i * 0.01 for i in range(30)}),
+        )
+        b = await r.retrieve(Query(text="what is X?", session_id="s1", top_k=20), BUDGET)
+        assert [i.content for i in b.items] == [f"f{i}" for i in range(20)]
 
     async def test_real_scorer_integration(self) -> None:
         # No fake scorer → default continuum.scoring.Scorer runs end to end.
