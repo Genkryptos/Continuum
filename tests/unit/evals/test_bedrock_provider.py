@@ -230,7 +230,10 @@ async def test_bedrock_gpt_oss_uses_openai_responses_api(
 # --judge-openrouter-provider ------------------------------------------------
 
 
-def test_judge_openrouter_provider_defaults_to_the_answerer_pin() -> None:
+def test_judge_openrouter_provider_defaults_to_the_answerer_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-dummy")  # the client needs a key to build
     args = boot._parse_args(
         [
             "--provider",
@@ -247,7 +250,10 @@ def test_judge_openrouter_provider_defaults_to_the_answerer_pin() -> None:
     assert judge.provider_pin == "DeepInfra"
 
 
-def test_judge_openrouter_provider_overrides_only_the_judge() -> None:
+def test_judge_openrouter_provider_overrides_only_the_judge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-dummy")  # the client needs a key to build
     args = boot._parse_args(
         [
             "--provider",
