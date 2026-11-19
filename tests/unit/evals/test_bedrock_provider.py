@@ -225,3 +225,43 @@ async def test_bedrock_gpt_oss_uses_openai_responses_api(
         }
     ]
     assert llm._throttle.interval == pytest.approx(60.0 / 17.0)
+
+
+# --judge-openrouter-provider ------------------------------------------------
+
+
+def test_judge_openrouter_provider_defaults_to_the_answerer_pin() -> None:
+    args = boot._parse_args(
+        [
+            "--provider",
+            "openrouter",
+            "--openrouter-provider",
+            "DeepInfra",
+            "--judge",
+            "llm",
+            "--judge-provider",
+            "openrouter",
+        ]
+    )
+    judge = boot._build_judge_llm(args)
+    assert judge.provider_pin == "DeepInfra"
+
+
+def test_judge_openrouter_provider_overrides_only_the_judge() -> None:
+    args = boot._parse_args(
+        [
+            "--provider",
+            "openrouter",
+            "--openrouter-provider",
+            "Crusoe",
+            "--judge",
+            "llm",
+            "--judge-provider",
+            "openrouter",
+            "--judge-openrouter-provider",
+            "DeepInfra",
+        ]
+    )
+    assert args.openrouter_provider == "Crusoe"
+    judge = boot._build_judge_llm(args)
+    assert judge.provider_pin == "DeepInfra"
