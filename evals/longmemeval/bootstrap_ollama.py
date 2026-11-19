@@ -5888,9 +5888,15 @@ def _build_judge_llm(args: argparse.Namespace) -> Any:
     if provider == "openai":
         return OpenAILLM(model=model, rpm=rpm)
     if provider == "openrouter":
+        # The judge may need its own backend: a provider can serve the
+        # answerer badly while serving the judge model fine (2026-11-20,
+        # DeepInfra returned empty gpt-oss-120b answers but a healthy
+        # llama-3.3-70b). Unset, it shares --openrouter-provider as before.
         return OpenRouterLLM(
             model=model, rpm=rpm,
-            provider_pin=args.openrouter_provider, seed=args.seed,
+            provider_pin=getattr(args, "judge_openrouter_provider", None)
+            or args.openrouter_provider,
+            seed=args.seed,
         )
     if provider == "meta":
         log.warning(
@@ -6868,6 +6874,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "~44%% answer variance run-to-run even at temperature 0. Also "
             "reads OPENROUTER_PROVIDER. Find a model's providers at "
             "openrouter.ai/models/<model>."
+        ),
+    )
+    p.add_argument(
+        "--judge-openrouter-provider",
+        default=None,
+        help=(
+            "Pin the JUDGE's OpenRouter backend separately from the answerer's "
+            "(no fallbacks). Defaults to --openrouter-provider, so existing "
+            "commands are unchanged. Use when one provider serves the answerer "
+            "badly but the judge model well."
         ),
     )
     p.add_argument(
